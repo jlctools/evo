@@ -14,4 +14,5 @@ Evo is Free and Open-Source Software licensed under Mozilla Public License 2.0.
 For more information see the MPL FAQ: https://www.mozilla.org/MPL/2.0/FAQ.html
 
 Evo Home: http://jlctools.us/evo
+
 Online documentation: http://jlctools.us/evo/docs.html
