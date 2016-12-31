@@ -18,5 +18,6 @@ Latest: [Evo 0.3](https://github.com/jlctools/evo/raw/master/download/evo0.3.tar
 Evo is Free and Open-Source Software licensed under [Mozilla Public License 2.0](https://www.mozilla.org/en-US/MPL/2.0/)
 
 Evo can be used in any software and can be distributed under the terms of the MPL
-* MPL does not automatically apply to your programs using Evo, it only applies to Evo files
+* Evo is free to use in commercial and [Open-Source](https://www.gnu.org/licenses/license-list.en.html#MPL-2.0) software
+* MPL does not automatically apply to your software using Evo, it only applies to Evo files
 * See the [MPL2 FAQ](https://www.mozilla.org/en-US/MPL/2.0/FAQ/) and the [MPL2 license](https://www.mozilla.org/en-US/MPL/2.0/) for more information
