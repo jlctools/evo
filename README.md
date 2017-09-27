@@ -26,4 +26,3 @@ Evo is free to use in commercial and Open-Source software
 * MPL does not automatically apply to your software using Evo, it only applies to Evo files
 * See the [MPL2 FAQ](https://www.mozilla.org/en-US/MPL/2.0/FAQ/) and the [MPL2 license](https://www.mozilla.org/en-US/MPL/2.0/) for more information
 * See also [notes on GPL compatibility](https://www.gnu.org/licenses/license-list.en.html#MPL-2.0)
-
