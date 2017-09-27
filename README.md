@@ -1,7 +1,8 @@
 Evo C++ Library
 ---------------
+[Evo Home](https://github.com/jlctools/evo) | [Online Docs](http://jlctools.github.io/evo/evo-0.3/html/index.html)
 
-Evo is a modern high-performance C++ library designed to make handling data structures and 
+Evo is a modern high performance C++ library designed to make handling data structures and 
 strings easy.
 
 Inspired by modern languages like Python and D, Evo is the result of many years of lessons
@@ -13,7 +14,10 @@ applications and other libraries.
 Download
 --------
 
-Latest: [Evo 0.3](https://github.com/jlctools/evo/raw/master/download/evo0.3.tar.gz) | [Online Docs](http://jlctools.github.io/evo/evo-0.3/html/index.html)
+Latest: [Evo 0.3](https://github.com/jlctools/evo/raw/master/download/evo0.3.tar.gz)
+
+License
+-------
 
 Evo is Free and Open-Source Software licensed under [Mozilla Public License 2.0](https://www.mozilla.org/en-US/MPL/2.0/)
 
