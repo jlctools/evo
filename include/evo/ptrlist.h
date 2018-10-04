@@ -1,8 +1,6 @@
 // Evo C++ Library
-/* Copyright (c) 2016 Justin Crowell
- This Source Code Form is subject to the terms of the Mozilla Public
- License, v. 2.0. If a copy of the MPL was not distributed with this
- file, You can obtain one at http://mozilla.org/MPL/2.0/.
+/* Copyright 2018 Justin Crowell
+Distributed under the BSD 2-Clause License -- see included file LICENSE.txt for details.
 */
 ///////////////////////////////////////////////////////////////////////////////
 /** \file ptrlist.h Evo Pointer List. */
@@ -10,14 +8,16 @@
 #ifndef INCL_evo_ptrlist_h
 #define INCL_evo_ptrlist_h
 
-// Includes
-#include "evo_config.h"
 #include "impl/container.h"
 #include "impl/iter.h"
 
-// Namespace: evo
-namespace evo {
+// Disable certain MSVC warnings for this file
+#if defined(_MSC_VER)
+    #pragma warning(push)
+    #pragma warning(disable:4457)
+#endif
 
+namespace evo {
 /** \addtogroup EvoContainers */
 //@{
 
@@ -69,10 +69,9 @@ namespace evo {
     } else \
         memset(data_, 0, sizeof(Item*)*size_); \
 }
-// TODO: Support EVO_LIST_REALLOC
 //  Assumes buffer is already allocated
 #define EVO_IMPL_PTRLIST_REALLOC(HDR, DATA, SIZE) { \
-    assert( (ulong)HDR > sizeof(Header) ); \
+    assert( (size_t)HDR > sizeof(Header) ); \
     assert( DATA != NULL ); \
     assert( SIZE > 0 ); \
     HDR = (Header*)::realloc( HDR, sizeof(Header) + (SIZE*sizeof(T*)) ); \
@@ -95,7 +94,7 @@ namespace evo {
 }
 //  Assumes buffer is already allocated
 #define EVO_IMPL_PTRLIST_FREEMEM(HDR) { \
-    assert( (ulong)HDR > sizeof(Header) ); \
+    assert( (size_t)HDR > sizeof(Header) ); \
     ::free(HDR); \
 }
 //  Assumes buffer is already allocated
@@ -108,8 +107,6 @@ namespace evo {
 /** \endcond */
 
 ///////////////////////////////////////////////////////////////////////////////
-
-// TODO: Support ListBase source for adding/copying items
 
 /** Sequential list of managed pointers with random access.
 
@@ -153,7 +150,6 @@ namespace evo {
    - item()
    - operator[]()
    - first(), last(), iend()
-   - hash()
  - compare()
    - operator==()
    - operator!=()
@@ -182,19 +178,17 @@ namespace evo {
 
 */
 template<class T,class TSize=SizeT>
-class PtrList
-{
+class PtrList {
 public:
     EVO_CONTAINER_TYPE;
-    typedef TSize               Size;            ///< %List size integer type
+    typedef TSize               Size;           ///< %List size integer type
     typedef Size                Key;            ///< Key type (item index)
-    typedef T                   Value;            ///< Value type (Item dereferenced, same as T)
-    typedef T*                  Item;            ///< Item type (pointer to Value)
+    typedef T                   Value;          ///< Value type (Item dereferenced, same as T)
+    typedef T*                  Item;           ///< Item type (pointer to Value)
 
-    typedef PtrList<T,Size>     ThisType;        ///< This list type
+    typedef PtrList<T,Size>     ThisType;       ///< This list type
 
     /** Default constructor sets as null. */
-    //[tags: self, set_null! ]
     PtrList() {
         header_ = NULL;
         data_   = NULL;
@@ -206,7 +200,6 @@ public:
      .
      \param  data  Data to copy
     */
-    //[tags: self, set_list!, unshare() ]
     PtrList(const ThisType& data) {
         if (data.size_ > 0) {
             header_ = data.header_;
@@ -231,7 +224,6 @@ public:
      \param  data  Data to copy
      \return       This
     */
-    //[tags: self, set_list, add_list!, unshare() ]
     ThisType& operator=(const ThisType& data)
         { return set(data); }
 
@@ -241,7 +233,6 @@ public:
      .
      \return  This
     */
-    //[tags: self, set, unshare() ]
     ThisType& clear() {
         if (size_ > 0) {
             assert( header_ != NULL );
@@ -265,10 +256,9 @@ public:
         return *this;
     }
 
-    /** Set as null and empty.
+    /** %Set as null and empty.
      \return  This
     */
-    //[tags: self, set_null, set, unshare() ]
     ThisType& set() {
         if (size_ > 0) {
             assert( header_ != NULL );
@@ -289,13 +279,12 @@ public:
         return *this;
     }
 
-    /** Set from another list.
+    /** %Set from another list.
      - Makes shared copy if possible -- see \ref Sharing "Sharing"
      .
      \param  data  Data to set/copy
      \return       This
     */
-    //[tags: self, set_list, set, unshare() ]
     ThisType& set(const ThisType& data) {
         if (data_ != data.data_) {
             if (size_ > 0)
@@ -313,10 +302,9 @@ public:
         return *this;
     }
 
-    /** Set as empty but not null.
+    /** %Set as empty but not null.
      \return  This
     */
-    //[tags: self, set_empty, set, unshare() ]
     ThisType& setempty() {
         if (data_ == NULL)
             data_ = EVO_PPEMPTY;
@@ -332,7 +320,6 @@ public:
      .
      \return  Whether null
     */
-    //[tags: info_size, set_null! ]
     bool null() const
         { return (data_ == NULL); }
 
@@ -341,21 +328,18 @@ public:
      .
      \return  Whether empty
     */
-    //[tags: info_size, null(), set_empty! ]
     bool empty() const
         { return (size_ == 0 || header_ == NULL || header_->used == 0); }
 
     /** Get list size.
      \return  Size as item count
     */
-    //[tags: info_size, capacity!, item(), data() ]
     Size size() const
         { return size_; }
 
     /** Get list used size, number of non-null items.
      \return  Used size as item count
     */
-    //[tags: info_size, capacity!, item(), data() ]
     Size used() const
         { return (header_ == NULL ? 0 : header_->used); }
 
@@ -364,7 +348,6 @@ public:
      .
      \return  Whether shared
     */
-    //[tags: shared, resize() ]
     bool shared() const
         { return (header_ != NULL && header_->refs > 1); }
 
@@ -374,7 +357,6 @@ public:
      .
      \return  Data pointer as read-only, NULL/invalid if size() is 0 (const)
     */
-    //[tags: info_item ]
     const Item* data() const
         { return data_; }
 
@@ -385,7 +367,6 @@ public:
      \param  index  Item index
      \return        Given item as read-only pointer, NULL if item is null (const)
     */
-    //[tags: info_item ]
     const Item operator[](Key index) const {
         assert( header_ != NULL );
         assert( data_ != NULL );
@@ -400,7 +381,6 @@ public:
      \param  index  Item index
      \return        Given item as read-only pointer, NULL if item is null (const)
     */
-    //[tags: info_item ]
     const Item item(Key index) const {
         assert( header_ != NULL );
         assert( data_ != NULL );
@@ -414,7 +394,6 @@ public:
      .
      \return  First item pointer, NULL if empty or all items null
     */
-    //[tags: info_item ]
     const Item first() const
         { return (header_ != NULL && header_->used > 0 ? data_[header_->first] : NULL); }
 
@@ -424,7 +403,6 @@ public:
      .
      \return  Last item pointer, NULL if empty or all items null
     */
-    //[tags: info_item ]
     const Item last() const
         { return (header_ != NULL && header_->used > 0 ? data_[header_->last] : NULL); }
 
@@ -435,11 +413,8 @@ public:
      \param  offset  Offset from end, 0 for last item, 1 for second-last, etc
      \return         Resulting index, END if offset out of bounds
     */
-    //[tags: size(), info_item ]
     Key iend(Size offset=0) const
         { return (offset < size_ ? size_-1-offset : END); }
-
-    // TODO: hash()
 
     // COMPARE
 
@@ -447,7 +422,6 @@ public:
      \param  data  Data to compare to
      \return       Result (<0 if this is less, 0 if equal, >0 if this is greater)
     */
-    //[tags: self, compare ]
     int compare(const ThisType& data) const {
         int result;
         if (data_ == NULL)
@@ -476,7 +450,7 @@ public:
                             { result = -1; break; }
                     } else if (item2 == NULL)
                         { result = 1; break; }
-                    else if ((result=DataOp<Value>::compare(*item1, *item2)) != 0)
+                    else if ((result=DataCompare<Value>::compare(*item1, *item2)) != 0)
                         break;
                 }
             } else
@@ -491,7 +465,6 @@ public:
      \param  data  Data to compare to
      \return       Whether equal
     */
-    //[tags: self, compare ]
     bool operator==(const ThisType& data) const {
         bool result;
         if (data_ == NULL)
@@ -531,7 +504,6 @@ public:
      \param  data  Data to compare to
      \return       Whether inequal
     */
-    //[tags: self, compare ]
     bool operator!=(const ThisType& data) const {
         bool result;
         if (data_ == NULL)
@@ -576,7 +548,6 @@ public:
      \param  end    End index for search, END for end of list
      \return        Found item index or NONE if not found
     */
-    //[tags: self, find_item ]
     Key find(const Value& value, Key start=0, Key end=END) const {
         Key result = (Key)NONE;
         if (header_ != NULL && header_->used > 0) {
@@ -604,7 +575,6 @@ public:
      \param  end    End index for search range (reverse search starting point), END for end of list
      \return        Found item index or NONE if not found
     */
-    //[tags: self, find_item, find_item ]
     Key findr(const T& value, Key start=0, Key end=END) const {
         Key result = (Key)NONE;
         if (header_ != NULL && header_->used > 0) {
@@ -622,8 +592,6 @@ public:
         return result;
     }
 
-    // TODO: contains()
-
     // INFO_SET
 
     /** Get data pointer (mutable).
@@ -633,7 +601,6 @@ public:
      .
      \return  Data pointer (mutable).
     */
-    //[tags: info_item ]
     Item* dataM()
         { unshare(); return data_; }
 
@@ -659,7 +626,7 @@ public:
             // Create new item
             newitem: // used to skip NULL check
             data_[key] = result = EVO_IMPL_CONTAINER_MEM_ALLOC1(Value);
-            DataOp<T>::init(*result);
+            DataInit<T>::init_safe(result);
             if (++header_->used == 1)
                 header_->first = header_->last = key;
             else if (key < header_->first)
@@ -696,7 +663,6 @@ public:
      \param  index  Item index
      \return        Given item pointer, NULL if item is null (mutable)
     */
-    //[tags: info_item ]
     Item operator()(Key index)
         { assert( index < size_ ); unshare(); return data_[index]; }
 
@@ -710,7 +676,6 @@ public:
      \param  index  Item index
      \return        Given item pointer, NULL if item is null (mutable)
     */
-    //[tags: info_item ]
     Item itemM(Key index)
         { assert( index < size_ ); unshare(); return data_[index]; }
 
@@ -721,7 +686,6 @@ public:
      .
      \return  This
     */
-    //[tags: shared, resize() ]
     ThisType& unshare() {
         if (size_ > 0) {
             assert( header_ != NULL );
@@ -746,7 +710,6 @@ public:
      \param  newsize  New size as item count
      \return          This
     */
-    //[tags: capacity, set_ptr!, size(), dataM(), unshare() ]
     ThisType& resize(Size newsize) {
         if (newsize == size_) {
             unshare();
@@ -879,7 +842,6 @@ public:
      \param  minsize  Minimum size as item count
      \return          This
     */
-    //[tags: capacity, set_ptr!, size(), dataM(), unshare() ]
     ThisType& resizemin(Size minsize) {
         if (minsize > size_)
             resize(minsize);
@@ -888,13 +850,12 @@ public:
 
     // COPY
 
-    /** Set as full (unshared) copy using data pointer (modifier).
+    /** %Set as full (unshared) copy using data pointer (modifier).
      - Effectively calls unshare()
      .
      \param  data  Data to copy
      \return       This
     */
-    //[tags: self, set_ptr, set, unshare() ]
     ThisType& copy(const ThisType& data) {
         if (data_ == data.data_) {
             unshare();
@@ -915,7 +876,6 @@ public:
 
     // REMOVE
 
-    // TODO: performance issue when removing first or last item repeatedly
     /** Remove item and set as null (modifier).
      - Effectively calls unshare()
      - The removed item is set as null -- no change to list size
@@ -923,7 +883,6 @@ public:
      \param  key  Item key (index) to remove
      \return      This
     */
-    //[tags: set! ]
     ThisType& remove(Key key) {
         if (key < size_) {
             assert( header_ != NULL );
@@ -1022,7 +981,6 @@ public:
      .
      \param  list  %List to swap with
     */
-    //[tags: self, move ]
     void swap(ThisType& list)
         { EVO_IMPL_CONTAINER_SWAP(this, &list, ThisType); }
 
@@ -1154,11 +1112,11 @@ public:
 protected:
     /** List data header */
     struct Header {
-        Size size;                ///< Buffer size allocated as item count (capacity)
-        Size used;                ///< Buffer size used/initialized as item count
-        Size first;                ///< Index of first used item, 0 if used=0
-        Size last;                ///< Index of last used item, 0 if used=0
-        Size refs;                ///< Buffer reference count
+        Size size;              ///< Buffer size allocated as item count (capacity)
+        Size used;              ///< Buffer size used/initialized as item count
+        Size first;             ///< Index of first used item, 0 if used=0
+        Size last;              ///< Index of last used item, 0 if used=0
+        Size refs;              ///< Buffer reference count
     };
 
     // States:
@@ -1166,8 +1124,8 @@ protected:
     //  empty:   data=1 or data=buffer, size=0
     //  buffer:  data=buffer, size>0, header.refs>=1
     Header* header_;            ///< Data header pointer, NULL if no buffer allocated
-    Item*   data_;                ///< Data pointer, NULL if null, can be 1 if empty (size_=0)
-    Size    size_;                ///< Data size (same as header.size), 0 if empty
+    Item*   data_;              ///< Data pointer, NULL if null, can be 1 if empty (size_=0)
+    Size    size_;              ///< Data size (same as header.size), 0 if empty
 };
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -1184,5 +1142,8 @@ protected:
 
 ///////////////////////////////////////////////////////////////////////////////
 //@}
-} // Namespace: evo
+}
+#if defined(_MSC_VER)
+    #pragma warning(pop)
+#endif
 #endif

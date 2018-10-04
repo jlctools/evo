@@ -1,28 +1,20 @@
 Evo C++ Library
 ---------------
-[Evo Home](https://github.com/jlctools/evo) | [Online Docs](http://jlctools.github.io/evo/evo-0.3/html/index.html)
+[Evo Home](https://github.com/jlctools/evo)
+[Online Docs](http://jlctools.github.io/evo/evo-0.4/html/index.html)
 
-Evo is a modern high performance C++ library designed to make handling data structures and 
-strings easy.
+Evo is a modern high performance C++ library designed to make writing efficient and portable code easy.
 
-Inspired by modern languages like Python and D, Evo is the result of many years of lessons
-learned from writing (and rewriting) high-performance, object-oriented C++ server code.
-Even when performance isn't critical, Evo can still make tedious string parsing and data
-structures easy to read and manage. Evo is intended to provide a solid foundation for
-applications and other libraries.
+Inspired by modern languages like Python and D, Evo is the result of many years of lessons learned from writing (and rewriting) high-performance, object oriented C++ server code. Evo aims to make C++ easier and more powerful without sacrificing performance.
 
 Download
 --------
 
-Latest: [Evo 0.3](https://github.com/jlctools/evo/raw/master/download/evo0.3.tar.gz)
+Latest: [Evo 0.4](https://github.com/jlctools/evo/raw/master/download/evo0.4.tar.gz)
+
+Windows: [Evo 0.4](https://github.com/jlctools/evo/raw/master/download/evo0.4.zip)
 
 License
 -------
 
-Evo is Free and Open-Source Software licensed under [Mozilla Public License 2.0](https://www.mozilla.org/en-US/MPL/2.0/)
-
-Evo is free to use in commercial and Open-Source software
-* If distributing software using a modified Evo, MPL terms apply to these modifications to Evo files
-* MPL does not automatically apply to your software using Evo, it only applies to Evo files
-* See the [MPL2 FAQ](https://www.mozilla.org/en-US/MPL/2.0/FAQ/) and the [MPL2 license](https://www.mozilla.org/en-US/MPL/2.0/) for more information
-* See also [notes on GPL compatibility](https://www.gnu.org/licenses/license-list.en.html#MPL-2.0)
+Evo is Free and Open-Source Software licensed under the [2-Clause BSD License](https://opensource.org/licenses/BSD-2-Clause), which is included with Evo in the LICENSE.txt file.

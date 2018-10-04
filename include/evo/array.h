@@ -1,8 +1,6 @@
 // Evo C++ Library
-/* Copyright (c) 2016 Justin Crowell
- This Source Code Form is subject to the terms of the Mozilla Public
- License, v. 2.0. If a copy of the MPL was not distributed with this
- file, You can obtain one at http://mozilla.org/MPL/2.0/.
+/* Copyright 2018 Justin Crowell
+Distributed under the BSD 2-Clause License -- see included file LICENSE.txt for details.
 */
 ///////////////////////////////////////////////////////////////////////////////
 /** \file array.h Evo Array container. */
@@ -10,15 +8,10 @@
 #ifndef INCL_evo_array_h
 #define INCL_evo_array_h
 
-// Includes
-#include "evo_config.h"
 #include "type.h"
-#include "impl/container.h"
 #include "impl/iter.h"
 
-// Namespace: evo
 namespace evo {
-
 /** \addtogroup EvoContainers */
 //@{
 
@@ -88,10 +81,14 @@ namespace evo {
 
  - size()
    - null(), empty()
+   - shared()
  - data() const
    - item(Key) const
+   - ring(Key) const
    - operator[](Key) const
-   - first() const, last() const, iend()
+   - first() const
+   - last() const
+   - iend()
    - hash()
  - compare()
    - operator==()
@@ -106,8 +103,11 @@ namespace evo {
 
  - data()
    - item(Key)
+   - ring(Key)
    - operator[](Key)
  - resize()
+   - resize2()
+   - unshare()
  - set()
    - set(const ThisType&)
    - set(const T*,Size)
@@ -121,36 +121,65 @@ namespace evo {
 
 \par Advanced
 
+ - advRing(Key) const
+ - advRing(Key)
  - advResize()
  .
 
 \par Example
 
 \code
+#include <evo/array.h>
+#include <evo/io.h>
+using namespace evo;
+static Console& c = con();
+
+int main() {
+    // Create an array and fill with 0's
+    Array<int> array;
+    array.resize(5);
+    array.fill(0);
+
+    // Set some values
+    for (int i = 0; i < 5; ++i)
+        array[i] = i;
+
+    // Iterate and print items
+    for (Array<int>::Iter iter(array); iter; ++iter)
+        c.out << "Value: " << *iter << NL;
+
+    return 0;
+}
+\endcode
+
+Output:
+\code{.unparsed}
+Item: 1
+Item: 2
+Item: 3
+Item: 4
+Item: 5
 \endcode
 */
 template<class T,class TSize=SizeT>
 class Array {
 public:
-    EVO_CONTAINER_TYPE;                            ///< Identify Evo container type
-    typedef TSize               Size;            ///< List size integer type
-    typedef Size                Key;            ///< Key type (item index)
-    typedef T                   Value;            ///< Value type (same as Item)
-    typedef T                   Item;            ///< Item type (same as Value)
-
-    typedef Array<T,Size>        ThisType;        ///< This array type
+    EVO_CONTAINER_TYPE;                         ///< Identify Evo container type
+    typedef Array<T,TSize> ThisType;            ///< This array type
+    typedef TSize          Size;                ///< List size integer type
+    typedef Size           Key;                 ///< Key type (item index)
+    typedef T              Value;               ///< Value type (same as Item)
+    typedef T              Item;                ///< Item type (same as Value)
 
     /** Default constructor sets as null. */
-    //[tags: self, set_null! ]
     Array() {
         data_ = NULL;
         size_ = 0;
     }
 
     /** Constructor sets as empty but not null.
-     \param  val  vEmpty
+     \param  val  vEMPTY
     */
-    //[tags: self, set_empty! ]
     explicit Array(const ValEmpty& val) {
         EVO_PARAM_UNUSED(val);
         data_ = EVO_PEMPTY;
@@ -160,11 +189,10 @@ public:
     /** Copy constructor.
      \param  src  Data to copy
     */
-    //[tags: self, set_list! ]
     Array(const ThisType& src) {
         if (src.size_ > 0) {
             data_ = (T*)::malloc((size_t)src.size_*sizeof(T));
-            ContainerOp<T>::init(data_, src.data_, src.size_);
+            DataInit<T>::init(data_, src.data_, src.size_);
         } else
             data_ = src.data_;
         size_ = src.size_;
@@ -174,11 +202,10 @@ public:
      \param  data  Data to copy
      \param  size  Data size as item count
     */
-    //[tags: self, set_ptr!, add_ptr! ]
     Array(const T* data, Size size) {
         if (size > 0) {
             data_ = (T*)::malloc((size_t)size*sizeof(T));
-            ContainerOp<T>::init(data_, data, size);
+            DataInit<T>::init(data_, data, size);
         } else if (data == NULL)
             data_ = NULL;
         else
@@ -189,7 +216,7 @@ public:
     /** Destructor to free used memory. */
     ~Array() {
         if (size_ > 0) {
-            ContainerOp<T>::unInit(data_, size_);
+            DataInit<T>::uninit(data_, size_);
             ::free(data_);
         }
     }
@@ -200,7 +227,6 @@ public:
      \param  src  Data to copy
      \return      This
     */
-    //[tags: self, set_list, add_list! ]
     ThisType& operator=(const ThisType& src)
         { return set(src); }
 
@@ -209,22 +235,20 @@ public:
      .
     Example:
     \code
-array = vNull;
+    array = vNULL;
     \endcode
      \return  This
     */
-    //[tags: self, set_null, add_item! ]
     ThisType& operator=(const ValNull&)
         { return set(); }
 
     /** Assignment operator to set as empty but not null.
     Example:
     \code
-array = vEmpty;
+    array = vEMPTY;
     \endcode
      \return  This
     */
-    //[tags: self, set_empty, add_item! ]
     ThisType& operator=(const ValEmpty&)
         { return setempty(); }
 
@@ -233,10 +257,9 @@ array = vEmpty;
      .
      \return  This
     */
-    //[tags: self, set ]
     ThisType& clear() {
         if (size_ > 0) {
-            ContainerOp<T>::unInit(data_, size_);
+            DataInit<T>::uninit(data_, size_);
             ::free(data_);
             data_ = EVO_PEMPTY;
             size_ = 0;
@@ -244,13 +267,12 @@ array = vEmpty;
         return *this;
     }
 
-    /** Set as null and empty.
+    /** %Set as null and empty.
      \return  This
     */
-    //[tags: self, set_null, set ]
     ThisType& set() {
         if (size_ > 0) {
-            ContainerOp<T>::unInit(data_, size_);
+            DataInit<T>::uninit(data_, size_);
             ::free(data_);
             size_ = 0;
         }
@@ -258,32 +280,31 @@ array = vEmpty;
         return *this;
     }
 
-    /** Set as copy of another array.
+    /** %Set as copy of another array.
      \param  src  Data to copy
      \return      This
     */
-    //[tags: self, set_list, set ]
     ThisType& set(const ThisType& src) {
         if (this != &src) {
             if (src.size_ > 0) {
                 if (size_ == src.size_) {
                     // Same positive size
-                    ContainerOp<T>::unInit(data_, size_);
-                    ContainerOp<T>::init(data_, src.data_, src.size_);
+                    DataInit<T>::uninit(data_, size_);
+                    DataInit<T>::init(data_, src.data_, src.size_);
                 } else {
                     // New positive size
                     if (size_ > 0) {
-                        ContainerOp<T>::unInit(data_, size_);
+                        DataInit<T>::uninit(data_, size_);
                         ::free(data_);
                     }
                     size_ = src.size_;
                     data_ = (T*)::malloc((size_t)src.size_*sizeof(T));
-                    ContainerOp<T>::init(data_, src.data_, src.size_);
+                    DataInit<T>::init(data_, src.data_, src.size_);
                 }
             } else {
                 // Null/Empty
                 if (size_ > 0) {
-                    ContainerOp<T>::unInit(data_, size_);
+                    DataInit<T>::uninit(data_, size_);
                     ::free(data_);
                     size_ = 0;
                 }
@@ -293,30 +314,29 @@ array = vEmpty;
         return *this;
     }
 
-    /** Set as copy using data pointer.
+    /** %Set as copy using data pointer.
      \param  data  Data to copy
      \param  size  Data size as item count
      \return       This
     */
-    //[tags: self, set_ptr, set ]
     ThisType& set(const T* data, Size size) {
         if (size == size_) {
             if (size_ > 0)
-                ContainerOp<T>::unInit(data_, size_);
+                DataInit<T>::uninit(data_, size_);
             if (size > 0)
-                ContainerOp<T>::init(data_, data, size);
+                DataInit<T>::init(data_, data, size);
             else if (data == NULL)
                 data_ = NULL;
             else
                 data_ = EVO_PEMPTY;
         } else {
             if (size_ > 0) {
-                ContainerOp<T>::unInit(data_, size_);
+                DataInit<T>::uninit(data_, size_);
                 ::free(data_);
             }
             if (size > 0) {
                 data_ = (T*)::malloc((size_t)size*sizeof(T));
-                ContainerOp<T>::init(data_, data, size);
+                DataInit<T>::init(data_, data, size);
             } else if (data == NULL)
                 data_ = NULL;
             else
@@ -326,13 +346,12 @@ array = vEmpty;
         return *this;
     }
 
-    /** Set as empty but not null.
+    /** %Set as empty but not null.
      \return  This
     */
-    //[tags: self, set_empty, set ]
     ThisType& setempty() {
         if (size_ > 0) {
-            ContainerOp<T>::unInit(data_, size_);
+            DataInit<T>::uninit(data_, size_);
             ::free(data_);
             size_ = 0;
         }
@@ -347,7 +366,6 @@ array = vEmpty;
      .
      \return  Whether null
     */
-    //[tags: info_size, set_null! ]
     bool null() const
         { return (data_ == NULL); }
 
@@ -356,23 +374,28 @@ array = vEmpty;
      .
      \return  Whether empty
     */
-    //[tags: info_size, null(), set_empty! ]
     bool empty() const
         { return (size_ == 0); }
 
     /** Get size.
      \return  Size as item count
     */
-    //[tags: info_size, item(), data() ]
     Size size() const
         { return size_; }
+
+    /** Get whether shared (false).
+     - This doesn't support sharing so always returns false
+     .
+     \return  Whether shared (always false)
+    */
+    bool shared() const
+        { return false; }
 
     /** Get data pointer (const).
      - \b Caution: Modifying the size of the array will invalidate returned pointer
      .
      \return  Data pointer as read-only, NULL/invalid if empty
     */
-    //[tags: info_item ]
     const T* data() const
         { return data_; }
 
@@ -382,7 +405,6 @@ array = vEmpty;
      \param  index  Item index
      \return        Given item as read-only (const)
     */
-    //[tags: info_item ]
     const T& operator[](Key index) const
         { assert( index < size_ ); return data_[index]; }
 
@@ -392,21 +414,27 @@ array = vEmpty;
      \param  index  Item index
      \return        Given item as read-only (const)
     */
-    //[tags: info_item ]
     const T& item(Key index) const
         { assert( index < size_ ); return data_[index]; }
+
+    /** Get ring-buffer item at position (const).
+     - See also: advRing()
+     .
+     \param  index  Item index, scaled down if out of bounds
+     \return        Given item as read-only (const)
+    */
+    const T& ring(Key index) const
+        { return data_[index % size_]; }
 
     /** Get first item (const).
      \return  First item pointer, NULL if empty
     */
-    //[tags: info_item ]
     const T* first() const
         { return (size_ > 0 ? data_ : NULL); }
 
     /** Get last item (const).
      \return  Last item pointer, NULL if empty
     */
-    //[tags: info_item ]
     const T* last() const
         { return (size_ > 0 ? data_+size_-1 : NULL); }
 
@@ -417,7 +445,6 @@ array = vEmpty;
      \param  offset  Offset from end, 0 for last item, 1 for second-last, etc
      \return         Resulting index, END if offset out of bounds
     */
-    //[tags: size(), info_item ]
     Key iend(Size offset=0) const
         { return (offset < size_ ? size_-1-offset : END); }
 
@@ -425,9 +452,8 @@ array = vEmpty;
      \param  seed  Seed value for hashing multiple values, 0 if none
      \return       Hash value
     */
-    //[tags: info_items ]
     ulong hash(ulong seed=0) const
-        { return DataOp<T>::hash(data_, size_, seed); }
+        { return DataHash<T>::hash(data_, size_, seed); }
 
     // COMPARE
 
@@ -435,7 +461,6 @@ array = vEmpty;
      \param  data  Data to compare to
      \return       Result (<0 if this is less, 0 if equal, >0 if this is greater)
     */
-    //[tags: self, compare ]
     int compare(const ThisType& data) const {
         int result;
         if (this == &data)
@@ -445,7 +470,7 @@ array = vEmpty;
         else if (data.data_ == NULL)
             result = 1;
         else
-            result = DataOp<T>::compare(data_, size_, data.data_, data.size_);
+            result = DataCompare<T>::compare(data_, size_, data.data_, data.size_);
         return result;
     }
 
@@ -453,7 +478,6 @@ array = vEmpty;
      \param  data  Data to compare to
      \return       Whether equal
     */
-    //[tags: self, compare ]
     bool operator==(const ThisType& data) const {
         bool result;
         if (this == &data)
@@ -463,7 +487,7 @@ array = vEmpty;
         else if (data.data_ == NULL || size_ != data.size_)
             result = false;
         else
-            result = DataOp<T>::equal(data_, data.data_, data.size_);
+            result = DataEqual<T>::equal(data_, data.data_, data.size_);
         return result;
     }
 
@@ -471,7 +495,6 @@ array = vEmpty;
      \param  data  Data to compare to
      \return       Whether inequal
     */
-    //[tags: self, compare ]
     bool operator!=(const ThisType& data) const {
         bool result;
         if (this == &data)
@@ -481,7 +504,7 @@ array = vEmpty;
         else if (data.data_ == NULL || size_ != data.size_)
             result = true;
         else
-            result = !DataOp<T>::equal(data_, data.data_, data.size_);
+            result = !DataEqual<T>::equal(data_, data.data_, data.size_);
         return result;
     }
 
@@ -491,7 +514,6 @@ array = vEmpty;
      \param  item  Item to check
      \return       Whether starts with item
     */
-    //[tags: self, compare_sub, find(), compare() ]
     bool starts(const T& item) const
         { return (size_ > 0 && data_[0] == item); }
 
@@ -502,9 +524,8 @@ array = vEmpty;
      \param  size   Size as item count to check
      \return        Whether starts with items
     */
-    //[tags: self, compare_sub, find(), compare() ]
     bool starts(const T* items, Size size) const
-        { return (size_ >= size && DataOp<T>::equal(data_, items, size)); }
+        { return (size_ >= size && DataEqual<T>::equal(data_, items, size)); }
 
     /** Check if ends with given item.
      - Uses item %operator==() for comparisons
@@ -512,7 +533,6 @@ array = vEmpty;
      \param  item  Item to check
      \return       Whether ends with item
     */
-    //[tags: self, compare_sub, find(), compare() ]
     bool ends(const T& item) const
         { return (size_ > 0 && data_[size_-1] == item); }
 
@@ -523,13 +543,8 @@ array = vEmpty;
      \param  size   Item count to check
      \return        Whether ends with items
     */
-    //[tags: self, compare_sub, find(), compare() ]
     bool ends(const T* items, Size size) const
-        { return (size_ >= size && DataOp<T>::equal(data_+(size_-size), items, size)); }
-
-    // FIND
-
-    // TODO: find(), findr(), findany(), findanyr(), contains()
+        { return (size_ >= size && DataEqual<T>::equal(data_+(size_-size), items, size)); }
 
     // INFO_SET
 
@@ -538,7 +553,6 @@ array = vEmpty;
      .
      \return  Data pointer (mutable), NULL/invalid if empty
     */
-    //[tags: info_item ]
     T* data()
         { return data_; }
 
@@ -548,7 +562,6 @@ array = vEmpty;
      \param  index  Item index
      \return        Given item (mutable)
     */
-    //[tags: info_item ]
     T& operator[](Key index)
         { assert( index < size_ ); return data_[index]; }
 
@@ -558,39 +571,50 @@ array = vEmpty;
      \param  index  Item index
      \return        Given item (mutable)
     */
-    //[tags: info_item ]
     T& item(Key index)
         { assert( index < size_ ); return data_[index]; }
+
+    /** Get ring-buffer item at position (mutable).
+     - See also: advRing()
+     .
+     \param  index  Item index, scaled down if out of bounds
+     \return        Given item (mutable)
+    */
+    T& ring(Key index)
+        { return data_[index % size_]; }
 
     /** Get first item (mutable).
      \return  First item pointer, NULL if empty
     */
-    //[tags: info_item ]
     T* first()
         { return (size_ > 0 ? data_ : NULL); }
 
     /** Get last item (mutable).
      \return  Last item pointer, NULL if empty
     */
-    //[tags: info_item ]
     T* last()
         { return (size_ > 0 ? data_+size_-1 : NULL); }
 
+    /** Make data unique -- no-op.
+     - Array doesn't support sharing so this is a no-op
+     .
+     \return  This
+    */
+    ThisType& unshare()
+        { return *this; }
+
     /** Resize while preserving existing data (modifier).
      - This adds/removes items as needed until given size is reached
-     - This will
-     - \b Advanced: See advBuffer() for getting writable pointer to buffer
      - \b Advanced: See advResize() for best performance in certain POD cases
      .
      \param  size  New size as item count
      \return       This
     */
-    //[tags: set_ptr!, size(), data() ]
     ThisType& resize(Size size) {
         if (size == 0) {
             // Null/Empty
             if (size_ > 0) {
-                ContainerOp<T>::unInit(data_, size_);
+                DataInit<T>::uninit(data_, size_);
                 ::free(data_);
                 data_ = EVO_PEMPTY;
                 size_ = 0;
@@ -604,19 +628,38 @@ array = vEmpty;
                 const Size save_size = (size_ < size ? size_ : size);
                 data_ = (T*)::malloc((size_t)size*sizeof(T));
                 memcpy(data_, old_data, (size_t)save_size*sizeof(T));
-                ContainerOp<T>::initTailSafe(data_, save_size, size);
+                DataInit<T>::init_tail_safe(data_, save_size, size);
 
                 size_ -= save_size;
                 if (size_ > 0)
-                    ContainerOp<T>::unInit(old_data+save_size, size_);
+                    DataInit<T>::uninit(old_data+save_size, size_);
                 ::free(old_data);
             } else {
                 // New array
                 data_ = (T*)::malloc((size_t)size*sizeof(T));
-                ContainerOp<T>::initSafe(data_, size);
+                DataInit<T>::init_safe(data_, size);
             }
             size_ = size;
         }
+        return *this;
+    }
+
+    /** Resize as power of 2 while preserving existing data (modifier).
+     - This makes sure size is always a power of 2, or 0 if empty
+     - If desired size isn't a power of 2, this increases it to the next power of 2
+     - Especially useful for ring buffers using ring() and advRing()
+     .
+     \param  size  New size as item count
+     \return       This
+    */
+    ThisType& resize2(Size size) {
+        if (size > 0) {
+            Size size2 = (size >= 256 ? 256 : 1);
+            while (size2 < size)
+                size2 *= 2;
+            size = size2;
+        }
+        resize(size);
         return *this;
     }
 
@@ -626,11 +669,10 @@ array = vEmpty;
      \param  size  Size as item count to append
      \return       This
     */
-    //[tags: add_item, add, addrem_n, remove() ]
     ThisType& addnew(Size size=1) {
         if (size > 0) {
             EVO_IMPL_ARRAY_GROW_ADD(size);
-            ContainerOp<T>::initSafe(data_+size_, size);
+            DataInit<T>::init_safe(data_+size_, size);
             size_ += size;
         }
         return *this;
@@ -640,10 +682,9 @@ array = vEmpty;
      \param  item  Item to append
      \return       This
     */
-    //[tags: self, add, add_item, addrem_item, set_item, remove() ]
     ThisType& add(const Item& item) {
         EVO_IMPL_ARRAY_GROW_ADD(1);
-        ContainerOp<T>::init(data_+size_, &item, 1);
+        DataInit<T>::init(data_+size_, &item, 1);
         ++size_;
         return *this;
     }
@@ -655,7 +696,6 @@ array = vEmpty;
      \param  size   Size as item count to insert
      \return        Inserted index
     */
-    //[tags: insert_item, insert, addrem_n, remove() ]
     Size insertnew(Key index, Size size=1) {
         if (size > 0) {
             if (index < size_) {
@@ -665,7 +705,7 @@ array = vEmpty;
                 EVO_IMPL_ARRAY_GROW_ADD(size);
                 size_ += size;
             }
-            ContainerOp<T>::initSafe(data_+index, size);
+            DataInit<T>::init_safe(data_+index, size);
         }
         return index;
     }
@@ -675,7 +715,6 @@ array = vEmpty;
      \param  item   Item to insert
      \return        Inserted index
     */
-    //[tags: self, insert, insert_item, addrem_item, set_item, remove() ]
     Size insert(Key index, const Item& item) {
         if (index < size_) {
             EVO_IMPL_ARRAY_GROW_INSERT(index, 1);
@@ -684,7 +723,7 @@ array = vEmpty;
             EVO_IMPL_ARRAY_GROW_ADD(1);
             ++size_;
         }
-        ContainerOp<T>::init(data_+index, &item, 1);
+        DataInit<T>::init(data_+index, &item, 1);
         return index;
     }
 
@@ -693,10 +732,9 @@ array = vEmpty;
     /** Remove items.
      \param  index  Remove index
      \param  size   Remove size, ALL for all items from index
-     \return        This
+     \return        Number of items removed
     */
-    //[tags: set! ]
-    ThisType& remove(Key index, Size size=1) {
+    Size remove(Key index, Size size=1) {
         if (index < size_ && size > 0) {
             Size tempsize = size_ - index;
             if (size > tempsize)
@@ -712,18 +750,20 @@ array = vEmpty;
                 if (tail > 0)
                     memcpy(data_+index, old_data+index+size, (size_t)tail*sizeof(T));
 
-                ContainerOp<T>::unInit(old_data+index, size);
+                DataInit<T>::uninit(old_data+index, size);
                 ::free(old_data);
                 size_ = tempsize;
             } else {
                 // Remove all
-                ContainerOp<T>::unInit(data_, size_);
+                size = size_;
+                DataInit<T>::uninit(data_, size_);
                 ::free(data_);
                 data_ = EVO_PEMPTY;
                 size_ = 0;
             }
-        }
-        return *this;
+        } else
+            size = 0;
+        return size;
     }
 
     // FILL
@@ -735,7 +775,6 @@ array = vEmpty;
      \param  index  Start index, END to start at end and append
      \param  size   Size to fill as item count from index, ALL for all items from index, 0 to do nothing
     */
-    //[tags: replace, resize() ]
     ThisType& fill(const T& item, Key index=0, Size size=ALL) {
         if (index == END)
             index = size_;
@@ -745,7 +784,7 @@ array = vEmpty;
             const Size newsize = index + size;
             if (newsize > size_)
                 advResize(newsize);
-            DataOp<T>::fill(data_+index, size, item);
+            DataFill<T>::fill(data_+index, size, item);
         }
         return *this;
     }
@@ -757,15 +796,35 @@ array = vEmpty;
      .
      \param  array  %Array to swap with
     */
-    //[tags: self, move ]
     void swap(ThisType& array)
         { EVO_IMPL_CONTAINER_SWAP(this, &array, ThisType); }
 
-    // ALGS
-
-    // TODO: search() binary search
-
     // ADVANCED
+
+    /** Advanced: Get ring-buffer item at position (const).
+     - This is optimized for speed using bit operations instead of modulus operator
+     - Must be resized with resize2() so size is always a power of 2
+     - \b Caution: Results are undefined if size is not a power of 2
+     .
+     \param  index  Item index, scaled down if out of bounds
+     \return        Given item as read-only (const)
+    */
+    const T& advRing(Key index) const {
+        assert( is_pow2(size_) );
+        return data_[index & (size_ - 1)];
+    }
+
+    /** Advanced: Get ring-buffer item at position (mutable).
+     - Must be resized with resize2() so size is always a power of 2
+     - \b Caution: Results are undefined if size is not a power of 2
+     .
+     \param  index  Item index
+     \return        Given item
+    */
+    T& advRing(Key index) {
+        assert( is_pow2(size_) );
+        return data_[index & (size_ - 1)];
+    }
 
     /** Advanced: Resize while preserving existing data, POD items not initialized (modifier).
      - This is a slightly modified version of resize():
@@ -775,17 +834,15 @@ array = vEmpty;
        - In most cases resize() is preferred since it's safer and the performance difference is usually negligible
        .
      - This adds/removes items as needed until given size is reached
-     - \b Advanced: See advBuffer() for getting writable pointer to buffer
      .
      \param  size  New size as item count
      \return       This
     */
-    //[tags: resize(), set_ptr!, size(), data() ]
     ThisType& advResize(Size size) {
         if (size == 0) {
             // Null/Empty
             if (size_ > 0) {
-                ContainerOp<T>::unInit(data_, size_);
+                DataInit<T>::uninit(data_, size_);
                 ::free(data_);
                 data_ = EVO_PEMPTY;
                 size_ = 0;
@@ -799,16 +856,16 @@ array = vEmpty;
                 const Size save_size = (size_ < size ? size_ : size);
                 data_ = (T*)::malloc((size_t)size*sizeof(T));
                 memcpy(data_, old_data, (size_t)save_size*sizeof(T));
-                ContainerOp<T>::initTailFast(data_, save_size, size);
+                DataInit<T>::init_tail_fast(data_, save_size, size);
 
                 size_ -= save_size;
                 if (size_ > 0)
-                    ContainerOp<T>::unInit(old_data+save_size, size_);
+                    DataInit<T>::uninit(old_data+save_size, size_);
                 ::free(old_data);
             } else {
                 // New array
                 data_ = (T*)::malloc((size_t)size*sizeof(T));
-                ContainerOp<T>::init(data_, size);
+                DataInit<T>::init(data_, size);
             }
             size_ = size;
         }
@@ -906,5 +963,5 @@ protected:
 
 ///////////////////////////////////////////////////////////////////////////////
 //@}
-} // Namespace: evo
+}
 #endif

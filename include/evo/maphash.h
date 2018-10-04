@@ -1,8 +1,6 @@
 // Evo C++ Library
-/* Copyright (c) 2016 Justin Crowell
- This Source Code Form is subject to the terms of the Mozilla Public
- License, v. 2.0. If a copy of the MPL was not distributed with this
- file, You can obtain one at http://mozilla.org/MPL/2.0/.
+/* Copyright 2018 Justin Crowell
+Distributed under the BSD 2-Clause License -- see included file LICENSE.txt for details.
 */
 ///////////////////////////////////////////////////////////////////////////////
 /** \file maphash.h Evo MapHash container. */
@@ -10,15 +8,18 @@
 #ifndef INCL_evo_maphash_h
 #define INCL_evo_maphash_h
 
-// Includes
 #include "map.h"
 #include "array.h"
 #include "ptrlist.h"
 #include "impl/hash.h"
 
-// Namespace: evo
-namespace evo {
+// Disable certain MSVC warnings for this file
+#if defined(_MSC_VER)
+    #pragma warning(push)
+    #pragma warning(disable:4457)
+#endif
 
+namespace evo {
 /** \addtogroup EvoContainers */
 //@{
 
@@ -36,7 +37,7 @@ namespace evo {
 
 \tparam  TKey    %Map key type
 \tparam  TValue  %Map value type
-\tparam  THash   %Hash function type to use, calls Hash::hash(const TKey&) -- default: HashOp<TKey>
+\tparam  THash   %Hash type to use -- default: CompareHash
 \tparam  TSize   %Size type to use for size values (must be unsigned integer) -- default: SizeT
 
 \par Iterators
@@ -53,8 +54,9 @@ namespace evo {
    - null(), empty()
    - capacity()
    - shared()
- - type()
    - ordered()
+ - contains(const Key&) const
+   - contains(const Key&, const Value&) const
  - find()
    - iter()
  - operator==()
@@ -80,88 +82,107 @@ namespace evo {
    - clear()
    - operator=(const MapBaseType&)
    - operator=(const ThisType&)
- - add(const Item&,bool)
-   - add(const MapBaseType&)
+ - add(const Key&,const Value&,bool)
+   - add(const Item&,bool)
+   - add(const MapBaseType&,bool)
  - remove(const Key&)
    - remove(typename MapBaseType::IterM&,IteratorDir)
- - move(MapBaseType::IterM&,IteratorDir)
-   - move(ThisType::IterM&,IteratorDir)
  .
 
 \par Example
 
 This example works with any Map type.
 
+Example using a map of numbers
+
 \code
-// Create map with numeric keys and values, set some key/values
-MapHash<int,int> map;
-map[10] = 100;
-map[20] = 200;
+#include <evo/string.h>
+#include <evo/maphash.h>
+#include <evo/io.h>
+using namespace evo;
+static Console& c = con();
 
-// Find (const), print value
-const int* const_value = map.find(10);
-if (const_value != NULL)
-    printf("Value:%i\n", *const_value);
+int main() {
+    typedef MapHash<int,int> MyMap;
 
-// Find (mutable), modify value
-int* value = map.findM(10);
-if (value != NULL)
-    *value *= 10;
+    // Create map with numeric keys and values
+    MyMap map;
+    map.add(2, 20);
+    map[1] = 10;
 
-// Lookup iterator and print key and value
-MapHash<int,int>::Iter iter = map.iter(20);
-if (iter)
-    printf("Key:%i, Value:%i\n", iter->key, iter->value);
+    // Add more values from delimited string
+    map.addsplit("3=30,4=40");
+
+    // Join map as delimited string and print it
+    String str;
+    str.joinmap(map);
+    c.out << str << NL;
+
+    // Check if map contains key
+    bool has1 = map.contains(1);        // true
+    bool has5 = map.contains(5);        // false
+
+    // Check if map contains key and value
+    bool has1_10 = map.contains(1, 10); // true
+    bool has1_20 = map.contains(1, 20); // false
+    bool has5_50 = map.contains(5, 50); // false
+
+    // Find and modify value
+    int* value = map.findM(1);
+    if (value != NULL)
+        *value = 100;
+
+    // Iterate and print keys and values
+    for (MyMap::Iter iter(map); iter; ++iter)
+        c.out << iter->key() << "=" << iter->value() << NL;
+
+    return 0;
+}
 \endcode
+
+Output:
+\code{.unparsed}
+2=20,3=30,1=10,4=40
+2=20
+3=30
+1=100
+4=40
+\endcode
+
+<i>Note: Item ordering will vary</i>
 */
-template<class TKey, class TValue, class THash=Hash<TKey>, class TCompare=Compare<TKey>, class TSize=SizeT>
-class MapHash : public Map<TKey, TValue, TSize>
-{
+template<class TKey, class TValue, class THash=CompareHash<TKey>, class TSize=SizeT>
+class MapHash : public Map<TKey,TValue,TSize> {
 protected:
     using Map<TKey,TValue,TSize>::size_;
 
 public:
     EVO_CONTAINER_TYPE;
-    typedef THash             Hash;                    ///< Hashing function type (function pointer or functor)
-    typedef TCompare          Compare;                ///< Compare type for internal MapList (function pointer or functor)
-    typedef TSize             Size;                    ///< Size integer type
-    typedef TKey              Key;                    ///< Key type
-    typedef TValue            Value;                ///< Value type
-    typedef KeyVal<Key,Value> Item;                    ///< Item (key/value pair) type
-
-    typedef MapHash<Key,Value,Hash,Compare,Size> ThisType;        ///< This type
-    typedef Map<Key,Value,Size>                  MapBaseType;    ///< Map base type (used when passing as parameter)
-
-    // Iterator support types
-    /** \cond impl */
-    typedef typename MapBaseType::IterKey  IterKey;
+#if defined(_MSC_VER) || defined(EVO_OLDCC) // avoid errors with older compilers and MSVC
+    typedef Map<TKey,TValue,TSize> MapBaseType;                 ///< %Map base type
+    typedef typename MapBaseType::Size Size;
+    typedef typename MapBaseType::Key Key;
+    typedef typename MapBaseType::Value Value;
+    typedef typename MapBaseType::Item Item;
+    typedef typename MapBaseType::IterKey IterKey;
     typedef typename MapBaseType::IterItem IterItem;
-    /** \endcond */
+#else
+    using typename Map<TKey,TValue,TSize>::MapBaseType;
+    using typename Map<TKey,TValue,TSize>::Size;
+    using typename Map<TKey,TValue,TSize>::Key;
+    using typename Map<TKey,TValue,TSize>::Value;
+    using typename Map<TKey,TValue,TSize>::Item;
+    using typename Map<TKey,TValue,TSize>::IterKey;
+    using typename Map<TKey,TValue,TSize>::IterItem;
+#endif
+    typedef MapHash<TKey,TValue,THash,TSize> ThisType;          ///< This type
+    typedef THash Hash;                                         ///< Hashing type -- default: CompareHash
 
-    typedef typename IteratorBi<ThisType>::Const Iter;    ///< Iterator (const) - IteratorBi
-    typedef IteratorBi<ThisType>                 IterM;    ///< Iterator (mutable) - IteratorBi
+    typedef typename IteratorBi<ThisType>::Const Iter;          ///< Iterator (const) - IteratorBi
+    typedef IteratorBi<ThisType>                 IterM;         ///< Iterator (mutable) - IteratorBi
 
     /** Constructor. */
     MapHash() : Map<TKey,TValue,TSize>(false)
-        { }
-
-    /** Constructor.
-     \param  hash  Hash function object to use
-    */
-    MapHash(const Hash& hash) : Map<TKey,TValue,TSize>(false), data_(hash)
-        { }
-
-    /** Constructor.
-     \param  cmp  Comparison object to use
-    */
-    MapHash(const Compare& cmp) : Map<TKey,TValue,TSize>(false), data_(cmp)
-        { }
-
-    /** Constructor.
-     \param  hash  Hash function object to use
-     \param  cmp   Comparison object to use
-    */
-    MapHash(const Hash& hash, const Compare& cmp) : Map<TKey,TValue,TSize>(false), data_(hash, cmp)
         { }
 
     /** Copy constructor.
@@ -169,7 +190,7 @@ public:
     */
     MapHash(const MapBaseType& src) : Map<TKey,TValue,TSize>(false) {
         for (typename MapBaseType::Iter iter(src); iter; ++iter)
-            getitem(iter->key).value = iter->value;
+            getitem(iter->first).second = iter->second;
     }
 
     /** Copy constructor.
@@ -178,16 +199,20 @@ public:
     MapHash(const ThisType& src) : Map<TKey,TValue,TSize>(false)
         { set(src); }
 
+    // SET
+
+    /** \copydoc Map::operator=() */
     ThisType& operator=(const MapBaseType& src)
         { set(src); return *this; }
 
+    /** Assignment operator.
+     - This copies the hash and comparison objects as well
+     .
+     \param  src  Source to copy
+     \return      This
+    */
     ThisType& operator=(const ThisType& src)
         { set(src); return *this; }
-
-    // SET
-
-    ThisType& clear()
-        { buckets_.clear(); size_ = 0; return *this; }
 
     ThisType& set()
         { buckets_.set(); size_ = 0; return *this; }
@@ -195,7 +220,7 @@ public:
     ThisType& set(const MapBaseType& src) {
         clear();
         for (typename MapBaseType::Iter iter(src); iter; ++iter)
-            getitem(iter->key).value = iter->value;
+            getitem(iter->first).second = iter->second;
         return *this;
     }
 
@@ -208,6 +233,9 @@ public:
 
     ThisType& setempty()
         { buckets_.setempty(); size_ = 0; return *this; }
+
+    ThisType& clear()
+        { buckets_.clear(); size_ = 0; return *this; }
 
     // INFO
 
@@ -227,17 +255,25 @@ public:
 
     // FIND
 
+    bool contains(const Key& key) const
+        { return (find(key) != NULL); }
+
+    bool contains(const Key& key, const Value& value) const {
+        const Value* item_value = find(key);
+        return (item_value != NULL && *item_value == value);
+    }
+
     const Value* find(const Key& key) const {
         if (size_ > 0) {
-            const Bucket* bucket = buckets_.item( data_.Hash::operator()(key) & data_.sizemask );
+            const Bucket* bucket = buckets_.item( data_.hash(key) & data_.sizemask );
             if (bucket != NULL) {
-                if (key == bucket->first.key) {
-                    return &bucket->first.value;
+                if (key == bucket->first.first) {
+                    return &bucket->first.second;
                 } else {
                     Size index;
                     const Item* item = bucket->search(index, key, data_);
                     if (item != NULL)
-                        return &item->value;
+                        return &item->second;
                 }
             }
         }
@@ -246,30 +282,31 @@ public:
 
     Value* findM(const Key& key) {
         if (size_ > 0) {
-            Bucket* bucket = buckets_.itemM( data_.Hash::operator()(key) & data_.sizemask );
+            Bucket* bucket = buckets_.itemM( data_.hash(key) & data_.sizemask );
             if (bucket != NULL) {
-                if (key == bucket->first.key) {
-                    return &bucket->first.value;
+                if (key == bucket->first.first) {
+                    return &bucket->first.second;
                 } else {
                     Size index;
                     Item* item = (Item*)bucket->search(index, key, data_);
                     if (item != NULL)
-                        return &item->value;
+                        return &item->second;
                 }
             }
         }
         return NULL;
     }
 
+    /** \copydoc Map::iter() */
     Iter iter(const Key& key) const {
         if (size_ > 0) {
-            IterKey iterkey( data_.Hash::operator()(key) & data_.sizemask );
+            IterKey iterkey( data_.hash(key) & data_.sizemask );
             const Bucket* bucket = buckets_.item(iterkey.a);
             if (bucket != NULL) {
-                if (bucket->first.key == key) {
+                if (bucket->first.first == key) {
                     return Iter(*this, iterkey, (IterItem*)&bucket->first);
                 } else {
-                    const IterItem* item = (IterItem*)bucket->search(iterkey.b, key, (Compare&)data_);
+                    const IterItem* item = (IterItem*)bucket->search(iterkey.b, key, data_);
                     if (item != NULL) {
                         ++iterkey.b;
                         return Iter(*this, iterkey, item);
@@ -277,18 +314,19 @@ public:
                 }
             }
         }
-        return Iter(*this, iterEnd);
+        return Iter(*this, iterEND);
     }
 
+    /** \copydoc Map::iterM() */
     IterM iterM(const Key& key) {
         if (size_ > 0) {
-            IterKey iterkey( data_.Hash::operator()(key) & data_.sizemask );
+            IterKey iterkey( data_.hash(key) & data_.sizemask );
             Bucket* bucket = buckets_.itemM(iterkey.a);
             if (bucket != NULL) {
-                if (bucket->first.key == key) {
+                if (bucket->first.first == key) {
                     return IterM(*this, iterkey, (IterItem*)&bucket->first);
                 } else {
-                    IterItem* item = (IterItem*)bucket->search(iterkey.b, key, (Compare&)data_);
+                    IterItem* item = (IterItem*)bucket->search(iterkey.b, key, data_);
                     if (item != NULL) {
                         ++iterkey.b;
                         return IterM(*this, iterkey, item);
@@ -296,7 +334,7 @@ public:
                 }
             }
         }
-        return IterM(*this, iterEnd);
+        return IterM(*this, iterEND);
     }
 
     Item& getitem(const Key& key, bool* created=NULL) {
@@ -323,16 +361,16 @@ public:
                 if ((bucket=*cur) != NULL) {
                     for (Size i=0, iend=bucket->others.size(); i <= iend; ++i) {
                         const Item* item = (i == 0 ? &bucket->first : &bucket->others[i-1]);
-                        Bucket* newbucket = buckets_.getitem(data_.Hash::operator()(item->key) & data_.sizemask, &created);
+                        Bucket* newbucket = buckets_.getitem(data_.hash(item->first) & data_.sizemask, &created);
                         if (created)
                             newbucket->first = *item;
                         else {
                             Size index;
-                            Item* newitem = (Item*)newbucket->search(index, item->key, data_);
+                            Item* newitem = (Item*)newbucket->search(index, item->first, data_);
                             if (newitem == NULL)
                                 newbucket->others.insert(index, *item);
                             else
-                                newitem->value = item->value;
+                                newitem->second = item->second;
                         }
                     }
                 }
@@ -342,12 +380,12 @@ public:
         // Get item, create if needed
         bool created_item;
         Item* item;
-        Bucket* bucket = buckets_.getitem((data_.Hash::operator()(key) & data_.sizemask), &created_item);
+        Bucket* bucket = buckets_.getitem((data_.hash(key) & data_.sizemask), &created_item);
         if (created_item) {
             ++size_;
             item = &bucket->first;
-            item->key = key;
-        } else if (bucket->first.key == key) {
+            item->first = key;
+        } else if (bucket->first.first == key) {
             item = &bucket->first;
         } else {
             Size index;
@@ -356,7 +394,7 @@ public:
                 created_item = true;
                 ++size_;
                 item = (Item*)&(bucket->others[bucket->others.insertnew(index, 1)]);
-                item->key = key;
+                item->first = key;
             }
         }
         if (created != NULL)
@@ -364,18 +402,20 @@ public:
         return *item;
     }
 
+    /** \copydoc Map::get() */
     Value& get(const Key& key, bool* created=NULL)
-        { return getitem(key, created).value; }
+        { return getitem(key, created).second; }
 
     // INFO_SET
 
+    /** \copydoc Map::operator[]() */
     Value& operator[](const Key& key)
-        { return getitem(key, NULL).value; }
+        { return getitem(key, NULL).second; }
 
     ThisType& unshare()
         { buckets_.unshare(); return *this; }
 
-    /** Set hash map size (capacity).
+    /** %Set hash map size (capacity).
      - Use to suggest a new capacity before adding a batch of items
      - This will set hash size to nearest power of 2 that can fit both current items and given size
      - \b Caution: This will invalidate iterators on this map
@@ -383,7 +423,6 @@ public:
      \param  size  New suggested capacity
      \return       This
     */
-    //[tags: self, capacity, size() ]
     ThisType& capacity(Size size) {
         const Size cursize = buckets_.size();
         if (size != cursize) {
@@ -412,16 +451,16 @@ public:
                         if ((bucket=*cur) != NULL) {
                             for (Size i=0, iend=bucket->others.size(); i <= iend; ++i) {
                                 const Item* item = (i == 0 ? &bucket->first : &bucket->others[i-1]);
-                                Bucket* newbucket = buckets_.getitem(data_.Hash::operator()(item->key) & data_.sizemask, &created);
+                                Bucket* newbucket = buckets_.getitem(data_.hash(item->first) & data_.sizemask, &created);
                                 if (created)
                                     newbucket->first = *item;
                                 else {
                                     Size index;
-                                    Item* newitem = (Item*)newbucket->search(index, item->key, data_);
+                                    Item* newitem = (Item*)newbucket->search(index, item->first, data_);
                                     if (newitem == NULL)
                                         newbucket->others.insert(index, *item);
                                     else
-                                        newitem->value = item->value; // TODO: swap if non-pod obj?
+                                        newitem->second = item->second;
                                 }
                             }
                         }
@@ -432,7 +471,7 @@ public:
         return *this;
     }
 
-    /** Set map capacity to at least given minimum.
+    /** %Set map capacity to at least given minimum.
      \param  min  Minimum capacity
      \return      This
     */
@@ -442,12 +481,13 @@ public:
         return *this;
     }
 
+    /** \copydoc Map::reserve() */
     ThisType& reserve(Size size)
         { return capacitymin(size_ + size); }
 
     // RESIZE
 
-    /** Set hash map size (capacity) directly.
+    /** %Set hash map size (capacity) directly.
      - This will force capacity to a given size (rounded up to next power of 2 if not a power of 2)
      - All existing items are preserved and rehashed as needed
      - If size is too small this will increase collisions and reduce lookup performance
@@ -457,7 +497,6 @@ public:
      \param  size  New size/capacity, minimum size of 8 is used if lower
      \return       This
     */
-    //[tags: self, capacity, size() ]
     void resize(Size size) {
         Size newsize = MIN_SIZE;
         while (newsize < size) newsize <<= 1;
@@ -475,16 +514,16 @@ public:
                 if ((bucket=*cur) != NULL) {
                     for (Size i=0, iend=bucket->others.size(); i <= iend; ++i) {
                         const Item* item = (i == 0 ? &bucket->first : &bucket->others[i-1]);
-                        Bucket* newbucket = buckets_.getitem(data_.Hash::operator()(item->key) & data_.sizemask, &created);
+                        Bucket* newbucket = buckets_.getitem(data_.hash(item->first) & data_.sizemask, &created);
                         if (created)
                             newbucket->first = *item;
                         else {
                             Size index;
-                            Item* newitem = (Item*)newbucket->search(index, item->key, data_);
+                            Item* newitem = (Item*)newbucket->search(index, item->first, data_);
                             if (newitem == NULL)
                                 newbucket->others.insert(index, *item);
                             else
-                                newitem->value = item->value; // TODO: swap if non-pod obj?
+                                newitem->second = item->second;
                         }
                     }
                 }
@@ -494,25 +533,25 @@ public:
 
     // ADD
 
-    Item& add(const Item& item, bool update=true) {
+    Item& add(const Key& key, const Value& value, bool update=true) {
         bool created_val;
-        Item& upditem = getitem(item.key, &created_val);
+        Item& upditem = getitem(key, &created_val);
         if (created_val || update)
-            upditem.value = item.value;
+            upditem.second = value;
         return upditem;
     }
 
-    ThisType& add(const MapBaseType& map) {
-        assert( this != &map );
-        reserve(map.size());
-        for (typename MapBaseType::Iter iter(map); iter; ++iter)
-            getitem(iter->key).value = iter->value;
+    Item& add(const Item& item, bool update=true)
+        { return add(item.first, item.second, update); }
+
+    ThisType& add(const MapBaseType& map, bool update=true) {
+        if (this != &map) {
+            reserve(map.size());
+            for (typename MapBaseType::Iter iter(map); iter; ++iter)
+                add(iter->first, iter->second, update);
+        }
         return *this;
     }
-
-    template<class T>
-    Size addsplit(const T& str, char delim=',', char kvdelim='=')
-        { return MapBaseType::addsplit(str, delim, kvdelim); }
 
     // MOVE
 
@@ -522,10 +561,10 @@ public:
      - This has the same effect as doing an add() then remove() on src map
      .
      \param  src  Source iterator in other map to move from
-     \param  dir  Direction to move src iterator to next item, iterNone for end position
+     \param  dir  Direction to move src iterator to next item, iterNONE for end position
      \return      This
     */
-    ThisType& move(IterM& src, IteratorDir dir=iterNone) {
+    ThisType& move(IterM& src, IteratorDir dir=iterNONE) {
         if (src) {
             ThisType& srcparent = src.getParent();
             if (&srcparent != this) {
@@ -544,22 +583,22 @@ public:
      \return      This
     */
     ThisType& move(const IterM& src)
-        { return move((IterM&)src, iterNone); }
+        { return move((IterM&)src, iterNONE); }
 
     // REMOVE
 
     bool remove(const Key& key) {
         bool result;
-        Size bucket_index = data_.Hash::operator()(key) & data_.sizemask;
+        Size bucket_index = data_.hash(key) & data_.sizemask;
         Bucket* bucket = buckets_.itemM(bucket_index);
         if (bucket != NULL) {
             Size index;
-            if (bucket->first.key == key) {
+            if (bucket->first.first == key) {
                 if (bucket->others.size() > 0) {
                     // Remove "first" and replace with last item in "others"
                     Item* item1 = &bucket->first;
                     Item* item2 = bucket->others.data();
-                    EVO_IMPL_CONTAINER_SWAP(item1, item2, Item); // TODO: move without swap, need Array::advRemove()
+                    EVO_IMPL_CONTAINER_SWAP(item1, item2, Item);
                     bucket->others.remove(0);
                 } else
                     // Remove bucket since "first" is only item
@@ -578,10 +617,10 @@ public:
         return result;
     }
 
-    bool remove(typename MapBaseType::IterM& iter, IteratorDir dir=iterNone)
+    bool remove(typename MapBaseType::IterM& iter, IteratorDir dir=iterNONE)
         { return remove((IterM&)iter, dir); }
 
-    bool remove(IterM& iter, IteratorDir dir=iterNone) {
+    bool remove(IterM& iter, IteratorDir dir=iterNONE) {
         if (iter && this == &iter.getParent()) {
             IterKey& iterkey = iter.getKey();
             assert( iterkey.a < buckets_.size() );
@@ -595,7 +634,7 @@ public:
                     // Remove "first" and replace with last item in "others"
                     Item* item1 = &bucket->first;
                     Item* item2 = bucket->others.data();
-                    EVO_IMPL_CONTAINER_SWAP(item1, item2, Item); // TODO: move without swap, need Array::advRemove()
+                    EVO_IMPL_CONTAINER_SWAP(item1, item2, Item);
                     bucket->others.remove(0);
                 } else {
                     // Remove bucket since "first" is only item
@@ -605,8 +644,8 @@ public:
             }
 
             // Update size and iterator
-            if (--size_ > 0 && dir != iterNone) {
-                if (dir == iterRv) {
+            if (--size_ > 0 && dir != iterNONE) {
+                if (dir == iterRV) {
                     // Previous
                     if (iterkey.b > 0 && bucket != NULL) {
                         iter.setData( (IterItem*)(--iterkey.b == 0 ? &(bucket->first) : &(bucket->others[iterkey.b-1])) );
@@ -616,7 +655,7 @@ public:
                             iterkey.b = bucket->others.size();
                             iter.setData( (IterItem*)(iterkey.b == 0 ? &bucket->first : &(bucket->others[iterkey.b-1])) );
                         } else
-                            iter = iterEnd;
+                            iter = iterEND;
                     }
                 } else {
                     // Next
@@ -627,11 +666,11 @@ public:
                         if ((bucket=(Bucket*)buckets_.iterNext(iterkey.a)) != NULL)
                             iter.setData( (IterItem*)&bucket->first );
                         else
-                            iter = iterEnd;
+                            iter = iterEND;
                     }
                 }
             } else
-                iter = iterEnd;
+                iter = iterEND;
             return true;
         }
         return false;
@@ -641,14 +680,14 @@ public:
 
     // Testing methods
     /** \cond impl */
-    #if EVO_UNIT_TEST_MODE
+#if EVO_UNIT_TEST_MODE
     Size utCollisions() const {
         Size count = 0;
         for (typename Buckets::Iter iter(buckets_); iter; ++iter)
             count += iter->others.size();
         return count;
     }
-    #endif
+#endif
     /** \endcond */
 
     // Iterator support methods
@@ -705,10 +744,10 @@ public:
 protected:
     const Item* getiter(IterKey& iterkey, const Key& key) const {
         if (size_ > 0) {
-            iterkey.a = (data_.Hash::operator()(key) & data_.sizemask);
+            iterkey.a = (data_.hash(key) & data_.sizemask);
             const Bucket* bucket = buckets_.item(iterkey.a);
             if (bucket != NULL) {
-                if (bucket->first.key == key) {
+                if (bucket->first.first == key) {
                     iterkey.b = 0;
                     return &bucket->first;
                 } else {
@@ -745,14 +784,14 @@ private:
         }
 
         // Search "others" for key, using compare, set index (insertion point if not found)
-        const Item* search(Size& index, const Key& key, const Compare& compare) const {
+        const Item* search(Size& index, const Key& key, const typename Hash::CompareBase& compare) const {
             int cmp;
             Size left = 0, right = others.size(), mid = 0;
             const Item* items = others.data();
             while (left < right) {
                 mid = left + ((right-left) / 2);
                 const Item* item = items + mid;
-                cmp = compare(key, item->key);
+                cmp = compare(key, item->first);
                 if (cmp < 0) {
                     right = mid;
                 } else if (cmp == 0) {
@@ -765,45 +804,44 @@ private:
             return NULL;
         }
     };
+
     typedef PtrList<Bucket,Size> Buckets;
 
     Buckets buckets_;
 
-    // Use inheritance to reduce size bloat with empty Hash, group Hash with least used member
-    struct Data : public Hash, Compare {
+    // Use inheritance to reduce size bloat with empty Hash
+    struct Data : public THash {
         Size sizemask;
         Size threshold;
 
         Data() : sizemask(0), threshold(0)
             { }
-        Data(const Hash& hash) : Hash(hash), sizemask(0), threshold(0)
+        Data(const THash& hash) : THash(hash), sizemask(0), threshold(0)
             { }
-        Data(const Compare& cmp) : Compare(cmp), sizemask(0), threshold(0)
+        Data(const Data& data) : Hash(data), sizemask(data.sizemask), threshold(data.threshold)
             { }
-        Data(const Hash& hash, const Compare& cmp) : Hash(hash), Compare(cmp), sizemask(0), threshold(0)
-            { }
-        Data(const Data& data) : Hash(data), Compare(data), sizemask(data.sizemask), threshold(data.threshold)
-            { }
-        Data& operator=(const Data& data) {
-            Hash::operator=((const Hash&)data);
-            Compare::operator=((const Compare&)data);
-            sizemask  = data.sizemask;
-            threshold = data.threshold;
-            return *this;
-        }
     };
+
     Data data_;
 };
 
+#undef EVO_IMPL_MAPHASH_SIZEMASK
+#undef EVO_IMPL_MAPHASH_THRESHOLD
+
 ///////////////////////////////////////////////////////////////////////////////
 
-// TODO: use #ifdef to detect string.h?
+#if defined(INCL_evo_string_h) || defined(DOXYGEN)
 /** MapHash using String keys and values.
  - This is an alias to MapHash
- */
+ - This is only defined if string.h is included before maphash.h
+*/
 typedef MapHash<String,String> StrHash;
+#endif
 
 ///////////////////////////////////////////////////////////////////////////////
 //@}
-} // Namespace: evo
+}
+#if defined(_MSC_VER)
+    #pragma warning(pop)
+#endif
 #endif

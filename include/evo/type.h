@@ -1,8 +1,6 @@
 // Evo C++ Library
-/* Copyright (c) 2016 Justin Crowell
- This Source Code Form is subject to the terms of the Mozilla Public
- License, v. 2.0. If a copy of the MPL was not distributed with this
- file, You can obtain one at http://mozilla.org/MPL/2.0/.
+/* Copyright 2018 Justin Crowell
+Distributed under the BSD 2-Clause License -- see included file LICENSE.txt for details.
 */
 ///////////////////////////////////////////////////////////////////////////////
 /** \file type.h Evo basic types and traits. */
@@ -10,49 +8,63 @@
 #ifndef INCL_evo_type_h
 #define INCL_evo_type_h
 
-// Includes
-#include "meta.h"
 #include "impl/container.h"
 
-// Namespace: evo
 namespace evo {
-
 /** \addtogroup EvoCore */
 //@{
 
 ///////////////////////////////////////////////////////////////////////////////
 
+/** Macro returning lowest argument.
+ \param  A  First number
+ \param  B  Second number
+ \return    Max number
+*/
+#define EVO_MIN(A, B) ((B) < (A) ? (B) : (A))
+
+/** Macro returning highest argument.
+ \param  A  First number
+ \param  B  Second number
+ \return    Max number
+*/
+#define EVO_MAX(A, B) ((B) > (A) ? (B) : (A))
+
+///////////////////////////////////////////////////////////////////////////////
+
 /** Safe bool base class.
 This implements "safe" boolean evaluation, without the side-effects of implicit conversions from the bool type.
- - Use by deriving the intended class from SafeBool.
- - The deriving class must implement the logical negation operator (as const) for boolean evaluation.
+ - Use by deriving the intended class from SafeBool
+ - The deriving class must implement the logical negation operator (as const) for boolean evaluation
    \code
-bool operator!() const
+    bool operator!() const
    \endcode
- - Safe bool comparisons (\c obj1 \c == \c obj2 or \c obj1 \c != \c obj1 \c ) will not compile unless the deriving class implements operator==() or operator!=(), respectively.
- - No virtual methods are used even though this is a base class.
+ - Safe bool comparisons (\c obj1 \c == \c obj2 or \c obj1 \c != \c obj1 \c ) will not compile unless the deriving class implements operator==() or operator!=(), respectively
+ - No virtual methods are used even though this is a base class
  .
  \tparam  T  The deriving type being used.
+
 \par Example:
+
 \code
-// Class Foo is a safe bool
-struct Foo : public SafeBool<Foo>
-{
+#include <evo/type.h>
+
+// Class supporting "safe bool evaluation"
+struct Foo : public evo::SafeBool<Foo> {
     bool operator!() const
         { return false; }
 };
 
-void func()
-{
+void func() {
     const Foo foo;
-    // Safe bool evaluation (calls !operator!())
-    if (foo)
-    {
+
+    // Safe bool evaluation -- calls !operator!()
+    if (foo) {
         // ...
     }
-    // Negative bool evaluation (calls operator!())
-    if (!foo)
-    {
+
+    // Negative bool evaluation -- calls operator!()
+    if (!foo) {
         // ...
     }
 }
@@ -62,7 +74,7 @@ template<class T> class SafeBool {
 protected:
     /** \cond impl */
     typedef void (SafeBool::*SafeBoolType)() const;
-    void This_type_does_not_support_comparisons() const { }
+    void This_type_does_not_support_this_comparison() const { }
     /** \endcond */
 
 public:
@@ -70,214 +82,505 @@ public:
     SafeBool() { }
     /** \cond impl */
     SafeBool(const SafeBool&) { }
-    SafeBool& operator=(const SafeBool&) { return *this; }
     /** \endcond */
 
     /** Safe (explicit) evaluation as bool type.
-     - This is called when object is directly evaluated as a bool.
-     - This calls !operator!() on object.
-     - See SafeBool description for more information.
+     - This is called when object is directly evaluated as a bool, and is equivalent to: !operator!()
+     - See \link SafeBool\endlink
      .
     */
     operator SafeBoolType() const
-        { return (!(static_cast<const T*>(this))->operator!() ? &SafeBool::This_type_does_not_support_comparisons : 0); }
+        { return (!(static_cast<const T*>(this))->operator!() ? &SafeBool::This_type_does_not_support_this_comparison : 0); }
 };
 
 /** \cond impl */
 template<typename T, typename U> bool operator==(const SafeBool<T>& l, const SafeBool<U>& r)
-    { l.This_type_does_not_support_comparisons(); return false; }
+    { l.This_type_does_not_support_this_comparison(); return false; }
 template<typename T, typename U> bool operator!=(const SafeBool<T>& l, const SafeBool<U>& r)
-    { l.This_type_does_not_support_comparisons(); return false; }
+    { l.This_type_does_not_support_this_comparison(); return false; }
 /** \endcond */
 
 /** \cond impl */
-namespace impl
-{
+namespace impl {
     struct SafeBoolTestCov : SafeBool<SafeBoolTestCov> {
         void test()
-            { This_type_does_not_support_comparisons(); }
+            { This_type_does_not_support_this_comparison(); }
     };
 }
 /** \endcond */
 
 ///////////////////////////////////////////////////////////////////////////////
 
-/** %Nullable primitive base type (used internally).
-See: Bool, Char, \link evo::Int Int\endlink, \link evo::Long Long\endlink, \link evo::UInt UInt\endlink,
-\link evo::ULong ULong\endlink, \link evo::Float Float\endlink, \link evo::FloatD FloatD\endlink, \link evo::FloatL FloatL\endlink
+/** %Nullable primitive base type.
+ - This is normally not used directly, see derived types or below primitives using this
+ - See: Bool, Char, \link Int\endlink, \link Long\endlink, \link UInt\endlink, \link ULong\endlink, \link Float\endlink, \link FloatD\endlink, \link FloatL\endlink
 */
 template<class T>
-class Nullable {
+class Nullable : public SafeBool<Nullable<T> > {
 public:
-    Nullable()
-        { null_ = true; value_ = (T)0; }
-    Nullable(const Nullable<T>& src)
-        { null_ = src.null_; value_ = src.value_; }
-    Nullable(T num)
-        { null_ = false; value_ = num; }
+    /** Constructor. */
+    Nullable() : value_((T)0), null_(true)
+        { }
+
+    /** Copy constructor.
+     \param  src  Source to copy
+    */
+    Nullable(const Nullable<T>& src) : value_(src.value_), null_(src.null_)
+        { }
+
+    /** Constructor to init with num.
+     \param  num  Number to use
+    */
+    Nullable(T num) : value_(num), null_(false)
+        { }
+
+    /** Assignment/Copy operator.
+     \param  src  Source to copy
+     \return      This
+    */
     Nullable<T>& operator=(const Nullable<T>& src)
         { null_ = src.null_; value_ = src.value_; return *this; }
-    Nullable<T>& operator=(T num)
-        { null_ = false; value_ = num; return *this; }
+
+    /** Constructor to init with value.
+     \param  value  Number to use
+     \return        This
+    */
+    Nullable<T>& operator=(T value)
+        { null_ = false; value_ = value; return *this; }
+
+    /** Assignment operator to set as null.
+     - Use param vNULL to set as null
+     .
+     \return  This
+    */
     Nullable<T>& operator=(ValNull)
         { null_ = true; value_ = (T)0; return *this; }
 
-    /** Implicit conversion to underlying type.
-     \return  Underlying type value
-     */
-    operator T() const
-        { return value_; }
+    /** Negation operator returns whether null or 0.
+     \return  Whether null or 0
+    */
+    bool operator!() const
+        { return (null_ || value_ == (T)0); }
+
+    /** Equality operator.
+     \param  val  Value to compare to
+     \return      Whether equal
+    */
+    bool operator==(const Nullable<T>& val) const
+        { return (null_ ? val.null_ : !val.null_ && value_ == val.value_); }
+
+    /** Equality operator.
+     - If null, the result is always false as null is not equal to any non-null value
+     .
+     \param  val  Value to compare to
+     \return      Whether equal, false if null
+    */
+    bool operator==(T val) const
+        { return (null_ ? false : value_ == val); }
+
+    /** Inequality operator.
+     \param  val  Value to compare to
+     \return      Whether inequal
+    */
+    bool operator!=(const Nullable<T>& val) const
+        { return (null_ ? !val.null_ : val.null_ || value_ != val.value_); }
+
+    /** Inequality operator.
+     - If null, the result is always true as null is not equal to any non-null value
+     .
+     \param  val  Value to compare to
+     \return      Whether inequal, true if null
+    */
+    bool operator!=(T val) const
+        { return (null_ ? true : value_ != val); }
+
+    /** Less than operator.
+     - If null, null is less than any non-null value
+     .
+     \param  val  Value to compare to
+     \return      Whether less than `val`
+    */
+    bool operator<(const Nullable<T>& val) const
+        { return (null_ ? !val.null_ : value_ < val.value_); }
+
+    /** Less than operator.
+     - If null, null is less than any non-null value
+     .
+     \param  val  Value to compare to
+     \return      Whether less than `val`
+    */
+    bool operator<(T val) const
+        { return (null_ ? true : value_ < val); }
+
+    /** Less than or equal operator.
+     - If null, null is less than or equal to any value
+     .
+     \param  val  Value to compare to
+     \return      Whether less than or equal to `val`, true if null
+    */
+    bool operator<=(const Nullable<T>& val) const
+        { return (null_ ? true : (val.null_ ? false : value_ <= val.value_)); }
+
+    /** Less than or equal operator.
+     - If null, null is less than or equal to any value
+     .
+     \param  val  Value to compare to
+     \return      Whether less than or equal to `val`, true if null
+    */
+    bool operator<=(T val) const
+        { return (null_ ? true : value_ <= val); }
+
+    /** Greater than operator.
+     - If null, null is not greater than any non-null value
+     .
+     \param  val  Value to compare to
+     \return      Whether greater than `val`, false if null
+    */
+    bool operator>(const Nullable<T>& val) const
+        { return (null_ ? false : (val.null_ ? true : value_ > val.value_)); }
+
+    /** Greater than operator.
+     - If null, null is not greater than any non-null value
+     .
+     \param  val  Value to compare to
+     \return      Whether greater than `val`, false if null
+    */
+    bool operator>(T val) const
+        { return (null_ ? false : value_ > val); }
+
+    /** Greater than or equal operator.
+     - If null, null is not greater than any non-null value
+     .
+     \param  val  Value to compare to
+     \return      Whether greater than or equal to `val`
+    */
+    bool operator>=(const Nullable<T>& val) const
+        { return (null_ ? val.null_ : (val.null_ ? true : value_ >= val.value_)); }
+
+    /** Greater than or equal operator.
+     - If null, null is not greater than any non-null value
+     .
+     \param  val  Value to compare to
+     \return      Whether greater than or equal to `val`
+    */
+    bool operator>=(T val) const
+        { return (null_ ? false : value_ >= val); }
+
+    /** Comparison.
+     \param  val  Value to compare to
+     \return      Result (<0 if this is less, 0 if equal, >0 if this is greater)
+    */
+    int compare(const Nullable<T>& val) const {
+        if (null_) {
+            if (val.null_)
+                return 0;
+            return -1;
+        } else if (val.null_)
+            return 1;
+        return (value_ == val.value_ ? 0 : (value_ < val.value_ ? -1 : 1));
+    }
+
+    /** Comparison.
+     - If null, the result is always -1 as null compares as less than any non-null value
+     .
+     \param  val  Value to compare to
+     \return      Result (<0 if this is less, 0 if equal, >0 if this is greater)
+    */
+    int compare(T val) const {
+        if (null_)
+            return -1;
+        return (value_ == val ? 0 : (value_ < val ? -1 : 1));
+    }
+
     /** Dereference for explicit conversion to underlying type. Alternative to value().
      \return  Underlying type value
-     */
+    */
     const T& operator*() const
         { return value_; }
 
     /** Get whether null.
      \return  Whether null
-     */
+    */
     bool null() const
         { return null_; }
+
     /** Get whether valid (not null).
      \return  Whether valid
-     */
+    */
     bool valid() const
         { return !null_; }
+
     /** Get underlying value. Alternative to operator*().
      \return  Whether valid
-     */
-    T value() const
+    */
+    const T& value() const
         { return value_; }
 
-    /** Set as null.
+    /** %Set as null.
      \return  This
-     */
+    */
     Nullable<T>& set()
         { null_ = true; value_ = (T)0; return *this; }
-    /** Set as copy of given value.
+
+    /** %Set as copy of given value.
      \param  src  Source to copy
      \return      This
-     */
+    */
     Nullable<T>& set(const Nullable<T>& src)
         { null_ = src.null_; value_ = src.value_; return *this; }
-    /** Set as given value.
+
+    /** %Set as given value.
      \param  src  Source to set
      \return      This
-     */
+    */
     Nullable<T>& set(T src)
         { null_ = false; value_ = src; return *this; }
+
+    /** Clears null flag and returns value reference.
+     - Value is unchanged, POD types default to 0 when null
+     - Useful for updating the underlying value by reference
+     - Note: `Nullable<bool>` template specialization returns by value instead of reference
+     .
+     \return  Whether valid
+    */
+    T& denull() {
+        if (null_)
+            null_ = false;
+        return value_;
+    }
 
 private:
     T    value_;
     bool null_;
 };
+
 // Specialized for minimum size
 /** \cond impl */
-template<> class Nullable<bool> {
+template<> class Nullable<bool> : public SafeBool<Nullable<bool> > {
 public:
     Nullable()
-        { value_ = (uchar)nvNull; }
+        { value_ = (uchar)nvNULL; }
     Nullable(const Nullable<bool>& src)
         { value_ = src.value_; }
     Nullable(bool val)
-        { value_ = (uchar)(val ? nvTrue : nvFalse); }
+        { value_ = (uchar)(val ? nvTRUE : nvFALSE); }
     Nullable<bool>& operator=(const Nullable<bool>& src)
         { value_ = src.value_; return *this; }
     Nullable<bool>& operator=(bool val)
-        { value_ = (uchar)(val ? nvTrue : nvFalse); return *this; }
+        { value_ = (uchar)(val ? nvTRUE : nvFALSE); return *this; }
     Nullable<bool>& operator=(ValNull)
-        { value_ = (uchar)nvNull; return *this; }
+        { value_ = (uchar)nvNULL; return *this; }
 
-    operator bool() const
-        { return (value_ == (uchar)nvTrue); }
-    bool operator*() const
-        { return (value_ == (uchar)nvTrue); }
+    bool operator!() const
+        { return (value_ != (uchar)nvTRUE); }
+    bool operator==(const Nullable<bool>& val) const
+        { return (value_ == val.value_); }
+    bool operator==(bool val) const
+        { return (value_ != (uchar)nvNULL && val == (value_ == (uchar)nvTRUE)); }
+    bool operator!=(const Nullable<bool>& val) const
+        { return (value_ != val.value_); }
+    bool operator!=(bool val) const
+        { return (value_ == (uchar)nvNULL || val != (value_ == (uchar)nvTRUE)); }
+
+    bool operator<(const Nullable<bool>& val) const
+        { return (value_ < val.value_); }
+    bool operator<(bool val) const
+        { return (value_ < (uchar)(val ? nvTRUE : nvFALSE)); }
+    bool operator<=(const Nullable<bool>& val) const
+        { return (value_ <= val.value_); }
+    bool operator<=(bool val) const
+        { return (value_ <= (uchar)(val ? nvTRUE : nvFALSE)); }
+    bool operator>(const Nullable<bool>& val) const
+        { return (value_ > val.value_); }
+    bool operator>(bool val) const
+        { return (value_ > (uchar)(val ? nvTRUE : nvFALSE)); }
+    bool operator>=(const Nullable<bool>& val) const
+        { return (value_ >= val.value_); }
+    bool operator>=(bool val) const
+        { return (value_ >= (uchar)(val ? nvTRUE : nvFALSE)); }
+
+    int compare(const Nullable<bool>& val) const
+        { return (value_ == val.value_ ? 0 : (value_ < val.value_ ? -1 : 1)); }
+
+    const bool operator*() const
+        { return (value_ == (uchar)nvTRUE); }
 
     bool null() const
-        { return (value_ == (uchar)nvNull); }
+        { return (value_ == (uchar)nvNULL); }
     bool valid() const
-        { return (value_ != (uchar)nvNull); }
-    bool value() const
-        { return (value_ == (uchar)nvTrue); }
+        { return (value_ != (uchar)nvNULL); }
+    const bool value() const
+        { return (value_ == (uchar)nvTRUE); }
 
-    // TODO
     Nullable<bool>& set()
-        { value_ = (uchar)nvNull; return *this; }
+        { value_ = (uchar)nvNULL; return *this; }
     Nullable<bool>& set(const Nullable<bool>& src)
         { value_ = src.value_; return *this; }
     Nullable<bool>& set(bool val)
-        { value_ = (uchar)(val ? nvTrue : nvFalse); return *this; }
+        { value_ = (uchar)(val ? nvTRUE : nvFALSE); return *this; }
+
+    bool denull() {
+        if (value_ == nvNULL) {
+            value_ = nvFALSE;
+            return false;
+        }
+        return (value_ == nvTRUE);
+    }
 
 private:
     enum NullableValue {
-        nvNull=0,
-        nvFalse,
-        nvTrue
+        nvNULL=0,
+        nvFALSE,
+        nvTRUE
     };
 
     uchar value_;
 };
 /** \endcond */
 
+/** Equality operator comparing value with Nullable value.
+ - If val2 is null, the result is always false as null is not equal to any non-null value
+ .
+ \param  val1  Value to compare
+ \param  val2  Value to compare to
+ \return       Whether equal, false if null
+*/
+template<class T> inline bool operator==(T val1, const Nullable<T>& val2)
+    { return val2 == val1; }
+
+/** Inequality operator comparing value with Nullable value.
+ - If val2 is null, the result is always true as null is not equal to any non-null value
+ .
+ \param  val1  Value to compare
+ \param  val2  Value to compare to
+ \return       Whether inequal, true if null
+*/
+template<class T> inline bool operator!=(T val1, const Nullable<T>& val2)
+    { return val2 != val1; }
+
+/** Less than operator comparing value with Nullable value.
+ - If val2 is null, no non-null value is less than null
+ .
+ \param  val1  Value to compare
+ \param  val2  Value to compare to
+ \return       Whether `val1` is less than `val2`, false if `val2` is null
+*/
+template<class T> inline bool operator<(T val1, const Nullable<T>& val2)
+    { return val2 > val1; }
+
+/** Less than or equal operator comparing value with Nullable value.
+ - If val2 is null, no non-null value is less than null
+ .
+ \param  val1  Value to compare
+ \param  val2  Value to compare to
+ \return       Whether `val1` is less than or equal to `val2`, false if `val2` is null
+*/
+template<class T> inline bool operator<=(T val1, const Nullable<T>& val2)
+    { return val2 >= val1; }
+
+/** Greater than operator comparing value with Nullable value.
+ - If val2 is null, any non-null value is greater than null
+ .
+ \param  val1  Value to compare
+ \param  val2  Value to compare to
+ \return       Whether `val1` is greater than `val2`, true if `val2` is null
+*/
+template<class T> inline bool operator>(T val1, const Nullable<T>& val2)
+    { return val2 < val1; }
+
+/** Greater than or equal operator comparing value with Nullable value.
+ - If val2 is null, any non-null value is greater than null
+ .
+ \param  val1  Value to compare
+ \param  val2  Value to compare to
+ \return       Whether `val1` is greater or equal to `val2`, true if `val2` is null
+*/
+template<class T> inline bool operator>=(T val1, const Nullable<T>& val2)
+    { return val2 <= val1; }
+
 ///////////////////////////////////////////////////////////////////////////////
 
 /** Basic boolean type. A basic Evo container for boolean values.
- - Assigned like standard bool\n
+ - Assigned like a bool:
    \code
-Bool val = true;  // set to true
+    Bool val(true);         // Set to true
+    val = false;            // Set to false
    \endcode
- - Can hold null value\n
+ - Can hold null value:
    \code
-Bool val;         // null by default
-val = false;      // set to false, no longer null
-val = vNull;      // set to null
+    Bool val;               // Null by default
+    val = false;            // Set to false, no longer null
+    val.set();;             // Set to null
    \endcode
- - Best to dereference to get standard bool value, though operator bool() supports implicit conversion\n
+ - Evaluate as bool to check if non-null and non-false:
    \code
-Bool val1;        // null by default
-if (*val1) {      // dereference for explicit bool value, best practice for clarity
-                  // false when null
-}
-if (val1) {       // implicit conversion works too but may cause type ambiguity
-                  // false when null
-}
-bool val2 = val1; // implicit conversion to bool (false when null)
-val2 = *val1;     // best practice to dereference for explicit conversion to bool
+    Bool val;               // Null by default
+    if (val) {              // false
+    }
+    if (!val) {             // true
+    }
+    val = false;
+    if (val) {              // false
+    }
+    val = true;
+    if (val) {              // true
+    }
    \endcode
- */
-struct Bool : public Nullable<bool>
-{
-    /** Wrapped type (bool). */
-    typedef bool Type;
+ - Dereference to get raw value:
+   \code
+    Bool val1;              // Null by default
+    if (*val1) {            // Dereference for raw value -- false when null
+    }
+   \endcode
+ - Comparison operator overloads:
+   \code
+    Bool val;               // Null by default
+    if (*val == false) {    // true: raw value is false
+    }
+    if (val == false) {     // false: null is not false
+    }
+    if (val < false) {      // true: null is less than any value
+    }
+    if (*val < false) {     // false: raw value is false
+    }
+   \endcode
+*/
+struct Bool : public Nullable<bool> {
+    typedef bool Type;                                  ///< Wrapped type (bool)
 
-    static const int bytes = sizeof(bool);            ///< Type size in bytes
-    static const int bits  = 1;                        ///< Type size in bits
+    static const int BYTES = sizeof(bool);              ///< Type size in bytes, usually 1
+    static const int BITS  = 1;                         ///< Type size in bits (1)
 
     /** Constructor. */
     Bool()
         { }
+
     /** Copy constructor.
      \param  val  Value to copy
     */
     Bool(const Bool& val) : Nullable<bool>(val)
         { }
+
     /** Constructor.
      \param  val  Value to set
     */
     Bool(bool val) : Nullable<bool>(val)
         { }
+
     /** Assignment operator.
      \param  val  Value to copy
      \return      This
     */
     Bool& operator=(const Bool& val)
         { Nullable<bool>::operator=(val); return *this; }
+
     /** Assignment operator.
      \param  val  Value to set
      \return      This
     */
     Bool& operator=(bool val)
         { Nullable<bool>::operator=(val); return *this; }
+
     /** Assignment operator to set as null.
      \return  This
     */
@@ -288,133 +591,168 @@ struct Bool : public Nullable<bool>
 ///////////////////////////////////////////////////////////////////////////////
 
 /** %Nullable primitive character base type.
-See: Char
- \tparam  T  Character type
+ \tparam  T  Character type (char)
+
+Character types:
+ - \link Char\endlink
+
+Examples:
+
+ - Assigned like a char:
+   \code
+    Char val('A');          // Set to 'A'
+    val = 'b';              // Set to 'b'
+   \endcode
+ - Can hold null value:
+   \code
+    Char val;               // Null by default
+    val = 'B';              // Set to 'B', no longer null
+    val.set();              // Set to null
+   \endcode
+ - Evaluate as bool to check non-null and non-zero:
+   \code
+    Char val;               // Null by default
+    if (val) {              // false
+    }
+    if (!val) {             // true
+    }
+    val = '\0';
+    if (val) {              // false
+    }
+    val = 'A';
+    if (val) {              // true
+    }
+   \endcode
+ - Use denull() to clear null flag and update value via reference -- useful for decrement/increment:
+   \code
+    Char val;               // Null by default
+    ++val.denull();         // Remove null flag (value is 0) and increment so value is now 1
+   \endcode
+ - Dereference to get raw value:
+   \code
+    Char val;               // Null by default
+    if (*val == 'A') {      // Dereference for raw value -- false: 0 when null
+    }
+   \endcode
+ - Comparison operator overloads:
+   \code
+    Char val;               // Null by default, with raw value 0
+    if (*val == '\0') {     // true: raw value is 0
+    }
+    if (val == '\0') {      // false: null is not 0
+    }
+    if (val < '\0') {       // true: null is less than any value
+    }
+    if (*val < '\0') {      // false: raw value is 0
+    }
+   \endcode
+ - Some traits and helpers
+   \code
+    int num_bits = Char::BITS;                   // get number of bits per char (8 bits)
+    if (Char::category('1') > Char::cALPHANUM) { // check character category (alpha-numeric) -- true
+    }
+    if (Char::isupper('A') {                     // check if upper-case character (static helper) -- true
+    }
+   \endcode
 */
 template<class T>
-struct CharT : public Nullable<T>
-{
-    /** Wrapped type. */
-    typedef T Type;
+struct CharT : public Nullable<T> {
+    typedef CharT<T> This;          ///< %This non-POD type
+    typedef T        Type;          ///< Wrapped POD type
 
-    static const int bytes = sizeof(T);                ///< Type size in bytes
-    static const int bits  = bytes * 8;                ///< Type size in bits
+    static const int BYTES = sizeof(T);                ///< Type size in bytes, usually 1
+    static const int BITS  = BYTES * CHAR_BIT;         ///< Type size in bits (8)
 
     /** Character category.
      - Overlapping categories (ex: alphanumeric) can be checked with greater-than (>) comparison:
        \code
-Char::Category cat = Char::category(ch);
-bool space     = (cat == Char::cSpace);     // Whitespace (space, tab)
-bool symbol    = (cat == Char::cSymbol);    // Symbols (comma, precent, dollar, etc)
-bool digit     = (cat == Char::cDigit);     // Decimal digit (0-9)
-bool uppercase = (cat == Char::cAlphaU);    // Alphabet uppercase (A-Z)
-bool lowercase = (cat == Char::cAlphaL);    // Alphabet lowercase (a-z)
-bool alphanum  = (cat > Char::cAlphaNum);   // Alphanumeric (0-9, A-Z, a-z)
-bool alpha     = (cat > Char::cAlpha);      // Alphabet (A-Z, a-z)
-bool printable = (cat > Char::cNone);       // Any printable character
-bool visible   = (cat > Char::cSpace);      // Any visible character (printable and not whitespace)
+        Char::Category cat = Char::category(ch);
+        bool space     = (cat == Char::cSPACE);     // Whitespace (space, tab)
+        bool symbol    = (cat == Char::cSYMBOL);    // Symbols (comma, precent, dollar, etc)
+        bool digit     = (cat == Char::cDIGIT);     // Decimal digit (0-9)
+        bool uppercase = (cat == Char::cALPHA_U);   // Alphabet uppercase (A-Z)
+        bool lowercase = (cat == Char::cALPHA_L);   // Alphabet lowercase (a-z)
+        bool alphanum  = (cat > Char::cALPHANUM);   // Alphanumeric (0-9, A-Z, a-z)
+        bool alpha     = (cat > Char::cALPHA);      // Alphabet (A-Z, a-z)
+        bool printable = (cat > Char::cNONE);       // Any printable character
+        bool visible   = (cat > Char::cSPACE);      // Any visible character (printable and not whitespace)
        \endcode
      .
     */
     enum Category {
-        cNone=0,        ///< Non printable char
-        cSpace,            ///< Whitespace (space, tab)
-        cSymbol,        ///< Symbol character (printable but not alphanumeric)
-        cAlphaNum,        ///< Alpha-numeric -- categories greater than this are alphanumeric
-        cDigit,            ///< Decimal digit (0-9)
-        cAlpha,            ///< Alphabet -- categories greater than this are alphabetic
-        cAlphaU,        ///< Alphabet uppercase (A-Z)
-        cAlphaL            ///< Alphabet lowercase (a-z)
+        cNONE=0,            ///< Non printable char
+        cSPACE,             ///< Whitespace (space, tab)
+        cSYMBOL,            ///< Symbol character (printable but not alphanumeric)
+        cALPHANUM,          ///< Alpha-numeric -- categories greater than this are alphanumeric
+        cDIGIT,             ///< Decimal digit (0-9)
+        cALPHA,             ///< Alphabet -- categories greater than this are alphabetic
+        cALPHA_U,           ///< Alphabet uppercase (A-Z)
+        cALPHA_L            ///< Alphabet lowercase (a-z)
     };
 
     /** Character digit type.
      - Digit types overlap so check with greater-than-or-equal (>=) comparison:
        \code
-Char::Digit dig = Char::digit(ch);
-bool b36 = (dig >= Char::dBase36);  // base 36 digit (0-9, A-Z)
-bool hex = (dig >= Char::dHex);     // hex digit (0-9, A-F)
-bool dec = (dig >= Char::dDecimal); // decimal digit (0-9)
-bool oct = (dig >= Char::dOctal);   // octal digit (0-7)
-bool err = (dig == Char::dHex);     // error: must use operator >= here
+        Char::Digit dig = Char::digit(ch);
+        bool b36 = (dig >= Char::dBASE36);  // base 36 digit (0-9, A-Z)
+        bool hex = (dig >= Char::dHEX);     // hex digit (0-9, A-F)
+        bool dec = (dig >= Char::dDECIMAL); // decimal digit (0-9)
+        bool oct = (dig >= Char::dOCTAL);   // octal digit (0-7)
+        bool err = (dig == Char::dHEX);     // error: must use operator >= here
        \endcode
      .
     */
     enum Digit {
-        dNone=0,            ///< Not a digit
-        dBase36,            ///< Base 36 character
-        dHex,                ///< Hexadecimal character
-        dDecimal,            ///< Decimal character
-        dOctal                ///< Octal character
+        dNONE=0,            ///< Not a digit
+        dBASE36,            ///< Base 36 character
+        dHEX,               ///< Hexadecimal character
+        dDECIMAL,           ///< Decimal character
+        dOCTAL              ///< Octal character
     };
 
     /** Constructor. */
     CharT()
         { }
+
     /** Copy constructor.
      \param  val  Value to copy
     */
     CharT(const CharT<T>& val) : Nullable<T>(val)
         { }
+
     /** Constructor.
      \param  val  Value to set
     */
     CharT(T val) : Nullable<T>(val)
         { }
+
     /** Assignment operator.
      \param  val  Value to copy
      \return      This
     */
     CharT<T>& operator=(const CharT<char>& val)
         { Nullable<T>::operator=(val); return *this; }
+
     /** Assignment operator.
      \param  val  Value to set
      \return      This
     */
     CharT<T>& operator=(char val)
         { Nullable<T>::operator=(val); return *this; }
-    /** Assignment operator to set as null.
+
+    /** Assignment operator to set as null by passing \ref vNULL.
      \return  This
     */
-    CharT<T>& operator=(ValNull val)
+    CharT<T>& operator=(ValNull)
         { Nullable<T>::set(); return *this; }
 };
 
-/** Basic character type. A basic Evo container for character values.
- - Assigned like standard char\n
-   \code
-Char val = 'A';             // set to 'A'
-   \endcode
- - Can hold null value\n
-   \code
-Char val;                   // null by default -- null converts to char as 0
-val = 'B';                  // set to 'B', no longer null
-val = vNull;                // set to null
-   \endcode
- - Best to dereference to get standard char value, though operator char() supports implicit conversion\n
-   \code
-Char val1;                  // null by default
-if (*val1 == 'A') {         // dereference for explicit char value, best practice for clarity
-                            // false: 0 when null
-}
-if (val1 == 'A') {          // implicit conversion works too but may cause type ambiguity
-                            // false: 0 when null
-}
-char val2 = val1;           // implicit conversion to char (0 when null)
-val2 = *val1;               // best practice to dereference for explicit conversion to char
-   \endcode
- - Traits and helpers\n
-   \code
-int num_bits = Char::bits;                   // get number of bits per char (answer depends on char size type, usually 8 bits)
-if (Char::category('1') > Char::cAlphaNum) { // check character category (alpha-numeric)
-                                             // true
-}
-if (Char::isupper('A') {                     // check if upper-case character (static helper)
-                                             // true
-}
-   \endcode
+/** Basic character type (char) -- see CharT. A basic Evo container for single-byte character values.
+\code
+Char ch('A');
+\endcode
 */
-struct Char : public CharT<char>
-{
+struct Char : public CharT<char> {
     /** Get character category.
      - Extended ASCII characters are considered unprintable
      .
@@ -430,7 +768,7 @@ struct Char : public CharT<char>
             2, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6,            // 64-79
             6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 2, 2, 2, 2, 2,            // 80-95
             2, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7,            // 96-111
-            7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 2, 2, 2, 2, 0            // 112-127
+            7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 2, 2, 2, 2, 0             // 112-127
         };
         return (Category)((uchar)ch < 128 ? chmap[(uint)ch] : 0);
     }
@@ -450,17 +788,14 @@ struct Char : public CharT<char>
             0, 2, 2, 2, 2, 2, 2, 1, 1, 1, 1, 1, 1, 1, 1, 1,            // 64-79
             1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0,            // 80-95
             0, 2, 2, 2, 2, 2, 2, 1, 1, 1, 1, 1, 1, 1, 1, 1,            // 96-111
-            1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0            // 112-127
+            1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0             // 112-127
         };
         return (Digit)((uchar)ch < 128 ? chmap[(uint)ch] : 0);
     }
 
-    // TODO - use char maps
-    // TODO - other checks: http://unixhelp.ed.ac.uk/CGI/man-cgi?isalpha+3
-
-    /** Check whether uppercase letter (A-Z).
+    /** Check whether whitespace character (space, tab, newline, carrige return).
      \param  ch  Character to check
-     \return     Whether uppercase
+     \return     Whether whitespace
     */
     static bool isspace(char ch)
         { return (ch == ' ' || ch == '\t' || ch == '\n' || ch == '\r'); }
@@ -503,28 +838,33 @@ struct Char : public CharT<char>
     /** Constructor. */
     Char()
         { }
+
     /** Copy constructor.
      \param  val  Value to copy
     */
-    Char(const CharT<char>& val) : CharT<char>(val)
+    Char(const Char& val) : CharT<char>(val)
         { }
+
     /** Constructor.
      \param  val  Value to set
     */
     Char(char val) : CharT<char>(val)
         { }
+
     /** Assignment operator.
      \param  val  Value to copy
      \return      This
     */
-    Char& operator=(const CharT<char>& val)
+    Char& operator=(const Char& val)
         { Nullable<char>::operator=(val); return *this; }
+
     /** Assignment operator.
      \param  val  Value to set
      \return      This
     */
     Char& operator=(char val)
         { Nullable<char>::operator=(val); return *this; }
+
     /** Assignment operator to set as null.
      \return  This
     */
@@ -534,101 +874,142 @@ struct Char : public CharT<char>
 
 ///////////////////////////////////////////////////////////////////////////////
 
+/** \cond impl */
+namespace impl {
+    template<int IntSize> struct IntMaxLen { };
+    // Max string length by int size in bytes, including either sign or hex/oct prefix (0x/0), but not both
+    template<> struct IntMaxLen<1> { static const int value = 4; };
+    template<> struct IntMaxLen<2> { static const int value = 7; };
+    template<> struct IntMaxLen<4> { static const int value = 12; };
+    template<> struct IntMaxLen<8> { static const int value = 23; };
+}
+/** \endcond */
+
+///////////////////////////////////////////////////////////////////////////////
+
+// Disable constant truncation MSVC warnings for constants using bit manipulation
+#if defined(_MSC_VER)
+    #pragma warning(push)
+    #pragma warning(disable:4309)
+#endif
+
 /** Basic integer type. A basic Evo container template for integer types.
  \tparam  T  Integer plain type (short, int, long, longl, ushort, uint, ulong, ulongl, etc)
 
 Integer types:
- - \link evo::Short Short\endlink, \link evo::Int Int\endlink, \link evo::Long Long\endlink, \link evo::LongL LongL\endlink
- - \link evo::UShort UShort\endlink, \link evo::UInt UInt\endlink, \link evo::ULong ULong\endlink, \link evo::ULongL ULongL\endlink
+ - \link Short\endlink, \link Int\endlink, \link Long\endlink, \link LongL\endlink
+ - \link UShort\endlink, \link UInt\endlink, \link ULong\endlink, \link ULongL\endlink
 
-Note: Examples here use Int type (and int type) but the same applies to all supported integer types.
+Examples -- using Int type (and int type) here, other supported integer types work the same:
 
- - Assigned like standard integer\n
+ - Assigned like an integer:
    \code
-Int val = 123;              // set to 123
+    Int val(123);               // Set to 123
+    val = 12;                   // Set to 12
    \endcode
- - Can hold null value\n
+ - Can hold null value:
    \code
-Int val;                    // null by default
-val = 567;                  // set to 567, no longer null
-val = vNull;                // set to null
+    Int val;                    // Null by default
+    val = 567;                  // Set to 567, no longer null
+    val.set();                  // Set to null
    \endcode
- - Best to dereference to get standard int value, though operator int() supports implicit conversion\n
+ - Evaluate as bool to check non-null and non-zero:
    \code
-Int val1;                   // null by default -- null converts to int as 0
-if (*val1 == 123) {         // dereference for explicit int value, best practice for clarity
-                            // false: 0 when null
-}
-if (val1 == 123) {          // implicit conversion works too but may cause type ambiguity
-                            // false: 0 when null
-}
-int val2 = val1;            // implicit conversion to int (0 when null)
-val2 = *val1;               // best practice to dereference for explicit conversion to int
+    Int val;                    // Null by default
+    if (val) {                  // false
+    }
+    if (!val) {                 // true
+    }
+    val = 0;
+    if (val) {                  // false
+    }
+    val = 1;
+    if (val) {                  // true
+    }
    \endcode
- - Traits and helpers\n
+ - Use denull() to clear null flag and update value via reference -- useful for decrement/increment:
    \code
-int num_bits = Int::bits;        // get number of bits per int (answer depends on int type size, often 32 bits)
-int digits = Int::digits(12345); // get number of digits in number 12345 (answer is 5) (static helper)
+    Int val;                    // Null by default
+    ++val.denull();             // Remove null flag (value is 0) and increment so value is now 1
+   \endcode
+ - Dereference to get raw value:
+   \code
+    Int val;                    // Null by default -- null converts to int as 0
+    if (*val == 123) {          // Dereference for raw value -- false: 0 when null
+    }
+   \endcode
+ - Comparison operator overloads:
+   \code
+    Int val;                    // Null by default, with raw value 0
+    if (*val == 0) {            // true: raw value is 0
+    }
+    if (val == 0) {             // false: null is not 0
+    }
+    if (val < 0) {              // true: null is less than any value
+    }
+    if (*val < 0) {             // false: raw value is 0
+    }
+   \endcode
+ - Some traits and helpers:
+   \code
+    int num_bits = Int::BITS;        // get number of bits per int (answer depends on int type size, often 32 bits)
+    int digits = Int::digits(12345); // get number of digits in number 12345 (answer is 5) (static helper)
    \endcode
 */
 template<class T>
-struct IntegerT : public Nullable<T>
-{
-    /** Wrapped type. */
-    typedef T Type;
+struct IntegerT : public Nullable<T> {
+    typedef IntegerT<T> This;       ///< %This non-POD type
+    typedef T           Type;       ///< Wrapped POD type
 
-    static const bool sign  = IsSigned<T>::value;        ///< Whether type is signed
-    static const int  bytes = sizeof(T);                ///< Type size in bytes
-    static const int  bits  = bytes * 8;                ///< Type size in bits
+    static const bool SIGN      = IsSigned<T>::value;                   ///< Whether type is signed
+    static const int  BYTES     = sizeof(T);                            ///< Type size in bytes
+    static const int  BITS      = sizeof(T) * 8;                        ///< Type size in bits
+    static const int  MAXSTRLEN = impl::IntMaxLen<sizeof(T)>::value;    ///< Max formatted length, including either sign or hex/octal prefix (0x/0), but not both
 
-    /** Get value with right-most (first/least-significant) bit set.
-     \return  Value. */
-    static T bitr()
-        { return 1; }
+    static const int  BITS_MINUS_1 = BITS - 1;                          ///< BITS minus 1, used by bit manipulation code
+    static const T    RBIT         = 0x01;                              ///< Mask with right-most (least significant) bit set
+    static const T    LBIT         = RBIT << BITS_MINUS_1;              ///< Mask with left-most (most significant) bit set
+    static const T    ZERO         = 0;                                 ///< Mask with all bits cleared (no bits set)
+    static const T    ALLBITS      = T(~ZERO);                          ///< Mask with all bits set
 
-    /** Get value with left-most (last/most-significant) bit set.
-     \return  Value. */
-    static T bitl()
-        { static const T val = (typename ToUnsigned<T>::Type)bitr() << (bits-1); return val; }
+    static const T    MIN = (SIGN ? LBIT : 0);                          ///< Minimum integer value
+    static const T    MAX = (SIGN ? ~LBIT : ALLBITS);                   ///< Maximum interger value
 
-    /** Get minimum value.
-     \return  Value. */
-    static T min()
-        { static const T val = (sign ? bitl() : 0); return val; }
-
-    /** Get minimum value as absolute number (0 if unsigned).
-     \return  Value. */
-    static T minabs()
-        { static const T val = (sign ? -min() : 0); return val; }
-
-    static T minabslimit()
-        { static const T val = (sign ? -(typename ToSigned<T>::Type)min() : max()); return val; }
-
-    /** Get maximum value for type.
-     \return  Value. */
-    static T max()
-        { static const T val = (sign ? ~bitl() : ~min()); return val; }
-
-    /** Get maximum formatted length for type at base. Includes sign if signed.
-     \return  Value. */
+    /** Get maximum formatted length for type at base.
+     - Includes either sign (if signed) or hex/octal prefix (if applicable), but not both
+     .
+     \param  base  Number base to use
+     \return       Max number length for given base
+    */
     static int maxlen(int base=10) {
         // Note: Newer compilers (gcc 4.9.2) give c++11 'narrowing conversion' warnings if 'values' are smaller than int, casting doesn't fix
-        static const int n = (sign ? 1 : 0);
-        static const int values[] = { 0, 0,
-            digits(max(),2)+n,  digits(max(),3)+n,  digits(max(),4)+n,  digits(max(),5)+n,  digits(max(),6)+n,  digits(max(),7)+n,
-            digits(max(),8)+n,  digits(max(),9)+n,  digits(max(),10)+n, digits(max(),11)+n, digits(max(),12)+n, digits(max(),13)+n,
-            digits(max(),14)+n, digits(max(),15)+n, digits(max(),16)+n, digits(max(),17)+n, digits(max(),18)+n, digits(max(),19)+n,
-            digits(max(),20)+n, digits(max(),21)+n, digits(max(),22)+n, digits(max(),23)+n, digits(max(),24)+n, digits(max(),25)+n,
-            digits(max(),26)+n, digits(max(),27)+n, digits(max(),28)+n, digits(max(),29)+n, digits(max(),30)+n, digits(max(),31)+n,
-            digits(max(),32)+n, digits(max(),33)+n, digits(max(),34)+n, digits(max(),35)+n, digits(max(),36)+n
+        if (base >= 100)
+            base -= 100;
+        assert( base > 1 );
+        assert( base <= 36 );
+        static const int n = (SIGN ? 1 : 0);
+        static const int VALUES[] = {
+            digits(MAX,2)+n, digits(MAX,3)+n, digits(MAX,4)+n, digits(MAX,5)+n, digits(MAX,6)+n,
+            digits(MAX,7)+n, digits(MAX,8)+1, digits(MAX,9)+n, digits(MAX,10)+n, digits(MAX,11)+n,
+            digits(MAX,12)+n, digits(MAX,13)+n, digits(MAX,14)+n, digits(MAX,15)+n, digits(MAX,16)+n+1,
+            digits(MAX,17)+n, digits(MAX,18)+n, digits(MAX,19)+n, digits(MAX,20)+n, digits(MAX,21)+n,
+            digits(MAX,22)+n, digits(MAX,23)+n, digits(MAX,24)+n, digits(MAX,25)+n, digits(MAX,26)+n,
+            digits(MAX,27)+n, digits(MAX,28)+n, digits(MAX,29)+n, digits(MAX,30)+n, digits(MAX,31)+n,
+            digits(MAX,32)+n, digits(MAX,33)+n, digits(MAX,34)+n, digits(MAX,35)+n, digits(MAX,36)+n
         };
-        return values[base];
+        return VALUES[base-2];
     }
 
     /** Get number of digits for given number and base. Includes sign if negative.
-     \return Value. */
+     \param  num   Number to use
+     \param  base  Number base to use
+     \return       Number of digits for given number and base
+    */
     static int digits(T num, int base=10) {
-        assert( base > 0 );
+        if (base >= 100)
+            base -= 100;
+        assert( base > 1 );
+        assert( base < 100 );
         int result = 0;
         if (num == 0)
             result = 1;
@@ -636,204 +1017,318 @@ struct IntegerT : public Nullable<T>
             if (num < 0)
                 ++result;
             while (num != 0) {
-                num /= base;
+                num /= (int8)base;
                 ++result; 
             }
         }
         return result;
     }
 
-    // TODO - basic bit manipulation methods?
-
     /** Constructor. */
     IntegerT()
         { }
+
     /** Copy constructor.
      \param  val  Value to copy
     */
     IntegerT(const IntegerT<T>& val) : Nullable<T>(val)
         { }
+
     /** Constructor.
      \param  val  Value to set
     */
     IntegerT(T val) : Nullable<T>(val)
         { }
+
     /** Assignment operator.
      \param  val  Value to copy
      \return      This
     */
     IntegerT<T>& operator=(const IntegerT<T>& val)
         { Nullable<T>::operator=(val); return *this; }
+
     /** Assignment operator.
      \param  val  Value to set
      \return      This
     */
     IntegerT<T>& operator=(T val)
         { Nullable<T>::operator=(val); return *this; }
-    /** Assignment operator to set as null.
+
+    /** Assignment operator to set as null by passing \ref vNULL.
      \return  This
     */
-    IntegerT<T>& operator=(ValNull val)
+    IntegerT<T>& operator=(ValNull)
         { Nullable<T>::set(); return *this; }
+
+    using Nullable<T>::value;
+
+    /** Get underlying value or given default if null.
+     \param  defval  Default value to use if null
+     \return         Result value, or defval if null
+    */
+    T value(T defval) const
+        { return (Nullable<T>::null() ? defval : Nullable<T>::value()); }
 };
+
+#if defined(_MSC_VER)
+    #pragma warning(pop)
+#endif
 
 /** Basic integer type (short) -- see IntegerT. A basic Evo container for integer values.
 \code
-Short num = 123;
+Short num(123);
 \endcode
 */
 typedef IntegerT<short> Short;
+
 /** Basic integer type (int) -- see IntegerT. A basic Evo container for integer values.
 \code
-Int num = 123;
+Int num(123);
 \endcode
 */
 typedef IntegerT<int> Int;
+
 /** Basic integer type (long) -- see IntegerT. A basic Evo container for integer values.
 \code
-Long num = 123;
+Long num(123);
 \endcode
 */
 typedef IntegerT<long> Long;
+
 /** Basic integer type (long long) -- see IntegerT. A basic Evo container for integer values.
 \code
-LongL num = 123;
+LongL num(123);
 \endcode
 */
 typedef IntegerT<longl> LongL;
 
 /** Basic integer type (int8) -- see IntegerT. A basic Evo container for integer values.
 \code
-Int8 num = 123;
+Int8 num(123);
 \endcode
 */
 typedef IntegerT<int8> Int8;
+
 /** Basic integer type (int16) -- see IntegerT. A basic Evo container for integer values.
 \code
-Int16 num = 123;
+Int16 num(123);
 \endcode
 */
 typedef IntegerT<int16> Int16;
+
 /** Basic integer type (int32) -- see IntegerT. A basic Evo container for integer values.
 \code
-Int32 num = 123;
+Int32 num(123);
 \endcode
 */
 typedef IntegerT<int32> Int32;
+
 /** Basic integer type (int64) -- see IntegerT. A basic Evo container for integer values.
 \code
-Int64 num = 123;
+Int64 num(123);
 \endcode
 */
 typedef IntegerT<int64> Int64;
 
 /** Basic integer type (unsigned short) -- see IntegerT. A basic Evo container for integer values.
 \code
-ushort num = 123;
+ushort num(123);
 \endcode
 */
 typedef IntegerT<ushort> UShort;
+
 /** Basic integer type (unsigned int) -- see IntegerT. A basic Evo container for integer values.
 \code
-uint num = 123;
+uint num(123);
 \endcode
 */
 typedef IntegerT<uint> UInt;
+
 /** Basic integer type (unsigned long) -- see IntegerT. A basic Evo container for integer values.
 \code
-ulong num = 123;
+ulong num(123);
 \endcode
 */
 typedef IntegerT<ulong> ULong;
+
 /** Basic integer type (unsigned long long) -- see IntegerT. A basic Evo container for integer values.
 \code
-ulongl num = 123;
+ulongl num(123);
 \endcode
 */
 typedef IntegerT<ulongl> ULongL;
 
 /** Basic integer type (uint8) -- see IntegerT. A basic Evo container for integer values.
 \code
-UInt8 num = 123;
+UInt8 num(123);
 \endcode
 */
 typedef IntegerT<uint8> UInt8;
+
 /** Basic integer type (uint16) -- see IntegerT. A basic Evo container for integer values.
 \code
-UInt16 num = 123;
+UInt16 num(123);
 \endcode
 */
 typedef IntegerT<uint16> UInt16;
+
 /** Basic integer type (uint32) -- see IntegerT. A basic Evo container for integer values.
 \code
-UInt32 num = 123;
+UInt32 num(123);
 \endcode
 */
 typedef IntegerT<uint32> UInt32;
+
 /** Basic integer type (uint64) -- see IntegerT. A basic Evo container for integer values.
 \code
-UInt64 num = 123;
+UInt64 num(123);
 \endcode
 */
 typedef IntegerT<uint64> UInt64;
 
 ///////////////////////////////////////////////////////////////////////////////
 
+/** \cond impl */
+namespace impl {
+    template<class T> struct ConstFloatT {
+        static T point1() { return 0.1f; }
+        static T ten()    { return 10.0f; }
+    };
+    template<> struct ConstFloatT<double> {
+        static double point1() { return 0.1; }
+        static double ten()    { return 10.0; }
+    };
+    template<> struct ConstFloatT<ldouble> {
+        static ldouble point1() { return 0.1L; }
+        static ldouble ten()    { return 10.0L; }
+    };
+};
+
+/** \endcond */
+
 /** %Nullable basic floating-point base type.
-See: \link evo::Float Float\endlink, \link evo::FloatD FloatD\endlink, \link evo::FloatL FloatL\endlink
  \tparam  T  Floating-point type
+
+Floating point types:
+ - \link evo::Float Float\endlink, \link evo::FloatD FloatD\endlink, \link evo::FloatL FloatL\endlink
+
+Examples -- using Float type (and float type) here, other supported floating point types work the same:
+
+ - Assigned like a number:
+   \code
+    Float val(12.3f);       // Set to 12.3
+    val = 1.23f;            // Set to 1.23
+   \endcode
+ - Can hold null value:
+   \code
+    Float val;              // Null by default
+    val = 56.7f;            // Set to 56.7, no longer null
+    val.set();              // Set to null
+   \endcode
+ - Evaluate as bool to check non-null and non-zero:
+   \code
+    Float val;              // Null by default
+    if (val) {              // false
+    }
+    if (!val) {             // true
+    }
+    val = 0.0f;
+    if (val) {              // false
+    }
+    val = 1.0f;
+    if (val) {              // true
+    }
+   \endcode
+ - Use denull() to clear null flag and update value via reference -- useful for decrement/increment:
+   \code
+    Float val;              // Null by default
+    ++val.denull();         // Remove null flag (value is 0.0) and increment so value is now 1.0
+   \endcode
+ - Dereference to get raw value:
+   \code
+    Float val;              // Null by default
+    if (*val == 1.23f) {    // Dereference for raw value -- false: 0.0 when null
+    }
+   \endcode
+ - Comparison operator overloads:
+   \code
+    Float val;              // Null by default, with raw value 0
+    if (*val == 0.0f) {     // true: raw value is 0.0
+    }
+    if (val == 0.0f) {      // false: null is not 0.0
+    }
+    if (val < 0.0f) {       // true: null is less than any value
+    }
+    if (*val < 0.0f) {      // false: raw value is 0.0
+    }
+   \endcode
+ - Some traits and helpers
+   \code
+    bool equal = Float::eq(1.23, 1.23);     // check whether approximately equal, accounts for floating point rounding errors
+   \endcode
 */
 template<class T>
-struct FloatT : public Nullable<T>
-{
-    /** Wrapped type. */
-    typedef T Type;
+struct FloatT : public Nullable<T> {
+    typedef FloatT<T> This;         ///< %This non-POD type
+    typedef T         Type;         ///< Wrapped POD type
 
-    static const bool is        = IsFloat<T>::value;                        ///< Whether type is a floating point type
-    static const bool sign      = true;                                        ///< Whether type is signed
-    static const int  bytes     = sizeof(T);                                ///< Type size in bytes
-    static const int  maxdigits = std::numeric_limits<T>::digits10;            ///< Maximum significant digits without precision loss
-    static const bool nanok     = std::numeric_limits<T>::has_quiet_NaN;    ///< Whether Not-A-Number (NaN) is supported
+    static const bool IS        = IsFloat<T>::value;                        ///< Whether type is really a floating point type
+    static const bool SIGN      = true;                                     ///< Whether type is signed
+    static const int  BYTES     = sizeof(T);                                ///< Type size in bytes
+    static const int  MAXDIGITS = std::numeric_limits<T>::digits10;         ///< Maximum significant digits without precision loss
+    static const bool NANOK     = std::numeric_limits<T>::has_quiet_NaN;    ///< Whether Not-A-Number (NaN) is supported
 
-    static const int maxdigits_auto = maxdigits + 15;    ///< Max formatting digits with auto precision (used internally)
+    static const int MAXDIGITS_AUTO = MAXDIGITS + 15;       ///< Max formatting digits with auto precision (used internally)
 
     /** Get max formatting digits with given exponent and precision, including sign and any additional chars (used internally).
-     \return  Max formatting digits. */
-    static int maxdigits_prec(int exp, int precision)
-        { const int BASEDIGITS = maxdigits + 9; return BASEDIGITS + (exp<0?-exp:exp) + precision; }
+     \return  Max formatting digits
+    */
+    static int maxdigits_prec(int exp, int precision) {
+        const int BASEDIGITS = MAXDIGITS + 9;
+        return BASEDIGITS + (exp < 0 ? -exp : exp) + precision;
+    }
 
     /** Get best precision value.
-     \return  Value */
-    static T precision()
-        { static const T val = evo_pow((T)0.1, std::numeric_limits<T>::digits10); return val; }
+     \return  Value
+    */
+    static T precision() {
+        static const T VAL = evo_pow(impl::ConstFloatT<T>::point1(), std::numeric_limits<T>::digits10);
+        return VAL;
+    }
 
     /** Get minimum normalized value.
-     \return  Value */
+     \return  Value
+    */
     static T min()
         { return std::numeric_limits<T>::min(); }
 
     /** Get minimum allowed exponent.
-     \return  Value */
+     \return  Value
+    */
     static int minexp()
         { return std::numeric_limits<T>::min_exponent10; }
 
     /** Get maximum normalized value.
-     \return  Value */
+     \return  Value
+    */
     static T max()
         { return std::numeric_limits<T>::max(); }
 
     /** Get maximum allowed exponent.
-     \return  Value */
+     \return  Value
+    */
     static int maxexp()
         { return std::numeric_limits<T>::max_exponent10; }
 
     /** Get infinity value.
-     \return  Value */
+     \return  Value
+    */
     static T inf()
         { return std::numeric_limits<T>::infinity(); }
 
-    /** Check whether value if infinite.
-     \return  Value */
+    /** Check whether value is infinite.
+     \return  Value
+    */
     static bool inf(T num) {
         if (num < 0.0)
             num = -num;
@@ -841,21 +1336,24 @@ struct FloatT : public Nullable<T>
     }
 
     /** Get whether value is Not-A-Number (NaN).
-     \return  Whether NaN, always false if NaN not supported */
+     \return  Whether NaN, always false if NaN not supported
+    */
     static bool nan(T num)
         { return (num != num); }
 
     /** Get Not-A-Number (NaN) value.
-     - This value doesn't work for comparison. Use nan(T) instead.
+     - This value doesn't work for comparison. Use nan(T) instead
      .
-     \return  NaN value, 0.0 if not supported */
+     \return  NaN value, 0.0 if not supported
+    */
     static T nan() {
-        static const T val = (T)(nanok ? std::numeric_limits<T>::quiet_NaN() : 0.0);
+        static const T val = (T)(NANOK ? std::numeric_limits<T>::quiet_NaN() : 0.0);
         return val;
     }
 
     /** Get machine epsilon. This is the difference between 1 and the least value greater than 1 that is representable.
-     \return  Epsilon value */
+     \return  Epsilon value
+    */
     static T eps()
         { return std::numeric_limits<T>::epsilon(); }
 
@@ -868,8 +1366,8 @@ struct FloatT : public Nullable<T>
      \return       Whether approximately equal
     */
     static bool eq(T val1, T val2) {
-        static const T epsilon = std::numeric_limits<T>::epsilon();
-        return ( (nan(val1) && nan(val2)) || val1 == val2 || evo_fabs(val1 - val2) <= epsilon );
+        static const T EPSILON = std::numeric_limits<T>::epsilon();
+        return ( (nan(val1) && nan(val2)) || val1 == val2 || evo_fabs(val1 - val2) <= EPSILON );
     }
 
     /** Get whether values are approximately equal using given epsilon value.
@@ -913,9 +1411,9 @@ struct FloatT : public Nullable<T>
     }
 
     /** Extract normalized base 10 mantissa and exponent from number.
-     \param  exp  Stores exponent value. [out]
-     \param  num  Number to use.
-     \return      Mantissa value.
+     \param  exp  Stores exponent value [out]
+     \param  num  Number to use
+     \return      Mantissa value
     */
     static T fexp10(int& exp, T num) {
         bool neg = false;
@@ -925,7 +1423,7 @@ struct FloatT : public Nullable<T>
         if (!nan(num) && !inf(num) && num != 0.0) {
             if (num >= 1.0) {
                 static const int BIGNUM_DIGITS = std::numeric_limits<T>::digits10;
-                static const T   BIGNUM        = evo_pow((T)10.0, BIGNUM_DIGITS);
+                static const T   BIGNUM        = evo_pow(impl::ConstFloatT<T>::ten(), BIGNUM_DIGITS);
                 while (num >= BIGNUM)
                     { num /= BIGNUM;  exp += BIGNUM_DIGITS; }
                 while (num >= 1000.0)
@@ -950,37 +1448,41 @@ struct FloatT : public Nullable<T>
     /** Constructor. */
     FloatT()
         { }
+
     /** Copy constructor.
      \param  val  Value to copy
     */
     FloatT(const FloatT<T>& val) : Nullable<T>(val)
         { }
+
     /** Constructor.
      \param  val  Value to set
     */
     FloatT(T val) : Nullable<T>(val)
         { }
+
     /** Assignment operator.
      \param  val  Value to copy
      \return      This
     */
     FloatT<T>& operator=(const FloatT<T>& val)
         { Nullable<T>::operator=(val); return *this; }
+
     /** Assignment operator.
      \param  val  Value to set
      \return      This
     */
     FloatT<T>& operator=(T val)
         { Nullable<T>::operator=(val); return *this; }
+
     /** Assignment operator to set as null.
      \return  This
     */
     FloatT<T>& operator=(ValNull)
         { Nullable<T>::set(); return *this; }
 
-    // TODO eq1?
     /** Get whether approximately equal to given value.
-     - This uses the system epsilon value for current type to determine whether the values are close enough to be considered equal.
+     - This uses the system epsilon value for current type to determine whether the values are close enough to be considered equal
      .
      \param  val  Value to compare to
      \return      Whether approximately equal
@@ -991,32 +1493,41 @@ struct FloatT : public Nullable<T>
     }
 
     /** Get whether approximately equal to given value.
-     - This uses the system epsilon value for current type to determine whether the values are close enough to be considered equal.
+     - This uses the system epsilon value for current type to determine whether the values are close enough to be considered equal
      .
      \param  val  Value to compare to
      \return      Whether approximately equal
     */
     bool eq1(T val)
         { return (!this->null() && FloatT<T>::eq(this->value(), val)); }
+
+    using Nullable<T>::value;
+
+    /** Get underlying value or given default if null.
+     \param  defval  Default value to use if null
+     \return         Result value, or defval if null
+    */
+    T value(T defval) const
+        { return (Nullable<T>::null() ? defval : Nullable<T>::value()); }
 };
 
 /** Basic single-precision floating-point type (float) -- see FloatT. A basic Evo container for floating-point values.
 \code
-Float num = 12.3f;
+Float num(12.3f);
 \endcode
 */
 typedef FloatT<float> Float;
 
 /** Basic double-precision floating-point type (double) -- see FloatT. A basic Evo container for floating-point values.
 \code
-FloatD num = 12.3;
+FloatD num(12.3);
 \endcode
 */
 typedef FloatT<double> FloatD;
 
 /** Basic long-double floating-point type (long double) -- see FloatT. A basic Evo container for floating-point values.
 \code
-FloatL num = 12.3L;
+FloatL num(12.3L);
 \endcode
 */
 typedef FloatT<long double> FloatL;
@@ -1025,11 +1536,13 @@ typedef FloatT<long double> FloatL;
 
 /** Base managed pointer.
  \tparam  T  Type to use pointer to (not raw pointer type)
+ \tparam  P  Actual pointer to store -- usually T* but could be something compatible like Atomic<T*>
 */
-template<class T> struct PtrBase : public SafeBool<PtrBase<T> > {
-    typedef PtrBase<T> BaseType;        ///< This pointer base type
+template<class T, class P=T*>
+struct PtrBase : public SafeBool<PtrBase<T> > {
+    typedef PtrBase<T,P> Base;      ///< This pointer base type
 
-    T* ptr_;            ///< Pointer
+    P ptr_;            ///< Pointer
 
     /** Dereference operator (const).
      - Results are undefined if pointer is NULL
@@ -1101,7 +1614,7 @@ template<class T> struct PtrBase : public SafeBool<PtrBase<T> > {
      \param  ptr  Pointer to compare to
      \return      Whether equal
     */
-    bool operator==(const BaseType& ptr) const
+    bool operator==(const Base& ptr) const
         { return ptr_ == ptr.ptr_; }
 
     /** Equality operator.
@@ -1115,7 +1628,7 @@ template<class T> struct PtrBase : public SafeBool<PtrBase<T> > {
      \param  ptr  Pointer to compare to
      \return      Whether not equal
     */
-    bool operator!=(const BaseType& ptr) const
+    bool operator!=(const Base& ptr) const
         { return ptr_ != ptr.ptr_; }
 
     /** Inequality operator.
@@ -1129,7 +1642,7 @@ template<class T> struct PtrBase : public SafeBool<PtrBase<T> > {
      \param  ptr  Pointer to compare to
      \return      Whether less than ptr
     */
-    bool operator<(const BaseType& ptr) const
+    bool operator<(const Base& ptr) const
         { return ptr_ < ptr.ptr_; }
 
     /** Less-than operator.
@@ -1143,7 +1656,7 @@ template<class T> struct PtrBase : public SafeBool<PtrBase<T> > {
      \param  ptr  Pointer to compare to
      \return      Whether less than or equal to ptr
     */
-    bool operator<=(const BaseType& ptr) const
+    bool operator<=(const Base& ptr) const
         { return ptr_ <= ptr.ptr_; }
 
     /** Less-than-or-equals operator.
@@ -1157,7 +1670,7 @@ template<class T> struct PtrBase : public SafeBool<PtrBase<T> > {
      \param  ptr  Pointer to compare to
      \return      Whether greater than ptr
     */
-    bool operator>(const BaseType& ptr) const
+    bool operator>(const Base& ptr) const
         { return ptr_ > ptr.ptr_; }
 
     /** Greater-than operator.
@@ -1171,7 +1684,7 @@ template<class T> struct PtrBase : public SafeBool<PtrBase<T> > {
      \param  ptr  Pointer to compare to
      \return      Whether greater than or equal to ptr
     */
-    bool operator>=(const BaseType& ptr) const
+    bool operator>=(const Base& ptr) const
         { return ptr_ >= ptr.ptr_; }
 
     /** Greater-than-or-equals operator.
@@ -1221,7 +1734,7 @@ template<class T> struct PtrBase : public SafeBool<PtrBase<T> > {
  \tparam  C  Conversion target type
 */
 template<class T, class C> struct Convert {
-    /** Set target to value (reversed conversion).
+    /** %Set target to value (reversed conversion).
      \param  dest   Destination to set
      \param  value  Value to set
     */
@@ -1260,298 +1773,179 @@ template<class T, class C> struct Convert {
 
 ///////////////////////////////////////////////////////////////////////////////
 
-/* Key/Value pair type. */
-template<class TKey, class TVal> struct KeyVal {
-    typedef typename evo::KeyVal<TKey,TVal> Type;    ///< Key/value type
-    typedef TKey Key;                                ///< Key type
-    typedef TVal Val;                                ///< Value type
-
-    TKey key;        ///< Key data
-    TVal value;        ///< Value data
-
-    /** Constructor. */
-    KeyVal()
-        { DataOp<Key>::defvalpod(key);  DataOp<Val>::defvalpod(value); }
-
-    /** Constructor.
-     \param  k  Key
-     */
-    KeyVal(const TKey& k) : key(k)
-        { DataOp<Val>::defvalpod(value); }
-
-    /** Constructor.
-     \param  k  Key
-     \param  v  Value
-     */
-    KeyVal(const TKey& k, const TVal& v) : key(k), value(v) { }
-
-    /** Constructor.
-     \param  src  Source to copy
-     */
-    KeyVal(const Type& src) : key(src.key), value(src.value) { }
-
-    /** Assignment operator.
-     \param  src  Source to copy
-     \return      This
-     */
-    Type& operator=(const Type& src)
-        { this->key = src.key; this->value = src.value; return *this; }
-
-    /** Equality operator.
-     \param  src  Source to compare
-     \return      Whether equal
-     */
-    bool operator==(const Type& src) const
-        { return key==src.key && value==src.value; }
-
-    /** Inequality operator.
-     \param  src  Source to compare
-     \return      Whether inequal
-     */
-    bool operator!=(const Type& src) const
-        { return key!=src.key || value!=src.value; }
-};
-
-///////////////////////////////////////////////////////////////////////////////
-
 // Special type for NONE, ALL, END values -- used internally.
 /** \cond impl */
 struct EndT {
+    // Evo sizes are unsigned, use max value
     operator unsigned char() const
-        { return IntegerT<unsigned char>::max(); }
+        { return IntegerT<unsigned char>::MAX; }
     operator unsigned short() const
-        { return IntegerT<unsigned short>::max(); }
+        { return IntegerT<unsigned short>::MAX; }
     operator unsigned int() const
-        { return IntegerT<unsigned int>::max(); }
+        { return IntegerT<unsigned int>::MAX; }
     operator unsigned long() const
-        { return IntegerT<unsigned long>::max(); }
+        { return IntegerT<unsigned long>::MAX; }
     operator unsigned long long() const
-        { return IntegerT<unsigned long long>::max(); }
+        { return IntegerT<unsigned long long>::MAX; }
 
     EndT() { }
 };
 
 template<class T> bool operator==(T a, EndT)
-    { return (a == IntegerT<T>::max()); }
+    { return (a == IntegerT<T>::MAX); }
 template<class T> bool operator==(EndT, T b)
-    { return (b == IntegerT<T>::max()); }
+    { return (b == IntegerT<T>::MAX); }
 
 template<class T> bool operator!=(T a, EndT)
-    { return (a != IntegerT<T>::max()); }
+    { return (a != IntegerT<T>::MAX); }
 template<class T> bool operator!=(EndT, T b)
-    { return (b != IntegerT<T>::max()); }
+    { return (b != IntegerT<T>::MAX); }
 /** \endcond */
 
-/** Special value for indicating no item or unknown item. Converts and compares with any Size type. */
+/** Special integer value for indicating no item or unknown item.
+ - Returned by methods like \link evo::String::find() find()\endlink
+ - Evo uses unsigned Size types, so this is used instead of the common special index value -1
+ - Implicitly converts and compares with any Size (integer) type -- actual value is the max integer of the type converted/compared to
+*/
 static const EndT NONE;
 
-/** Special value for indicating all items or all remaining items. Converts and compares with any Size type. */
+/** Special integer value for indicating all items or all remaining items.
+ - Passed to methods like \link evo::String::replace(Key,Size,const String&) replace()\endlink
+ - Evo uses unsigned Size types, so this is used instead of the common special index value -1
+ - Implicitly converts and compares with any Size (integer) type -- actual value is the max integer of the type converted/compared to
+*/
 static const EndT ALL;
 
-/** Special value for indicating end of items. Converts and compares with any Size type. */
+/** Special integer value for indicating end of items or no item.
+ - Passed as a position/index to methods like \link evo::String::find(char,Key,Key) const find()\endlink
+ - Evo uses unsigned Size types, so this is used instead of the common special index value -1
+ - Implicitly converts and compares with any Size (integer) type -- actual value is the max integer of the type converted/compared to
+*/
 static const EndT END;
 
 ///////////////////////////////////////////////////////////////////////////////
 
-/** Special pointer value for default initialization (used in containers). */
-#define EVO_PDEFAULT ((T*)IntegerT<std::size_t>::max())
+/** Special pointer value for default initialization (used in containers). 
+ - This only works inside container classes with item type "T" defined
+*/
+#define EVO_PDEFAULT ((T*)IntegerT<std::size_t>::MAX)
 
-/** Special pointer value for empty but not NULL (used in containers). */
+/** Special pointer value for empty but not NULL (used in containers).
+ - This only works inside container classes with item type "T" defined
+*/
 #define EVO_PEMPTY ((T*)1)
 
-/** Special pointer value for empty but not NULL (used in containers). */
+/** Special pointer value for empty but not NULL (used in containers).
+ - This only works inside container classes with item type "T" defined
+*/
 #define EVO_PPEMPTY ((T**)1)
 
 ///////////////////////////////////////////////////////////////////////////////
 
-// TBitArray
-// TODO
-
 // Implementation
 /** \cond impl */
-namespace impl
-{
-    template<class T>
-    struct BitInfoT {
-        static const int bytes        = sizeof(T);
-        static const int bits         = bytes * 8;
-        static const int bits_minus_1 = bits - 1;
-        static const T   rbit         = 0x01;
-        static const T   lbit         = rbit << bits_minus_1;
+namespace impl {
+    template<class T, int SZ=sizeof(T)>
+    struct NextPow2 {
+        static T next(T v) {
+            T n = 1;
+            while (n < v)
+                n <<= 1;
+            return n;
+        }
     };
 
-    struct BitInfo {
-        static const int           bits         = 8;
-        static const int           bits_minus_1 = bits - 1;
-        static const unsigned char rbit         = 0x01;
-        static const unsigned char lbit         = rbit << bits_minus_1;
-
-        static unsigned char maskM(register int start, register int count) {
-            if (count <= 0)
-                return 0;
-            else if (start <= 0)
-                return -(lbit >> (count-1));
-            else
-                return ( ~-(lbit >> (start-1)) & -(lbit >> (start+count-1)) );
+    template<class T> struct NextPow2<T,1> {
+        static uint8 next(uint8 v) {
+            --v;
+            v |= v >> 1;
+            v |= v >> 2;
+            v |= v >> 4;
+            return ++v;
         }
-
-        template<class T>
-        static T getVal(T& data, register unsigned char* ptr, register int offset, register int count) {
-            data = 0;
-            if (count > 0) {
-                ptr = &(ptr[offset / bits]);
-                offset = offset % bits;
-                if (offset + count <= bits)
-                    // Copy from single byte
-                    data = (*ptr & maskM(offset, count)) >> (bits - (offset+count));
-                else {
-                    // Copy from more than one byte
-                    if (count > BitInfoT<T>::bits)
-                        count = BitInfoT<T>::bits;
-                    // Copy first partial byte
-                    if (offset > 0) {
-                        data |= ( (*ptr & ~-(lbit >> (offset-1))) << (count-offset) );
-                        count -= (bits - offset);
-                        ++ptr;
-                    }
-                    // Copy whole bytes
-                    while (count >= bits) {
-                        count -= bits;
-                        data |= (*ptr << count);
-                        ++ptr;
-                    }
-                    // Copy end partial byte
-                    if (count > 0)
-                        data |= ( (*ptr & -(lbit >> (count-1))) >> (bits-count) );
-                }
-            }
-            return data;
+    };
+    template<class T> struct NextPow2<T,2> {
+        static uint16 next(uint16 v) {
+            --v;
+            v |= v >> 1;
+            v |= v >> 2;
+            v |= v >> 4;
+            v |= v >> 8;
+            return ++v;
+        }
+    };
+    template<class T> struct NextPow2<T,4> {
+        static uint32 next(uint32 v) {
+            --v;
+            v |= v >> 1;
+            v |= v >> 2;
+            v |= v >> 4;
+            v |= v >> 8;
+            v |= v >> 16;
+            return ++v;
+        }
+    };
+    template<class T> struct NextPow2<T,8> {
+        static uint64 next(uint64 v) {
+            --v;
+            v |= v >> 1;
+            v |= v >> 2;
+            v |= v >> 4;
+            v |= v >> 8;
+            v |= v >> 16;
+            v |= v >> 32;
+            return ++v;
         }
     };
 }
-
-// TODO - make class with static inline funcs
-
-// BIT_ARRAY_SIZE()
-/** Get size of array for number of bits.
- \param  numbits  Number of bits.
- \return          List size in bytes.
-*/
-#define BIT_ARRAY_SIZE(numbits) ( ((numbits)+::evo::impl::BitInfo::bits_minus_1) / ::evo::impl::BitInfo::bits )
-
-// BIT_ARRAY_INDEX()
-/** Get byte index for bit offset.
- \param  offset  Bit offset.
- \return         List byte index.
-*/
-#define BIT_ARRAY_INDEX(offset) ( ((int)offset) / ::evo::impl::BitInfo::bits )
-
-// BIT_ARRAY_MASK()
-/** Get mask with given bit set.
- - Offset is automatically scaled down to byte offset.
- - Offset begins at highest-order bit (0x80).
-.
- \param  offset  Bit offset.
- \return         Mask with given bit set.
-*/
-#define BIT_ARRAY_MASK(offset) ( ::evo::impl::BitInfo::lbit >> ((offset) % ::evo::impl::BitInfo::bits) )
-
-// BIT_ARRAY_MASK_L()
-/** Get mask with beginning (highest order) bits set.
- \param  count  Number of bits to set.
- \return        Bit mask with given bits set.
-*/
-#define BIT_ARRAY_MASK_L(count) (unsigned char)(-(::evo::impl::BitInfo::lbit >> ((count)-1)))
-
-// BIT_ARRAY_MASK_R()
-/** Get mask with ending (lowest order) bits set.
- \param  count  Number of bits to set.
- \return        Bit mask with given bits set.
-*/
-#define BIT_ARRAY_MASK_R(count) (unsigned char)(~-(::evo::impl::BitInfo::rbit << (count)))
-
-// BIT_ARRAY_MASK_M()
-/** Get mask with given bits set.
- \param  offset  Start bit offset (from left).
- \param  count   Number of bits to set from start.
- \return         Bit mask with given bits set.
-*/
-#define BIT_ARRAY_MASK_M(offset,count) ::evo::impl::BitInfo::maskM(offset, count)
-
-// BIT_ARRAY_BYTE()
-/** Get byte value at index.
- \param  ptr    Pointer to bit array.
- \param  index  Byte index.
- \return        Byte value.
-*/
-#define BIT_ARRAY_BYTE(ptr,index) ( ((unsigned char*)ptr)[index] )
-
-// BIT_ARRAY_CHK()
-/** Get bit at offset.
- - Offset is mapped to byte index and byte-level offset.
- - Byte offset begins at highest-order bit (0x80).
-.
- \param  ptr     Pointer to bit array.
- \param  offset  Bit offset.
- \return         Bit value.
-*/
-#define BIT_ARRAY_CHK(ptr,offset) ( ((unsigned char*)ptr)[BIT_ARRAY_INDEX(offset)] & BIT_ARRAY_MASK(offset) )
-
-// BIT_ARRAY_GET()
-/** Get given bits as a number.
- - Extracts given bits as a number.
- - Offset is mapped to byte index and byte-level offset.
- - Byte offset begins at highest-order bit (0x80).
-.
- \param  data   Set to result data (must be basic numeric type). [out]
- \param  ptr    Pointer to bit array.
- \param  start  Bit start offset.
- \param  count  Bit count.
- \return        Data value.
-*/
-#define BIT_ARRAY_GET(data,ptr,start,count) ::evo::impl::BitInfo::getVal(data, ptr, start, count)
-
-// BIT_ARRAY_SET()
-/** Set bit at offset.
- - Offset is mapped to byte index and byte-level offset.
- - Byte offset begins at highest-order bit (0x80).
-.
- \param  ptr     Pointer to bit array.
- \param  offset  Bit offset.
-*/
-#define BIT_ARRAY_SET(ptr,offset) ( ((unsigned char*)ptr)[BIT_ARRAY_INDEX(offset)] |= BIT_ARRAY_MASK(offset) )
-
-// BIT_ARRAY_CLR()
-/** Clear bit at offset.
- - Offset is mapped to byte index and byte-level offset.
- - Byte offset begins at highest-order bit (0x80).
-.
- \param  ptr     Pointer to bit array.
- \param  offset  Bit offset.
-*/
-#define BIT_ARRAY_CLR(ptr,offset) ( ((unsigned char*)ptr)[BIT_ARRAY_INDEX(offset)] &= ~BIT_ARRAY_MASK(offset) )
-
-// BIT_ARRAY_SET_ALL()
-/** Set all bits.
- - Bits are set at byte level so this may change padding bits at end.
-.
- \param  ptr      Pointer to bit array.
- \param  numbits  Number of bits to set.
-*/
-#define BIT_ARRAY_SET_ALL(ptr,numbits) memset(ptr, 0xFF, BIT_ARRAY_SIZE(numbits))
-
-// BIT_ARRAY_CLR_ALL()
-/** Clear all bits.
- - Bits are set at byte level so this may change padding bits at end.
-.
- \param  ptr      Pointer to bit array.
- \param  numbits  Number of bits to clear.
-*/
-#define BIT_ARRAY_CLR_ALL(ptr,numbits) memset(ptr, 0, BIT_ARRAY_SIZE(numbits))
-
 /** \endcond */
+
+/** Get next power of 2 equal to or greater than given number.
+ \tparam  T  Number type, inferred from param -- must be unsigned
+ \param  v  Value to get next power of 2 from
+ \return    Next power of 2 that's greater than or equal to v, 0 on overflow
+ \see size_pow2()
+*/
+template<class T>
+inline T next_pow2(T v) {
+    assert( !IntegerT<T>::SIGN );
+    v += (v == 0);
+    return impl::NextPow2<T>::next(v);
+}
+
+/** Get size as power of 2.
+ - This finds the lowest power of 2 that fits input size, and is at least minsize
+ - On overflow the max power of 2 for Size is returned
+ - Using powers of 2 allows a "faster modulus" on size using a mask (`size - 1`):
+   - `i & (size - 1)` is equivalent to `i % size`
+ .
+ \tparam  Size  Size type to use, inferred from params
+ \param  size     Input size to convert to power of 2
+ \param  minsize  Minimum allowed size -- must be positive and a power of 2
+ \return          Requested size as power of 2, always positive 0
+ \see next_pow2()
+*/
+template<class Size>
+inline Size size_pow2(Size size, Size minsize=2) {
+    assert( !IntegerT<Size>::SIGN );
+    if (size <= minsize)
+        return minsize;
+    const Size MAX_SIZE = (std::numeric_limits<Size>::max() >> 1) + 1;
+    if (size >= MAX_SIZE)
+        return MAX_SIZE;
+    return impl::NextPow2<Size>::next(size);
+}
+
+/** Get whether a number is a power of 2.
+ \tparam  T  Number type, inferred from param
+ \param  num  Number to check
+ \return      Whether num is a power of 2
+*/
+template<class T>
+inline bool is_pow2(T num)
+    { return (num && (num & (num - 1)) == 0); }
 
 ///////////////////////////////////////////////////////////////////////////////
 //@}
-} // Namespace: evo
+}
 #endif

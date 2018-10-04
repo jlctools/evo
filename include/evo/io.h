@@ -1,8 +1,6 @@
 // Evo C++ Library
-/* Copyright (c) 2016 Justin Crowell
- This Source Code Form is subject to the terms of the Mozilla Public
- License, v. 2.0. If a copy of the MPL was not distributed with this
- file, You can obtain one at http://mozilla.org/MPL/2.0/.
+/* Copyright 2018 Justin Crowell
+Distributed under the BSD 2-Clause License -- see included file LICENSE.txt for details.
 */
 ///////////////////////////////////////////////////////////////////////////////
 /** \file io.h Evo Input/Output streams. */
@@ -10,342 +8,98 @@
 #ifndef INCL_evo_io_h
 #define INCL_evo_io_h
 
-// Includes
 #include "substring.h"
 #include "impl/sysio.h"
+
+// Disable certain MSVC warnings for this file
+#if defined(_MSC_VER)
+    #pragma warning(push)
+    #pragma warning(disable:4100)
+#endif
+
+///////////////////////////////////////////////////////////////////////////////
+
+/** Shortcut to define a Console for I/O.
+ - This defines "static Console& c" in current scope
+ - This is normally used at the top of each function using Console streams
+   - This may be used globally (not recommended), but you'll run into "redefinition of 'c'" errors if used (or included) in multiple source files
+     - Note: Evo examples often use a static global for simplicity
+   - This won't work in a class or struct outside of a function (must initialize static member out of line)
+ - For \b thread-safe variant see \link EVO_CONSOLE_MT EVO_CONSOLE_MT\endlink
+
+\par Example
+
+\code
+#include <evo/io.h>
+using namespace evo;
+
+void hello() {
+    EVO_CONSOLE;
+    c.out << "Hello" << NL;
+}
+
+int main() {
+    EVO_CONSOLE;
+    c.out << "Calling hello()" << NL;
+    hello();
+
+    return 0;
+}
+\endcode
+*/
+#define EVO_CONSOLE static evo::Console& c = evo::con()
+
+/** Catch Evo Exception and print error message to stderr.
+ - This does not terminate the program when the exception is caught, pass abort() (or similar) in CODE to do that
+ - Use after a try or catch block, where a "catch" would normally go (see example below)
+ - For \b thread-safe variant see EVO_CATCH_MT()
+ .
+ \param  CODE  Code to run if exception is caught, abort() to terminate process, use just a semi-colon for none
+
+\par Example
+
+\code
+#include <evo/io.h>
+
+int main() {
+    try {
+        // ...
+        return 0;
+    } EVO_CATCH(abort())
+}
+\endcode
+*/
+#if EVO_CATCH_DEBUG == 0
+    #define EVO_CATCH(CODE) catch (const evo::Exception& e) { \
+        evo::Console& c = evo::con(); \
+        c.err << evo::NL << e.msg() << evo::SubString(" -- ", 4); \
+        evo::errormsg_out(c.err, e.error()); \
+        c.err << evo::NL; \
+        CODE; \
+    }
+#else
+    #define EVO_CATCH(CODE) catch (const evo::Exception& e) { \
+        evo::Console& c = evo::con(); \
+        c.err << evo::NL; \
+        if (e.file()) \
+            c.err << e.file() << '(' << e.line() << evo::SubString("): ", 3); \
+        c.err << e.msg() << evo::SubString(" -- ", 4); \
+        evo::errormsg_out(c.err, e.error()); \
+        c.err << evo::NL; \
+        CODE; \
+}
+#endif
+
+///////////////////////////////////////////////////////////////////////////////
 
 // Namespace: evo
 namespace evo {
 
-/** \addtogroup EvoIO */
+/** \addtogroup EvoIO
+Evo input/output streams
+*/
 //@{
 
-///////////////////////////////////////////////////////////////////////////////
-
-enum Flush { fFLUSH=0 };
-
-/** Signals an output stream flush */
-static const Flush FLUSH = fFLUSH;
-
-///////////////////////////////////////////////////////////////////////////////
-
-// TODO: move to string.h, support in String <<
-// TODO: examples
-#if 0
-
-/** Formatting integer base.
- - Used with operator<<()
- - Integer formatting settings only apply to integers and don't expire, they apply until changed
-*/
-enum FmtBase {
-    fBaseCurrent = 0,   ///< Current base (no change)
-    fOct = 8,           ///< Base 8: octal
-    fDec = 10,          ///< Base 10: decimal (default)
-    fHex = 16           ///< Base 16: hexadecimal
-};
-
-/** Formatting integer base prefix type.
- - Used with operator<<()
- - Integer formatting settings only apply to integers and don't expire, they apply until changed
-*/
-enum FmtBasePrefix {
-    fPrefixCurrent,     ///< Current prefix (no change)
-    fNoPrefix,          ///< No base prefix (default)
-    fPrefix,            ///< Standard base prefix (0x, 0)
-    fPrefixCh           ///< Single character base prefix (x, 0)
-};
-
-/** Formatting alignment.
- - Used with operator<<()
- - Alignment settings don't expire, they remain until changed
-*/
-enum FmtAlign {
-    fAlignCurrent,      ///< Current alignment (no change)
-    fLeft,              ///< Align left
-    fCenter,            ///< Align center
-    fRight              ///< Align right
-};
-
-/** Holds string to use when formatting a null value.
- - This stores a reference to string pointer, which must remain valid -- best to use a literal
- - Used with operator<<()
- - Null value doesn't expire, it applies until changed
-
-\par Example
-
-\code
-#include <evo/io.h>
-using namespace evo;
-static Console& c = con();
-
-int main() {
-    Int foo;
-    c.out << FmtNull("null") << foo << NL;
-    return 0;
-}
-\endcode
-
-Output
-\verbatim
-null
-\endverbatim
-*/
-struct FmtNull {
-    SubString null;     ///< String for formatting null values
-
-    /** Constructor. */
-    FmtNull()
-        { }
-
-    /** Constructor.
-     \param  null  Null string to set, must be terminated
-    */
-    FmtNull(const char* null) : null(null)
-        { }
-
-    /** Constructor.
-     \param  null  Null string to set
-    */
-    FmtNull(const SubString& null) : null(null)
-        { }
-};
-
-/** Formatting integer padding detail.
- - This sets width and padding character for formatting integers
- - Used with operator<<()
- - Integer formatting settings only apply to integers and don't expire, they apply until changed
-
-\par Example
-
-\code
-#include <evo/io.h>
-using namespace evo;
-static Console& c = con();
-
-int main() {
-    c.out << 1 << ',' << FmtIntPad(2) << 1 << ',' << 20 << ',' << 0 << NL;
-    c.out << FmtIntPad(3, '_') << 1 << ',' << 20 << ',' << 0 << NL;
-    return 0;
-}
-\endcode
-
-Output
-\verbatim
-1,01,20,00
-__1,_20,__0
-\endverbatim
-*/
-struct FmtIntPad {
-    int  width;         ///< Width to fill to, 0 for none, -1 to ignore (leave current width) (default: 0)
-    char ch;            ///< Fill character, 0 to ignore (leave current fill character) (default: space)
-
-    /** Constructor.
-     \param  width  Width to fill to, 0 for none, -1 to ignore (leave current width) (default: 0)
-     \param  ch     Fill character
-    */
-    FmtIntPad(int width=-1, char ch=0) : width(width), ch(ch)
-        { }
-
-    /** Copy constructor.
-     \param  src  Source to copy
-    */
-    FmtIntPad(const FmtIntPad& src) : width(src.width), ch(src.ch)
-        { }
-
-    /** Assignment operator.
-     \param  src  Source to copy (width<0 and ch=0 are skipped)
-     \return      This
-    */
-    FmtIntPad& operator=(const FmtIntPad& src) {
-        if (src.width >= 0)
-            width = src.width;
-        if (ch != 0)
-            ch = src.ch;
-        return *this;
-    }
-
-    /** Reset to defaults.
-     \return  This
-    */
-    FmtIntPad& reset() {
-        width = 0;
-        ch    = ' ';
-        return *this;
-    }
-};
-
-/** Formatting detail for integers.
- - Padding is added before the number and after prefix (if applicable), prefix doesn't count toward padding width
- - Used with operator<<()
- - Integer formatting settings only apply to integers and don't expire, they apply until changed
-
-\par Example
-
-\code
-#include <evo/io.h>
-using namespace evo;
-static Console& c = con();
-
-int main() {
-    c.out << 123 << FmtInt(fHex, fPrefix, 4, '0') << 10 << ',' << 0x14 << ',' << 0x1ACFF << NL;
-    c.out << FmtInt(fDec, 5, '_')  << 123 << NL;
-    c.out << fOct << fNoPrefix << 5 << ',' << 456 << NL;
-    return 0;
-}
-\endcode
-
-Output
-\verbatim
-123,0x000A,0x0014,0x1ACFF
-__123
-5,710
-\endverbatim
-*/
-struct FmtInt {
-    int           base;     ///< Base for formatting (default: fDec)
-    FmtBasePrefix prefix;   ///< Formatting prefix type (default: fNoPrefix)
-    FmtIntPad     pad;      ///< Padding settings (default: none, spaces)
-
-    /** Constructor.
-     \param  base    Formatting base, fBaseCurrent to ignore (default: fDec)
-     \param  prefix  Formatting prefix, fPrefixCurrent to ignore (default: fNoPrefix)
-     \param  width   Padding Width to fill to, 0 for none, -1 to ignore (leave current width) (default: 0)
-     \param  ch      Padding fill character, 0 to ignore (leave current fill character)
-    */
-    FmtInt(int base=fBaseCurrent, FmtBasePrefix prefix=fPrefixCurrent, int width=-1, char ch=0) : base(base), prefix(prefix), pad(width, ch)
-        { }
-
-    /** Constructor.
-     \param  base    Formatting base, fBaseCurrent to ignore (default: fDec)
-     \param  width   Padding Width to fill to, 0 for none, -1 to ignore (leave current width) (default: 0)
-     \param  ch      Padding fill character, 0 to ignore (leave current fill character)
-    */
-    FmtInt(int base, int width, char ch=0) : base(fBaseCurrent), prefix(fPrefixCurrent), pad(width, ch)
-        { }
-
-    /** Copy constructor.
-     \param  src  Source to copy
-    */
-    FmtInt(const FmtInt& src) :
-        base(  src.base),
-        prefix(src.prefix),
-        pad(   src.pad)
-        { }
-
-    /** Assignment operator.
-     \param  src  Source to copy (ignored values are skipped)
-     \return      This
-    */
-    FmtInt& operator=(const FmtInt& src) {
-        if (src.base > fBaseCurrent)
-            base = src.base;
-        if (src.prefix > fPrefixCurrent)
-            prefix = src.prefix;
-        pad = src.pad;
-        return *this;
-    }
-
-    /** Reset to defaults.
-     \return  This
-    */
-    FmtInt& reset() {
-        base   = fDec;
-        prefix = fNoPrefix;
-        pad.reset();
-        return *this;
-    }
-};
-
-/** Formatting floating-point number padding detail.
- - Used with operator<<()
-*/
-struct FmtFloatPad {
-    int  width;         ///< Width to fill to, 0 for none, -1 to ignore (leave current width) (default: 0)
-    char ch;            ///< Fill character, 0 to ignore (leave current fill character) (default: space)
-
-    /** Constructor.
-     \param  width  Width to fill to, 0 for none, -1 to ignore (leave current width) (default: 0)
-     \param  ch     Fill character
-    */
-    FmtFloatPad(int width=-1, char ch=0) : width(width), ch(ch)
-        { }
-
-    /** Copy constructor.
-     \param  src  Source to copy
-    */
-    FmtFloatPad(const FmtFloatPad& src) : width(src.width), ch(src.ch)
-        { }
-
-    /** Assignment operator.
-     \param  src  Source to copy (width<0 and ch=0 are skipped)
-     \return      This
-    */
-    FmtFloatPad& operator=(const FmtFloatPad& src) {
-        if (src.width >= 0)
-            width = src.width;
-        if (ch != 0)
-            ch = src.ch;
-        return *this;
-    }
-
-    /** Reset to defaults.
-     \return  This
-    */
-    FmtFloatPad& reset() {
-        width = 0;
-        ch    = ' ';
-        return *this;
-    }
-};
-
-/** Formatting detail for floating-point numbers.
- - Used with operator<<()
-*/
-struct FmtFloat {
-    int         precision;
-    FmtFloatPad pad; // TODO
-
-    FmtFloat(int precision=PREC_AUTO) : precision(precision)
-        { }
-};
-
-/** Formatting as field detail.
- - Used with operator<<()
-*/
-struct FmtField {
-    FmtAlign align;
-    char     fill;
-
-    FmtField(FmtAlign align=fLeft, char fill=' ') :
-        align(align), fill(fill)
-        { }
-};
-
-/** Set formatting width for next field.
- - This applies only to the next formatted value, after that width is reset to 0 (no width)
- - Used with operator<<()
-*/
-struct FmtWidth {
-    int width;
-
-    FmtWidth(int width) : width(width)
-        { }
-};
-
-/** Formatting detail.
- - Used with operator<<()
-*/
-struct FmtOut {
-    FmtNull  null;
-    FmtInt   num_int;
-    FmtFloat num_flt;
-    FmtField field;
-};
-
-//template<class T>
-//fmtwidth
-
-#endif
 ///////////////////////////////////////////////////////////////////////////////
 
 /** Base binary stream interface.
@@ -354,58 +108,59 @@ struct FmtOut {
  - Writing to a read-only stream will return error EInval
  .
 */
-class StreamBinBase : public SafeBool<StreamBinBase>
-{
-public:
+struct IoBase : public SafeBool<IoBase> {
     /** Constructor. */
-    StreamBinBase() : error_(ENone), excep_(EVO_EXCEPTIONS)
-        { }
+    IoBase() : error_(ENone), excep_(EVO_EXCEPTIONS) {
+    }
 
     /** Destructor. */
-    virtual ~StreamBinBase()
-        { }
+    virtual ~IoBase() {
+    }
 
-    /** Negation operator checks whether last operation set an error.
+    /** Negation operator checks whether an error was set by a previous operation.
      - Call error() to get last error code
+     - Alternatively, use SafeBool evaluation to check whether previous operations were successful
      .
-     \return
+     \return  Whether last operation set an error
     */
-    bool operator!() const
-        { return (error_ != ENone); }
+    bool operator!() const {
+        return (error_ != ENone);
+    }
 
     /** Get whether exceptions are enabled.
      \return  Whether exceptions enabled
     */
-    bool excep() const
-        { return excep_; }
+    bool excep() const {
+        return excep_;
+    }
 
-    /** Set whether exceptions are enabled.
+    /** %Set whether exceptions are enabled.
      \param  val  Whether to enable exceptions
     */
-    void excep(bool val)
-        { excep_ = val; }
+    void excep(bool val) {
+        excep_ = val;
+    }
 
     /** Get error code from last operation.
      \return  Error code, ENone for success (no error)
     */
-    Error error() const
-        { return error_; }
+    Error error() const {
+        return error_;
+    }
 
     /** Get whether stream is open.
      \return  Whether open
     */
-    virtual bool isopen() const
-        { return false; }
-
-    // TODO: peek()?
-    // TODO: skip()?
+    virtual bool isopen() const {
+        return false;
+    }
 
     /** Read binary input from stream.
      - This does a binary read -- no conversion on newlines
      - Depending on the stream type, this may:
        - be a blocking call
        - read at least 1 byte, but less than requested
-       - return a read error
+       - return a read error, some stream types may timeout
        .
      - Call error() to check error code
      - This never throws any exception
@@ -414,8 +169,10 @@ public:
      \param  size  Size to read
      \return       Bytes read and stored in buf, 0 if end-of-stream or error
     */
-    virtual ulong readbin(char* buf, ulong size)
-        { error_ = ENone; return 0; }
+    virtual ulong readbin(void* buf, ulong size) {
+        error_ = ENone;
+        return 0;
+    }
 
     /** Write binary output to stream.
      - This does a binary write -- no conversion on newlines
@@ -424,17 +181,19 @@ public:
        - write at least 1 byte, but less than requested
          - StreamBase: always writes all data on success
          .
-       - return a write error
+       - return a write error, some stream types may timeout
        .
      - Call error() to check error code
-     - This never throws any exception
      .
      \param  buf   Data to write
      \param  size  Size to write
      \return       Bytes written, 0 on error
     */
-    virtual ulong writebin(const char* buf, ulong size)
-        { error_ = EInval; EVO_THROW_ERR_CHECK(evo::ExceptionStreamOut, "Stream doesn't support writebin()", error_, excep_); return 0; }
+    virtual ulong writebin(const void* buf, ulong size) {
+        error_ = EInval;
+        EVO_THROW_ERR_CHECK(evo::ExceptionStreamOut, "Stream doesn't support writebin()", error_, excep_);
+        return 0;
+    }
 
     /** Flush any pending output in stream write buffer, if buffered.
      - This is a no-op if writes aren't buffered
@@ -442,8 +201,10 @@ public:
      .
      \return  Whether successful, false on error
     */
-    virtual bool flush()
-        { error_ = ENone; return true; }
+    virtual bool flush() {
+        error_ = ENone;
+        return true;
+    }
 
 protected:
     Error error_;        ///< Last error code
@@ -453,17 +214,21 @@ protected:
 ///////////////////////////////////////////////////////////////////////////////
 
 /** Base text and binary stream interface.
- - This extends StreamBinBase and adds reading and writing text
+ - This extends IoBase and adds reading and writing text
  - Text I/O automatically handles newline conversion
  - For absolute best performance use binary I/O, if possible
  .
 */
-class StreamBase : public StreamBinBase
-{
-public:
+struct StreamBase : public IoBase {
+    typedef ulong Size;     ///< Data size type (ulong)
+
+    /** Constructor. */
+    StreamBase() {
+    }
+
     /** Destructor. */
-    virtual ~StreamBase()
-        { }
+    virtual ~StreamBase() {
+    }
 
     /** Read text input from stream.
      - This does a text read, converting newlines as needed
@@ -474,14 +239,15 @@ public:
        .
      - Call error() to check error code
      - After calling this with size=1 (not recommended), calling readline() next may trigger a special case error in certain conditions -- see readline() error code ELoss
-     - This never throws any exception
      .
      \param  buf   Buffer to store data read
      \param  size  Size in bytes to read from file (must be positive)
      \return       Bytes read, 0 if end-of-file or error
     */
-    virtual ulong readtext(char* buf, ulong size)
-        { error_ = ENone; return 0; }
+    virtual ulong readtext(char* buf, ulong size) {
+        error_ = ENone;
+        return 0;
+    }
 
     /** Read text line input from stream.
      - This will read and return the next line as a string, not including the newline
@@ -507,52 +273,500 @@ public:
      \param  maxlen  Maximum line length, 0 for no limit
      \return         Whether successful, false if no more lines (end-of-file) or error
     */
-    virtual bool readline(String& str, ulong maxlen=0)
-        { error_ = ENone; return false; }
+    virtual bool readline(String& str, ulong maxlen=0) {
+        error_ = ENone;
+        return false;
+    }
+
+    /** Write repeat character as text output to stream.
+     - This does a text write, converting newlines as needed
+       - Note that writing newline text characters 1 char at a time or by string will give the same end result either way -- the edge cases are covered
+       .
+     - Depending on the stream type, this may be a blocking call
+     - If exceptions are disabled, call error() to check error code
+     .
+     \param  ch     Character to write
+     \param  count  Character count to write, must be positive
+     \return        Size actually written (should be the smae as count), 0 on error
+    */
+    virtual ulong writechar(char ch, ulong count=1) {
+        error_ = EInval;
+        EVO_THROW_ERR_CHECK(evo::ExceptionStreamOut, "Stream doesn't support writechar()", error_, excep_);
+        return 0;
+    }
 
     /** Write text output to stream.
      - This does a text write, converting newlines as needed
      - Depending on the stream type, this may be a blocking call
-     - Call error() to check error code
-     - This never throws any exception
+     - If exceptions are disabled, call error() to check error code
      .
      \param  buf   Data to write
      \param  size  Size to write
      \return       Size actually written, 0 on error
     */
-    virtual ulong writetext(const char* buf, ulong size)
-        { error_ = EInval; EVO_THROW_ERR_CHECK(evo::ExceptionStreamOut, "Stream doesn't support writetext()", error_, excep_); return 0; }
+    virtual ulong writetext(const char* buf, ulong size) {
+        error_ = EInval;
+        EVO_THROW_ERR_CHECK(evo::ExceptionStreamOut, "Stream doesn't support writetext()", error_, excep_);
+        return 0;
+    }
 
     /** Write text line output to stream.
      - This always writes the whole line followed by a newline on success
      - This does a text write, converting newlines as needed, which could turn into multiple lines
      - Depending on the stream type, this may be a blocking call
-     - Call error() to check error code
-     - This never throws any exception
+     - If exceptions are disabled, call error() to check error code
      .
      \param  buf   Data buffer to write from
-     \param  size  Data size to write in bytes
+     \param  size  Data size to write in bytes, must be positive
      \return       Size actually written (including newline), 0 on error
     */
-    virtual ulong writeline(const char* buf, ulong size)
-        { error_ = EInval; EVO_THROW_ERR_CHECK(evo::ExceptionStreamOut, "Stream doesn't support writeline()", error_, excep_); return 0; }
+    virtual ulong writeline(const char* buf, ulong size) {
+        error_ = EInval;
+        EVO_THROW_ERR_CHECK(evo::ExceptionStreamOut, "Stream doesn't support writeline()", error_, excep_);
+        return 0;
+    }
 
-    /** Write a newline to stream.
-     - This always writes the whole newline on success
-     - Depending on the stream type, this may be a blocking call
-     - Call error() to check error code
-     - This never throws any exception
+    /** Get pointer for writing directly to buffer to append data.
+     - Call write_direct_finish() to commit written data, or don't to cancel
+     - This will flush buffer to make room, if needed
+     - Newlines in data written aren't converted
      .
-     \return  Size actually written, 0 on error
+     \param  size  Requred size in bytes to reserve
+     \return       Buffer to write to (at append position), NULL on error or if buffer not large enough or if not supported
     */
-    virtual ulong writenewline()
-        { error_ = EInval; EVO_THROW_ERR_CHECK(evo::ExceptionStreamOut, "Stream doesn't support writenewline()", error_, excep_); return 0; }
+    virtual char* write_direct(Size size) {
+        error_ = EInval;
+        EVO_THROW_ERR_CHECK(evo::ExceptionStreamOut, "Stream doesn't support write_direct()", error_, excep_);
+        return NULL;
+    }
+
+    /** Get pointer for writing directly to buffer to append data and allow multiple passes for larger sizes.
+     - Call write_direct_flush() or write_direct_finish() to commit written data, or neither to cancel
+     - If `reserve_size` is 0 then this does nothing and returns a non-NULL but invalid pointer
+     - This will flush buffer to make room, if needed
+     - Newlines in data written aren't converted
+     .
+     \param  available     Stores available size reserved in bytes, may be less than `reserve_size`, 0 if `reserve_size` was 0  [out]
+     \param  reserve_size  Requred size in bytes to reserve
+     \return               Buffer to write to (at append position), NULL on error or if not supported
+    */
+    char* write_direct_multi(Size& available, Size reserve_size) {
+        error_ = EInval;
+        EVO_THROW_ERR_CHECK(evo::ExceptionStreamOut, "Stream doesn't support write_direct_multi()", error_, excep_);
+        return NULL;
+    }
+
+    /** Flush data written directly to buffer and get pointer for appending more.
+     - This commits data written directly after previous call or write_direct_multi(), which must be called first
+     - If `reserve_size` is 0 then this does the same as write_direct_finish() and returns a non-NULL but invalid pointer on success
+     - Newlines in data written aren't converted
+     .
+     \param  available     Stores available size reserved in bytes, may be less than `reserve_size`, 0 if `reserve_size` was 0  [out]
+     \param  written_size  Size written in bytes to flush, must not be greater than `available` size from previous call to this or write_direct_multi()
+     \param  reserve_size  Requred size in bytes to reserve, 0 to finish
+     \return               Buffer to write to (at append position), NULL on error or if not supported
+    */
+    char* write_direct_flush(Size& available, Size written_size, Size reserve_size) {
+        error_ = EInval;
+        EVO_THROW_ERR_CHECK(evo::ExceptionStreamOut, "Stream doesn't support write_direct_flush()", error_, excep_);
+        return NULL;
+    }
+
+    /** Finish writing directly to buffer.
+     - This commits data written directly after calling write_direct() or write_direct_multi(), one of which must be called first
+     - Newlines in data written aren't converted
+     .
+     \param  size  Size written in bytes, must not be greater than `size` passed to write_direct()
+     \return       Whether successful, false if not supported
+    */
+    virtual bool write_direct_finish(Size size) {
+        error_ = EInval;
+        EVO_THROW_ERR_CHECK(evo::ExceptionStreamOut, "Stream doesn't support write_direct_finish()", error_, excep_);
+        return false;
+    }
+};
+
+///////////////////////////////////////////////////////////////////////////////
+
+/** %Stream output formatter with state.
+ - This is associated with a Stream object and supports stateful (i.e. sticky) output formatting with "<<" operator on this object
+   - Use Stream::Format (where Stream is the stream type used)
+ - Formatting attributes include:
+   - Aligned fields for formatting text "columns"
+   - Integer base, prefix, and padding (in addition to field padding)
+   - Floating point precision and padding (in additon to field padding)
+   - %String to use for "null" values (null char*, String, \link evo::Int Int\endlink, etc)
+   .
+ - Note: Single character (char) and Newline (NL) values are not formatted as fields (i.e. not padded) since they're usually delimiters
+ - See: \ref StreamFormatting "Stream Formatting"
+
+\par Examples
+
+Example using File:
+\code
+#include <evo/io.h>
+using namespace evo;
+
+int main() {
+    File file("file.txt", oWRITE_NEW);
+
+    // Use a temporary formatter to write line: 7B,1C8
+    File::Format(file) << fHEX << 123 << ',' << 456 << NL;
+
+    // Create a formatter and use to write line: 001,002
+    File::Format out(file);
+    out << FmtSetInt(fDEC, 3) << 1 << ',' << 2 << NL;
+
+    return 0;
+}
+\endcode
+
+Example using Console (stdout):
+\code
+#include <evo/io.h>
+using namespace evo;
+
+int main() {
+    Console& c = con();
+
+    // Use a temporary formatter to write line: 7B,1C8
+    Console::Format(c.out) << fHEX << 123 << ',' << 456 << NL;
+
+    // Create a formatter and use to write line: 001,002
+    Console::Format out(c.out);
+    out << FmtSetInt(fDEC, 3) << 1 << ',' << 2 << NL;
+
+    return 0;
+}
+\endcode
+
+For more examples see: \ref StreamFormatting "Stream Formatting"
+*/
+template<class T>
+struct StreamFormatter {
+    typedef typename T::Size   Size;    ///< Data size type (ulong)
+    typedef T                  Out;     ///< Associated output stream type, type returned by write_out()
+    typedef StreamFormatter<T> This;    ///< This type
+
+    Out&       out;                     ///< Associated output stream
+    FmtAttribs fmt;                     ///< Formatting attributes (state)
+
+    /** Constructor.
+     \param  out  Output stream to associate and format to
+    */
+    StreamFormatter(Out& out) : out(out) {
+    }
+
+    /** Copy constructor.
+     - This will reference the same stream as src
+     .
+     \param  src  Source to copy
+    */
+    StreamFormatter(const This& src) : out(src.out), fmt(src.fmt) {
+    }
+
+    /** Assignment operator copies attributes.
+     - This does not copy the referenced string
+     .
+     \param  src  Source to copy attributes from
+     \return      This
+    */
+    This& operator=(const This& src) {
+        memcpy(&fmt, &src.fmt, sizeof(FmtAttribs));
+        return *this;
+    }
+
+    /** Get parent output string.
+     \return  Parent output string (this)
+    */
+    Out& write_out()
+        { return *this; }
+
+    // Field
+        
+    /** %Set field alignment type to use.
+     \param  align  Alignment type
+     \return        This
+    */
+    This& operator<<(FmtAlign align)
+        { fmt.field.align = align; return *this; }
+
+    /** %Set field width to use.
+     \param  width  Field width to use
+     \return        This
+    */
+    This& operator<<(FmtWidth width)
+        { fmt.field.width = width; return *this; }
+
+    /** %Set field attributes to use.
+     \param  field  Field attributes
+     \return        This
+    */
+    This& operator<<(const FmtSetField& field)
+        { fmt.field.merge(field); return *this; }
+
+    // Newlines
+
+    /** Write an explicit newline and flush stream.
+     - Use \link evo::NL NL\endlink for default newline value, where default is set by the stream
+     .
+     \param  nl  Newline value to write, \link evo::NL_SYS NL_SYS\endlink for system default
+     \return     This
+    */
+    This& operator<<(Newline nl)
+        { out << nl; return *this; }
+
+    /** Write default newline and flush stream.
+     - This overloads operator<<(Newline)
+     .
+     \param  nl  Default newline value (\link evo::NL NL\endlink), where default is set by the stream
+     \return     This
+    */
+    This& operator<<(NewlineDefault nl)
+        { out << nl; return *this; }
+
+    /** Flush buffer by writing to stream.
+     - This calls flush()
+     - This is useful when writing a console prompt, flush so the prompt is immediately visible
+     .
+     \return  This
+    */
+    This& operator<<(Flush) {
+        if (out.error() == ENone)
+            out.flush();
+        return *this;
+    }
+
+    // Null
+
+    /** %Set attributes for null values.
+     \param  null  Null attributes
+     \return       This
+    */
+    This& operator<<(const FmtSetNull& null)
+        { fmt.null = null; return *this; }
+
+    // Bools
+
+    /** Append a bool value.
+     - Bool value is formatted as either "true" or "false" (without quotes)
+     - This calls writetext()
+     .
+     \param  val  Bool value to append
+     \return      This
+    */
+    This& operator<<(bool val) {
+        if (val)
+            out.writetext("true", 4);
+        else
+            out.writetext("false", 5);
+        return *this;
+    }
+
+    // Chars
+
+    /** Append a character.
+     \param  ch  Character to append
+     \return     This
+    */
+    This& operator<<(char ch) {
+        if (out.error() == ENone)
+            out.writechar(ch, 1);
+        return *this;
+    }
+
+    /** Append a repeated character.
+     \param  ch  Character info to append
+     \return     This
+    */
+    This& operator<<(const FmtChar& ch) {
+        if (out.error() == ENone)
+            out.writefmtchar(ch.ch, ch.count, fmt.field);
+        return *this;
+    }
+
+    // Strings
+
+    /** Append a terminated string.
+     - Field attributes apply
+     .
+     \param  val  %String pointer, must be terminated, NULL for null string
+     \return      This
+    */
+    This& operator<<(const char* val) {
+        if (val == NULL) {
+            if (fmt.null.size > 0)
+                out.writefmtstr(fmt.null.str, fmt.null.size, fmt.field);
+        } else if (*val != '\0')
+            out.writefmtstr(val, (ulong)strlen(val), fmt.field);
+        return *this;
+    }
+
+    /** Append a string.
+     - Field attributes apply
+     .
+     \param  str  %String value
+     \return      This
+    */
+    template<class TSize>
+    This& operator<<(const ListBase<char,TSize>& str) {
+        if (str.data_ == NULL) {
+            if (fmt.null.size > 0)
+                out.writefmtstr(fmt.null.str, fmt.null.size, fmt.field);
+        } else if (str.size_ != '\0')
+            out.writefmtstr(str.data_, str.size_, fmt.field);
+        return *this;
+    }
+
+    // Integers
+
+    /** %Set base for formatting integers.
+     \param  base  Base to use, see FmtBase
+     \return       This
+    */
+    This& operator<<(FmtBase base)
+        { fmt.num_int.base = base; return *this; }
+
+    /** %Set prefix for formatting integers.
+     \param  prefix  Integer prefix to use, see FmtBasePrefix
+     \return         This
+    */
+    This& operator<<(FmtBasePrefix prefix)
+        { fmt.num_int.prefix = prefix; return *this; }
+
+    /** %Set integer formatting attributes.
+     \param  fmt_int  Integer formatting attributes
+     \return          This
+    */
+    This& operator<<(const FmtSetInt& fmt_int)
+        { fmt.num_int.merge(fmt_int); return *this; }
+
+    /** Append a formatted signed integer.
+     - Integer and field attributes apply
+     .
+     \param  num  Integer to format
+     \return      This
+    */
+    This& operator<<(short num)
+        { out.writefmtnum(num, fmt.num_int, &fmt.field); return *this; }
+
+    /** \copydoc operator<<(short) */
+    This& operator<<(int num)
+        { out.writefmtnum(num, fmt.num_int, &fmt.field); return *this; }
+
+    /** \copydoc operator<<(short) */
+    This& operator<<(long num)
+        { out.writefmtnum(num, fmt.num_int, &fmt.field); return *this; }
+
+    /** \copydoc operator<<(short) */
+    This& operator<<(longl num)
+        { out.writefmtnum(num, fmt.num_int, &fmt.field); return *this; }
+
+    /** Append a formatted unsigned integer.
+     - Integer and field attributes apply
+     .
+     \param  num  Integer to format
+     \return      This
+    */
+    This& operator<<(ushort num)
+        { out.writefmtnumu(num, fmt.num_int, &fmt.field); return *this; }
+
+    /** \copydoc operator<<(ushort) */
+    This& operator<<(uint num)
+        { out.writefmtnumu(num, fmt.num_int, &fmt.field); return *this; }
+
+    /** \copydoc operator<<(ushort) */
+    This& operator<<(ulong num)
+        { out.writefmtnumu(num, fmt.num_int, &fmt.field); return *this; }
+
+    /** \copydoc operator<<(ushort) */
+    This& operator<<(ulongl num)
+        { out.writefmtnumu(num, fmt.num_int, &fmt.field); return *this; }
+
+    /** Append a formatted integer class.
+     - Integer, field, and null attributes apply
+     .
+     \tparam  T  Integer POD type, deduced from arguments
+
+     \param  num  Integer to format (Int, UInt, etc)
+     \return      This
+    */
+    template<class U>
+    This& operator<<(const IntegerT<U>& num) {
+        if (num.null()) {
+            if (fmt.null.size > 0)
+                out.writefmtstr(fmt.null.str, fmt.null.size, fmt.field);
+        } else if (IntegerT<U>::SIGN)
+            out.writefmtnum(num.value(), fmt.num_int, &fmt.field);
+        else
+            out.writefmtnumu(num.value(), fmt.num_int, &fmt.field);
+        return *this;
+    }
+
+    // Floats
+
+    /** %Set floating point formatting precision.
+     \param  prec  Precision value, see FmtPrecision
+     \return       This
+    */
+    This& operator<<(FmtPrecision prec)
+        { fmt.num_flt.precision = prec; return *this; }
+
+    /** %Set floating point formatting attributes.
+     \param  fmt_flt  Floating point formatting attributes
+     \return          This
+    */
+    This& operator<<(const FmtSetFloat& fmt_flt)
+        { fmt.num_flt.merge(fmt_flt); return *this; }
+
+    /** Append a formatting floating point number.
+     - Floating point and field attributes apply
+     .
+     \param  num  Number to format
+     \return      This
+    */
+    This& operator<<(float num)
+        { out.writefmtnumf(num, fmt.num_flt, &fmt.field); return *this; }
+
+    /** \copydoc operator<<(float) */
+    This& operator<<(double num)
+        { out.writefmtnumf(num, fmt.num_flt, &fmt.field); return *this; }
+
+    /** \copydoc operator<<(float) */
+    This& operator<<(ldouble num)
+        { out.writefmtnumf(num, fmt.num_flt, &fmt.field); return *this; }
+
+    /** Append a formatted integer class.
+     - Floating point, field, and null attributes apply
+     .
+     \tparam  T  Floating point POD type, deduced from arguments
+     \param  num  Number to format (Float, FloatD, etc)
+     \return      This
+    */
+    template<class U>
+    This& operator<<(const FloatT<U>& num) {
+        if (num.null()) {
+            if (fmt.null.size > 0)
+                out.writefmtstr(fmt.null.str, fmt.null.size, fmt.field);
+        } else
+            out.writefmtnumf(num.value(), fmt.num_flt, &fmt.field);
+        return *this;
+    }
+
+    // Dump
+
+    /** Write formatted data dump to stream.
+     \param  fmtdump  Dump info
+     \return          This
+    */
+    This& operator<<(const FmtDump& fmtdump)
+        { out.writefmtdump(fmtdump); return *this; }
 };
 
 ///////////////////////////////////////////////////////////////////////////////
 
 /** Input/Output stream implementation.
- - This is not normally instantiated directly, see: File, Pipe, Console
+ - This is not normally instantiated directly, see: File, Pipe, Console, Socket
  - This implements binary and text input/output with buffering
    - Binary I/O (no newline conversion): readbin(), writebin()
    - Text I/O (automatic newline conversion): readtext(), readline(), writetext(), writeline()
@@ -561,39 +775,41 @@ public:
  - This also implements formatted output using operator<<()\n
    Note: Output formatting stops (is skipped) when an error is set, this allows chaining multiple << calls before checking for error\n
    Example:\code
-stream << "test" << 123 << ',' << 12.3 << NL;
-if (!stream) {
-    // write error
-}
+    stream << "test" << 123 << ',' << 12.3 << NL;
+    if (!stream) {
+        // write error
+    }
    \endcode
  - Call error() to check error code from last operation
  - Evaluating as bool (via SafeBool) checks whether last operation was successful using ! operator!()\n
    Example:
    \code
-if (stream) {
-    // last operation successful
-}
-if (!stream) {
-    // last operation failed
-}
+    if (stream) {
+        // last operation successful
+    }
+    if (!stream) {
+        // last operation failed
+    }
    \endcode
  .
- \tparam  T  Low-level I/O stream implementing SysIoDevice to use
+\tparam  T  Low-level I/O stream implementing IoDevice to use
 */
 template<class T>
-class Stream : public StreamBase
-{
+class Stream : public StreamBase {
 public:
-    typedef typename T::Handle Handle;      ///< Low-level handle type (OS dependent)
-    typedef Stream<T>          This;        ///< This stream type
+    typedef typename T::Handle Handle;                  ///< Low-level handle type (OS dependent)
+    typedef Stream<T>          This;                    ///< This stream type
+    typedef This               Out;                     ///< Type returned by write_out()
 
-    // TODO
-    //Iter iterlines()
+    typedef StreamFormatter<This> Format;               ///< \copydoc evo::StreamFormatter
+
+    typedef typename T::ExceptionInT  ExceptionInT;     ///< %Stream input exception type
+    typedef typename T::ExceptionOutT ExceptionOutT;    ///< %Stream output exception type
 
     /** Constructor.
      \param  newlines  Newline type to use for text reading/writing
     */
-    Stream(Newline newlines=NL) :
+    Stream(Newline newlines=NL_SYS) :
         owned_(false),
         bufrd_(0, newlines),
         bufwr_(0, newlines),
@@ -605,136 +821,508 @@ public:
      - Calls close()
      - Never throws an exception, even if flush fails
     */
-    ~Stream()
-        { close(); }
+    ~Stream() {
+        close();
+    }
+
+    /** Get stream handle for low-level calls.
+     \return  %Stream handle
+    */
+    Handle handle() const {
+        return device_.handle;
+    }
 
     /** Advanced: Access primary read buffer.
      - \b Caution: This returns a low-level interface that must be used properly
+     - Note: Other buffers may be involved if filters are used
      - This never throws any exception
      .
      \return  Read buffer
     */
-    RawBuffer& bufread()
-        { return bufrd_.readbuf; }
+    RawBuffer& bufread() {
+        return bufrd_.readbuf;
+    }
 
     /** Advanced: Access primary write buffer.
      - \b Caution: This returns a low-level interface that must be used properly
+     - Note: Other buffers may be involved if filters are used
      - This never throws any exception
      .
      \return  Write buffer
     */
-    SysWriter& bufwrite()
-        { return bufwr_; }
+    IoWriter& bufwrite() {
+        return bufwr_;
+    }
+
+    /** Attach existing stream.
+     \param  mode        Access mode to use (oREAD, oREAD_WRITE, or oWRITE), must be correct for handle
+     \param  handle      Handle to attach, must be valid
+     \param  owned       Whether to take ownership and close handle, false detaches on close()
+     \param  flushlines  Whether to flush text output on newlines (line buffering)
+    */
+    void attach(Open mode, Handle handle, bool owned=true, bool flushlines=false) {
+        close();
+        device_.handle = handle;
+        if (device_.isopen()) {
+            init(mode, flushlines);
+            owned_ = owned;
+        }
+    }
 
     /** Detach current stream.
+     - This will flush output before detaching
+     - Never throws an exception, even if flush fails
+     .
      \return  Detached handle
     */
-    Handle detach()
-        { owned_ = false; return device_.detach(); }
+    Handle detach() {
+        if (device_.isopen()) {
+            if (bufwr_.used > 0)
+                bufwr_.flush(device_);
+            bufrd_.close();
+            bufwr_.close();
+            owned_ = false;
+        }
+        return device_.detach();
+    }
 
     /** Close stream.
      - This will flush output before closing
-     - Never throws an exception, even if flush fails
+     - Never throws an exception, even if flush or close fails
      .
      \return  Whether successful, false on flush error (stream will still close)
     */
     bool close() {
-        if (bufwr_.used > 0)
-            error_ = bufwr_.flush(device_);
-        else
-            error_ = ENone;
-        if (owned_)
-            device_.close();
-        else
-            device_.detach();
-        owned_ = false;
-        return (error_ == ENone);
+        if (device_.isopen()) {
+            if (bufwr_.used > 0) {
+                error_ = bufwr_.flush(device_);
+            } else
+                error_ = ENone;
+            bufrd_.close();
+            bufwr_.close();
+            if (owned_) {
+                device_.close();
+                owned_ = false;
+            } else
+                device_.detach();
+            return (error_ == ENone);
+        }
+        return true;
     }
 
-    bool isopen() const
-        { return device_.isopen(); }
+    bool isopen() const {
+        return device_.isopen();
+    }
 
-    ulong readbin(char* buf, ulong size) {
-        if (rwlast_ != rwlREAD && !readprep())
+    ulong readbin(void* buf, ulong size) {
+        if (T::STREAM_SEEKABLE && rwlast_ != rwlREAD && !readprep())
             return 0;
         size = bufrd_.readbin(error_, device_, buf, size);
-        EVO_THROW_ERR_CHECK(evo::ExceptionStreamIn, "Stream binary read failed", error_, (excep_ && error_ != ENone && error_ != EEnd));
+        EVO_THROW_ERR_CHECK(ExceptionInT, "Stream binary read failed", error_, (excep_ && size == 0 && error_ != ENone && error_ != EEnd));
         return size;
     }
 
     ulong readtext(char* buf, ulong size) {
-        if (rwlast_ != rwlREAD && !readprep())
+        if (T::STREAM_SEEKABLE && rwlast_ != rwlREAD && !readprep())
             return 0;
         size = bufrd_.readtext(error_, device_, buf, size);
-        EVO_THROW_ERR_CHECK(evo::ExceptionStreamIn, "Stream text read failed", error_, (excep_ && error_ != ENone && error_ != EEnd));
+        EVO_THROW_ERR_CHECK(ExceptionInT, "Stream text read failed", error_, (excep_ && size == 0 && error_ != ENone && error_ != EEnd));
         return size;
     }
 
     bool readline(String& str, ulong maxlen=0) {
-        if (rwlast_ != rwlREAD && !readprep())
+        if (T::STREAM_SEEKABLE && rwlast_ != rwlREAD && !readprep())
             return false;
         error_ = bufrd_.readline(str, device_, maxlen);
-        EVO_THROW_ERR_CHECK(evo::ExceptionStreamIn, "Stream text line read failed", error_, (excep_ && error_ != ENone && error_ != EEnd));
-        return (error_ == ENone);
+        if (error_ != ENone && error_ != EEnd) {
+            EVO_THROW_ERR_CHECK(ExceptionInT, "Stream text line read failed", error_, excep_);
+            return false;
+        }
+        return true;
     }
-
-    // TODO readprevline()
 
     bool flush() {
         error_ = bufwr_.flush(device_);
-        EVO_THROW_ERR_CHECK(evo::ExceptionStreamOut, "Stream flush failed", error_, (excep_ && error_ != ENone));
-        return (error_ == ENone);
+        if (error_ != ENone) {
+            EVO_THROW_ERR_CHECK(ExceptionOutT, "Stream flush failed", error_, excep_);
+            return false;
+        }
+        return true;
     }
 
-    ulong writebin(const char* buf, ulong size) {
-        if (rwlast_ != rwlWRITE && !writeprep())
+    ulong writebin(const void* buf, ulong size) {
+        if (T::STREAM_SEEKABLE && rwlast_ != rwlWRITE && !writeprep())
             return 0;
         size = bufwr_.writebin(error_, device_, buf, size);
-        EVO_THROW_ERR_CHECK(evo::ExceptionStreamOut, "Stream binary write failed", error_, (excep_ && error_ != ENone));
+        EVO_THROW_ERR_CHECK(ExceptionOutT, "Stream binary write failed", error_, (excep_ && size == 0 && error_ != ENone));
         return size;
     }
 
+    ulong writechar(char ch, ulong count=1) {
+        if (T::STREAM_SEEKABLE && rwlast_ != rwlWRITE && !writeprep())
+            return 0;
+        count = bufwr_.writetext_char(error_, device_, ch, count);
+        EVO_THROW_ERR_CHECK(ExceptionOutT, "Stream text write failed", error_, (excep_ && count == 0 && error_ != ENone));
+        return count;
+    }
+
     ulong writetext(const char* buf, ulong size) {
-        if (rwlast_ != rwlWRITE && !writeprep())
+        if (T::STREAM_SEEKABLE && rwlast_ != rwlWRITE && !writeprep())
             return 0;
         size = bufwr_.writetext(error_, device_, buf, size);
-        EVO_THROW_ERR_CHECK(evo::ExceptionStreamOut, "Stream text write failed", error_, (excep_ && error_ != ENone));
+        EVO_THROW_ERR_CHECK(ExceptionOutT, "Stream text write failed", error_, (excep_ && size == 0 && error_ != ENone));
         return size;
     }
 
     ulong writeline(const char* buf, ulong size) {
-        if (rwlast_ != rwlWRITE && !writeprep())
+        if (T::STREAM_SEEKABLE && rwlast_ != rwlWRITE && !writeprep())
             return 0;
-        ulong writtensize = bufwr_.writetext(error_, device_, buf, size);
+        ulong writtensize = bufwr_.writetext(error_, device_, buf, size), writtensize2;
         bufwr_.partnl = 0;
-        if (writtensize == 0 || !bufwr_.writebin(error_, device_, bufwr_.newline, bufwr_.newlinesize) ) {
-            EVO_THROW_ERR_CHECK(evo::ExceptionStreamOut, "Stream text line write failed", error_, excep_);
+        if ( writtensize == 0 || (writtensize2=bufwr_.writebin(error_, device_, bufwr_.newline, bufwr_.newlinesize)) == 0 ) {
+            EVO_THROW_ERR_CHECK(ExceptionOutT, "Stream text line write failed", error_, excep_);
             return 0;
         }
-        return writtensize + bufwr_.newlinesize;
+        return writtensize + writtensize2;
     }
 
-    ulong writenewline() {
-        if (rwlast_ != rwlWRITE && !writeprep())
+    Out& write_out()
+        { return *this; }
+
+    char* write_direct(Size size) {
+        if (T::STREAM_SEEKABLE && rwlast_ != rwlWRITE && !writeprep())
             return 0;
-        bufwr_.partnl = 0;
-        if (!bufwr_.writebin(error_, device_, bufwr_.newline, bufwr_.newlinesize)) {
-            EVO_THROW_ERR_CHECK(evo::ExceptionStreamOut, "Stream newline write failed", error_, excep_);
-            return 0;
+        if (size > bufwr_.size) {
+            EVO_THROW_ERR_CHECK(ExceptionOutT, "Stream not large enough for write_direct()", error_, excep_);
+            return NULL;
         }
-        return bufwr_.newlinesize;
+        if (bufwr_.avail() < size) {
+            error_ = bufwr_.flush(device_);
+            if (error_ != ENone) {
+                EVO_THROW_ERR_CHECK(ExceptionOutT, "Stream flush failed", error_, excep_);
+                return NULL;
+            }
+        }
+        bufwr_.partnl = 0;
+        return bufwr_.data + bufwr_.used;
     }
 
-    // operator<<() overloads are copied to StreamOut
-    // Note: It's tempting to move to base and call virtual writes, but then operator<<() returns base type and calls require VTABLE lookups
+    char* write_direct_multi(Size& available, Size reserve_size) {
+        if (T::STREAM_SEEKABLE && rwlast_ != rwlWRITE && !writeprep())
+            return 0;
+        if (reserve_size > bufwr_.avail()) {
+            error_ = bufwr_.flush(device_);
+            if (error_ != ENone) {
+                EVO_THROW_ERR_CHECK(ExceptionOutT, "Stream flush failed", error_, excep_);
+                return NULL;
+            }
+            if (reserve_size > bufwr_.size)
+                available = (Size)bufwr_.size;
+            else
+                available = reserve_size;
+        } else {
+            available = reserve_size;
+            if (reserve_size == 0)
+                return (char*)1; // finished
+        }
+        bufwr_.partnl = 0;
+        return bufwr_.data + bufwr_.used;
+    }
 
-    /** Write a newline to stream and flush output.
-     - This calls writenewline() then flush()
+    char* write_direct_flush(Size& available, Size written_size, Size reserve_size) {
+        bufwr_.used += written_size;
+        assert( bufwr_.used <= bufwr_.size );
+
+        error_ = bufwr_.flush(device_);
+        if (error_ != ENone) {
+            EVO_THROW_ERR_CHECK(ExceptionOutT, "Stream flush failed", error_, excep_);
+            return NULL;
+        }
+
+        if (reserve_size > bufwr_.size) {
+            available = (Size)bufwr_.size;
+        } else {
+            available = reserve_size;
+            if (reserve_size == 0)
+                return (char*)1; // finished
+        }
+
+        return bufwr_.data;
+    }
+
+    bool write_direct_finish(Size size) {
+        bufwr_.used += size;
+        assert( bufwr_.used <= bufwr_.size );
+        return true;
+    }
+
+    /** Write formatted signed number.
+     - Depending on the stream type, this may be a blocking call
+     - If exceptions are disabled, call error() to check error code
      .
-     \return  This
+     \tparam  TNum  Number type, inferred by param
+     \param  num   Number to write
+     \param  base  Base to use for formatting
+     \return       Whether successful, false on error
     */
-    This& operator<<(Newline)
-        { if (error_ == ENone) { writenewline(); flush(); } return *this; }
+    template<class TNum>
+    bool writenum(TNum num, int base=fDEC) {
+        if (error_ == ENone) {
+            if (T::STREAM_SEEKABLE && rwlast_ != rwlWRITE && !writeprep())
+                return false;
+            error_ = bufwr_.writenum(device_, num, base);
+            if (error_ != ENone) {
+                EVO_THROW_ERR_CHECK(ExceptionOutT, "Stream text write number failed", error_, excep_);
+                return false;
+            }
+            return true;
+        }
+        EVO_THROW_ERR_CHECK(ExceptionOutT, "Stream text write number blocked by previous error", error_, excep_);
+        return false;
+    }
+
+    /** Write formatted unsigned number.
+     - Depending on the stream type, this may be a blocking call
+     - If exceptions are disabled, call error() to check error code
+     .
+     \tparam  TNum  Number type, inferred by param
+     \param  num   Number to write
+     \param  base  Base to use for formatting
+     \return       Whether successful, false on error
+    */
+    template<class TNum>
+    bool writenumu(TNum num, int base=fDEC) {
+        if (error_ == ENone) {
+            if (T::STREAM_SEEKABLE && rwlast_ != rwlWRITE && !writeprep())
+                return false;
+            error_ = bufwr_.writenumu(device_, num, base);
+            if (error_ != ENone) {
+                EVO_THROW_ERR_CHECK(ExceptionOutT, "Stream text write number failed", error_, excep_);
+                return false;
+            }
+            return true;
+        }
+        EVO_THROW_ERR_CHECK(ExceptionOutT, "Stream text write number blocked by previous error", error_, excep_);
+        return false;
+    }
+
+    /** Write formatted floating-point number.
+     - Depending on the stream type, this may be a blocking call
+     - If exceptions are disabled, call error() to check error code
+     .
+     \tparam  TNum  Number type, inferred by param
+     \param  num        Number to write
+     \param  precision  Formatting precision (number of fractional digits), 0 for none, fPREC_AUTO for automatic
+     \return            Whether successful, false on error
+    */
+    template<class TNum>
+    bool writenumf(TNum num, int precision=fPREC_AUTO) {
+        if (error_ == ENone) {
+            if (T::STREAM_SEEKABLE && rwlast_ != rwlWRITE && !writeprep())
+                return false;
+            error_ = bufwr_.writenumf(device_, num, precision);
+            if (error_ != ENone) {
+                EVO_THROW_ERR_CHECK(ExceptionOutT, "Stream text write number failed", error_, excep_);
+                return false;
+            }
+            return true;
+        }
+        EVO_THROW_ERR_CHECK(ExceptionOutT, "Stream text write number blocked by previous error", error_, excep_);
+        return false;
+    }
+
+    /** Write formatted and/or repeated character.
+     \param  ch     Character to write
+     \param  count  Character repeat count to use
+     \param  field  Field attributes to use
+     \return        Whether successful, false on error
+    */
+    bool writefmtchar(char ch, ulong count, const FmtSetField& field) {
+        if (error_ == ENone) {
+            if (T::STREAM_SEEKABLE && rwlast_ != rwlWRITE && !writeprep())
+                return false;
+            error_ = bufwr_.writefmtchar(device_, ch, count, field);
+            EVO_THROW_ERR_CHECK(ExceptionOutT, "Stream text formatted write char failed", error_, (excep_ && error_ != ENone));
+            return true;
+        }
+        EVO_THROW_ERR_CHECK(ExceptionOutT, "Stream text write formatted char blocked by previous error", error_, excep_);
+        return false;
+    }
+
+    /** Write text with field alignment.
+     - This does a text write, converting newlines as needed
+     - Depending on the stream type, this may be a blocking call
+     - If exceptions are disabled, call error() to check error code
+     .
+     \param  buf    Buffer to write from
+     \param  size   Size to write in bytes
+     \param  field  Field attributes to use
+     \return        Whether successful, false on error
+    */
+    bool writefmtstr(const char* buf, ulong size, const FmtSetField& field) {
+        if (error_ == ENone) {
+            if (T::STREAM_SEEKABLE && rwlast_ != rwlWRITE && !writeprep())
+                return false;
+            error_ = bufwr_.writefmtstr(device_, buf, size, field);
+            EVO_THROW_ERR_CHECK(ExceptionOutT, "Stream text formatted write string failed", error_, (excep_ && error_ != ENone));
+            return true;
+        }
+        EVO_THROW_ERR_CHECK(ExceptionOutT, "Stream text write formatted string blocked by previous error", error_, excep_);
+        return false;
+    }
+
+    /** Write formatted signed number with field alignment.
+     - Depending on the stream type, this may be a blocking call
+     - If exceptions are disabled, call error() to check error code
+     .
+     \tparam  TNum  Number type, inferred by param
+     \param  num    Number to write
+     \param  fmt    Integer formatting attributes to use
+     \param  field  Field formatting attributes to use, NULL for none
+     \return        Whether successful, false on error
+    */
+    template<class TNum>
+    bool writefmtnum(TNum num, const FmtSetInt& fmt, const FmtSetField* field=NULL) {
+        if (error_ == ENone) {
+            if (T::STREAM_SEEKABLE && rwlast_ != rwlWRITE && !writeprep())
+                return false;
+            error_ = bufwr_.writefmtnum(device_, num, fmt, field);
+            if (error_ != ENone) {
+                EVO_THROW_ERR_CHECK(ExceptionOutT, "Stream text write formatted number failed", error_, excep_);
+                return false;
+            }
+            return true;
+        }
+        EVO_THROW_ERR_CHECK(ExceptionOutT, "Stream text write formatted number blocked by previous error", error_, excep_);
+        return false;
+    }
+
+    /** Write formatted unsigned number with field alignment.
+     - Depending on the stream type, this may be a blocking call
+     - If exceptions are disabled, call error() to check error code
+     .
+     \tparam  TNum  Number type, inferred by param
+     \param  num    Number to write
+     \param  fmt    Integer formatting attributes to use
+     \param  field  Field formatting attributes to use, NULL for none
+     \return        Whether successful, false on error
+    */
+    template<class TNum>
+    bool writefmtnumu(TNum num, const FmtSetInt& fmt, const FmtSetField* field=NULL) {
+        if (error_ == ENone) {
+            if (T::STREAM_SEEKABLE && rwlast_ != rwlWRITE && !writeprep())
+                return false;
+            error_ = bufwr_.writefmtnumu(device_, num, fmt, field);
+            if (error_ != ENone) {
+                EVO_THROW_ERR_CHECK(ExceptionOutT, "Stream text write formatted number failed", error_, excep_);
+                return false;
+            }
+            return true;
+        }
+        EVO_THROW_ERR_CHECK(ExceptionOutT, "Stream text write formatted number blocked by previous error", error_, excep_);
+        return false;
+    }
+
+    /** Write formatted floating point number with field alignment.
+     - Depending on the stream type, this may be a blocking call
+     - If exceptions are disabled, call error() to check error code
+     .
+     \tparam  TNum  Number type, inferred by param
+     \param  num    Number to write
+     \param  fmt    Floating point formatting attributes to use
+     \param  field  Field formatting attributes to use, NULL for none
+     \return        Whether successful, false on error
+    */
+    template<class TNum>
+    bool writefmtnumf(TNum num, const FmtSetFloat& fmt, const FmtSetField* field=NULL) {
+        if (error_ == ENone) {
+            if (T::STREAM_SEEKABLE && rwlast_ != rwlWRITE && !writeprep())
+                return false;
+            error_ = bufwr_.writefmtnumf(device_, num, fmt, field);
+            if (error_ != ENone) {
+                EVO_THROW_ERR_CHECK(ExceptionOutT, "Stream text write formatted number failed", error_, excep_);
+                return false;
+            }
+            return true;
+        }
+        EVO_THROW_ERR_CHECK(ExceptionOutT, "Stream text write formatted number blocked by previous error", error_, excep_);
+        return false;
+    }
+
+    /** Write formatted data dump.
+     - Output may span multiple lines, and always ends with a newline (unless dump data is empty)
+     - Depending on the stream type, this may be a blocking call
+     - If exceptions are disabled, call error() to check error code
+     .
+     \param  fmt  Format data, including buffer to dump
+     \return      Whether successful, false on error
+    */
+    bool writefmtdump(const FmtDump& fmt) {
+        if (error_ == ENone) {
+            if (T::STREAM_SEEKABLE && rwlast_ != rwlWRITE && !writeprep())
+                return false;
+            error_ = bufwr_.writefmtdump(device_, fmt, bufwr_.newline, bufwr_.newlinesize);
+            if (error_ != ENone) {
+                EVO_THROW_ERR_CHECK(ExceptionOutT, "Stream text write hex dump failed", error_, excep_);
+                return false;
+            }
+            return true;
+        }
+        EVO_THROW_ERR_CHECK(ExceptionOutT, "Stream text write hex dump blocked by previous error", error_, excep_);
+        return false;
+    }
+
+    /** Write formatted data dump with explicit newline type.
+     - Output may span multiple lines, and always ends with a newline (unless dump data is empty)
+     - Depending on the stream type, this may be a blocking call
+     - If exceptions are disabled, call error() to check error code
+     .
+     \param  fmt  Format data, including buffer to dump
+     \param  nl   Newline type to use, \link evo::NL NL\endlink for current default or \link evo::NL_SYS NL_SYS\endlink for system default
+     \return      Whether successful, false on error
+    */
+    bool writefmtdump(const FmtDump& fmt, Newline nl) {
+        if (error_ == ENone) {
+            if (T::STREAM_SEEKABLE && rwlast_ != rwlWRITE && !writeprep())
+                return false;
+            error_ = bufwr_.writefmtdump(device_, fmt, getnewline(nl), getnewlinesize(nl));
+            if (error_ != ENone) {
+                EVO_THROW_ERR_CHECK(ExceptionOutT, "Stream text write hex dump failed", error_, excep_);
+                return false;
+            }
+            return true;
+        }
+        EVO_THROW_ERR_CHECK(ExceptionOutT, "Stream text write hex dump blocked by previous error", error_, excep_);
+        return false;
+    }
+
+    /** Write an explicit newline and flush stream.
+     - Use \link evo::NL NL\endlink for default newline value, where default is set by the stream
+     .
+     \param  nl  Newline type to write, \link evo::NL NL\endlink for current default or \link evo::NL_SYS NL_SYS\endlink for system default
+     \return     This
+    */
+    This& operator<<(Newline nl) {
+        if (error_ == ENone) {
+            writebin(getnewline(nl), getnewlinesize(nl));
+            flush();
+        }
+        return *this;
+    }
+
+    /** Write default newline and flush stream.
+     - This overloads operator<<(Newline)
+     .
+     \param  nl  Default newline value (\link evo::NL NL\endlink), where default is set by the stream
+     \return     This
+    */
+    This& operator<<(NewlineDefault nl) {
+        if (error_ == ENone) {
+            writebin(bufwr_.newline, bufwr_.newlinesize);
+            flush();
+        }
+        return *this;
+    }
 
     /** Flush buffer by writing to stream.
      - This calls flush()
@@ -742,8 +1330,28 @@ public:
      .
      \return  This
     */
-    This& operator<<(Flush)
-        { if (error_ == ENone) flush(); return *this; }
+    This& operator<<(Flush) {
+        if (error_ == ENone)
+            flush();
+        return *this;
+    }
+
+    /** Append a bool value to stream.
+     - Bool value is formatted as either "true" or "false" (without quotes)
+     - This calls writetext()
+     .
+     \param  val  Bool value to append
+     \return      This
+    */
+    This& operator<<(bool val) {
+        if (error_ == ENone) {
+            if (val)
+                bufwr_.writetext(error_, device_, "true", 4);
+            else
+                bufwr_.writetext(error_, device_, "false", 5);
+        }
+        return *this;
+    }
 
     /** Write character to stream.
      - This calls writetext()
@@ -751,8 +1359,11 @@ public:
      \param  ch  Character to write
      \return     This
     */
-    This& operator<<(char ch)
-        { if (error_ == ENone) writetext(&ch, 1); return *this; }
+    This& operator<<(char ch) {
+        if (error_ == ENone)
+            writechar(ch);
+        return *this;
+    }
 
     /** Write terminated string to stream.
      - This calls writetext()
@@ -761,8 +1372,8 @@ public:
      \return      This
     */
     This& operator<<(const char* str) {
-        if (error_ == ENone && str != NULL) // TODO: write null indicator?
-            writetext(str, strlen(str));
+        if (error_ == ENone && str != NULL)
+            writetext(str, (ulong)strlen(str));
         return *this;
     }
 
@@ -773,7 +1384,7 @@ public:
      \return      This
     */
     This& operator<<(const SubString& str) {
-        if (error_ == ENone && str.size_ > 0) // TODO: write null indicator?
+        if (error_ == ENone && str.size_ > 0)
             writetext(str.data_, str.size_);
         return *this;
     }
@@ -789,7 +1400,7 @@ public:
     */
     template<class TSize>
     This& operator<<(const ListBase<char,TSize>& str) {
-        if (error_ == ENone && str.size_ > 0) // TODO: write null indicator?
+        if (error_ == ENone && str.size_ > 0)
             writetext(str.data_, str.size_);
         return *this;
     }
@@ -802,7 +1413,7 @@ public:
      \return      This
     */
     This& operator<<(int num)
-        { if (error_ == ENone) writenum(num); return *this; }
+        { writenum(num); return *this; }
 
     /** Write formatted number to stream.
      - This will flush current buffer if it's too full
@@ -812,7 +1423,7 @@ public:
      \return      This
     */
     This& operator<<(long num)
-        { if (error_ == ENone) writenum(num); return *this; }
+        { writenum(num); return *this; }
 
     /** Write formatted number to stream.
      - This will flush current buffer if it's too full
@@ -822,7 +1433,7 @@ public:
      \return      This
     */
     This& operator<<(longl num)
-        { if (error_ == ENone) writenum(num); return *this; }
+        { writenum(num); return *this; }
 
     /** Write formatted number to stream.
      - This will flush current buffer if it's too full
@@ -832,7 +1443,7 @@ public:
      \return      This
     */
     This& operator<<(uint num)
-        { if (error_ == ENone) writenumu(num); return *this; }
+        { writenumu(num); return *this; }
 
     /** Write formatted number to stream.
      - This will flush current buffer if it's too full
@@ -842,7 +1453,7 @@ public:
      \return      This
     */
     This& operator<<(ulong num)
-        { if (error_ == ENone) writenumu(num); return *this; }
+        { writenumu(num); return *this; }
 
     /** Write formatted number to stream.
      - This will flush current buffer if it's too full
@@ -852,7 +1463,23 @@ public:
      \return      This
     */
     This& operator<<(ulongl num)
-        { if (error_ == ENone) writenumu(num); return *this; }
+        { writenumu(num); return *this; }
+
+    /** Write formatted class number to stream.
+     - This will flush current buffer if it's too full
+     - This formats directly to write buffer so it must be large enough
+     .
+     \tparam  U  Number class type (Int, Uint, etc)
+
+     \param  num  Number to format and write, no-op if null
+     \return      This
+    */
+    template<class U>
+    This& operator<<(const IntegerT<U>& num) {
+        if (!num.null())
+            writenum(num.value());
+        return *this;
+    }
 
     /** Write formatted floating-point number to stream.
      - This will flush current buffer if it's too full
@@ -862,7 +1489,7 @@ public:
      \return      This
     */
     This& operator<<(float num)
-        { if (error_ == ENone) writenumf(num); return *this; }
+        { writenumf(num); return *this; }
 
     /** Write formatted floating-point number to stream.
      - This will flush current buffer if it's too full
@@ -872,7 +1499,7 @@ public:
      \return      This
     */
     This& operator<<(double num)
-        { if (error_ == ENone) writenumf(num); return *this; }
+        { writenumf(num); return *this; }
 
     /** Write formatted floating-point number to stream.
      - This will flush current buffer if it's too full
@@ -882,94 +1509,114 @@ public:
      \return      This
     */
     This& operator<<(ldouble num)
-        { if (error_ == ENone) writenumf(num); return *this; }
+        { writenumf(num); return *this; }
 
-    // TODO: add Int, etc... uchar?
+    /** Write formatted class floating-point number to stream.
+     - This will flush current buffer if it's too full
+     - This formats directly to write buffer so it must be large enough
+     .
+     \tparam  U  Number class type (Float, FloatD, etc)
 
-    // TODO
-/*    This& operator<<(const FmtNull& fmt)
-        { fmtout_.null = fmt; return *this; }
+     \param  num  Number to format and write, no-op if null
+     \return      This
+    */
+    template<class U>
+    This& operator<<(const FloatT<U>& num) {
+        if (!num.null())
+            writenumf(num.value());
+        return *this;
+    }
 
-    This& operator<<(FmtBase base)
-        { fmtout_.num_int.base = (int)base; return *this; }
+    /** Write repeated character to stream.
+     - This will flush current buffer if it's too full
+     - This formats directly to write buffer so it must be large enough
+     .
+     \param  fmt  Character info
+     \return      This
+    */
+    This& operator<<(const FmtChar& fmt)
+        { writechar(fmt.ch, fmt.count); return *this; }
 
-    This& operator<<(const FmtIntPad& pad)
-        { fmtout_.num_int.pad = pad; return *this; }
+    /** Write formatted number field to stream.
+     - This will flush current buffer if it's too full
+     - This formats directly to write buffer so it must be large enough
+     .
+     \param  fmt  Number info
+     \return      This
+    */
+    This& operator<<(const FmtShort& fmt)
+        { writefmtnum(fmt.num, fmt.fmt); return *this; }
 
+    /** \copydoc operator<<(const FmtShort&) */
     This& operator<<(const FmtInt& fmt)
-        { fmtout_.num_int = fmt; return *this; }
+        { writefmtnum(fmt.num, fmt.fmt); return *this; }
 
-    This& operator<<(const FmtFloatPad& pad)
-        { fmtout_.num_flt.pad = pad; return *this; }
+    /** \copydoc operator<<(const FmtShort&) */
+    This& operator<<(const FmtLong& fmt)
+        { writefmtnum(fmt.num, fmt.fmt); return *this; }
 
+    /** \copydoc operator<<(const FmtShort&) */
+    This& operator<<(const FmtLongL& fmt)
+        { writefmtnum(fmt.num, fmt.fmt); return *this; }
+
+    /** \copydoc operator<<(const FmtShort&) */
+    This& operator<<(const FmtUShort& fmt)
+        { writefmtnumu(fmt.num, fmt.fmt); return *this; }
+
+    /** \copydoc operator<<(const FmtShort&) */
+    This& operator<<(const FmtUInt& fmt)
+        { writefmtnumu(fmt.num, fmt.fmt); return *this; }
+
+    /** \copydoc operator<<(const FmtShort&) */
+    This& operator<<(const FmtULong& fmt)
+        { writefmtnumu(fmt.num, fmt.fmt); return *this; }
+
+    /** \copydoc operator<<(const FmtShort&) */
+    This& operator<<(const FmtULongL& fmt)
+        { writefmtnumu(fmt.num, fmt.fmt); return *this; }
+
+    /** \copydoc operator<<(const FmtShort&) */
     This& operator<<(const FmtFloat& fmt)
-        { fmtout_.num_flt = fmt; return *this; }
+        { writefmtnumf(fmt.num, fmt.fmt); return *this; }
 
-    This& operator<<(const FmtField& fmt)
-        { fmtout_.field = fmt; return *this; }
+    /** \copydoc operator<<(const FmtShort&) */
+    This& operator<<(const FmtFloatD& fmt)
+        { writefmtnumf(fmt.num, fmt.fmt); return *this; }
 
-    This& operator<<(const FmtOut& fmt)
-        { fmtout_ = fmt; return *this; }
+    /** \copydoc operator<<(const FmtShort&) */
+    This& operator<<(const FmtFloatL& fmt)
+        { writefmtnumf(fmt.num, fmt.fmt); return *this; }
 
-    const FmtOut& fmtout() const
-        { return fmtout_; }
-*/
+    /** Write formatted data dump to stream.
+     \param  fmt  Dump info
+     \return      This
+    */
+    This& operator<<(const FmtDump& fmt)
+        { writefmtdump(fmt); return *this; }
+
 protected:
+    /** Current read/write mode. */
     enum RwLast {
         rwlNONE = 0,
         rwlREAD,
         rwlWRITE
     };
 
-    T          device_;     ///< I/O device
-    bool       owned_;      ///< Whether handle is owned (to be closed here)
-    SysReader  bufrd_;      ///< Buffered reader
-    SysWriter  bufwr_;      ///< Buffered writer
-    ulongl     savepos_;    ///< Read/Write: Used to save buffered read position when switching between read/write
-    RwLast     rwlast_;     ///< Read/Write: Used to track last operation when switching between read/write
-    //FmtOut     fmtout_;     ///< Output formatting detail
+    T        device_;       ///< I/O device
+    bool     owned_;        ///< Whether handle is owned (to be closed here)
+    IoReader bufrd_;        ///< Buffered reader
+    IoWriter bufwr_;        ///< Buffered writer
+    ulongl   savepos_;      ///< Read/Write: Used to save buffered read position when switching between read/write
+    RwLast   rwlast_;       ///< Read/Write: Used to track last operation when switching between read/write
 
     /** Initialize and reset buffers for a new stream. */
-    void init() {
+    void init(Open mode, bool flushlines=false) {
         savepos_ = 0;
         rwlast_  = rwlNONE;
-    }
-
-    /** Initialize buffer for writing. */
-    void initwrite(bool flushlines=false) {
-        if (bufwr_.size == 0)
-            bufwr_.resize(SysWriter::DEFSIZE);
-        bufwr_.flushlines = flushlines;
-    }
-
-    /** Write formatted signed number. */
-    template<class TNum>
-    bool writenum(TNum num, int base=10) {
-        if (rwlast_ != rwlWRITE && !writeprep())
-            return false;
-        error_ = bufwr_.writetext_num(device_, num, base);
-        EVO_THROW_ERR_CHECK(evo::ExceptionStreamOut, "Stream text write number failed", error_, (excep_ && error_ != ENone));
-        return (error_ == ENone);
-    }
-
-    /** Write formatted unsigned number. */
-    template<class TNum>
-    bool writenumu(TNum num, int base=10) {
-        if (rwlast_ != rwlWRITE && !writeprep())
-            return false;
-        error_ = bufwr_.writetext_numu(device_, num, base);
-        EVO_THROW_ERR_CHECK(evo::ExceptionStreamOut, "Stream text write number failed", error_, (excep_ && error_ != ENone));
-        return (error_ == ENone);
-    }
-
-    /** Write formatted floating-point number. */
-    template<class TNum>
-    bool writenumf(TNum num, int precision=PREC_AUTO) {
-        if (rwlast_ != rwlWRITE && !writeprep())
-            return false;
-        error_ = bufwr_.writetext_numf(device_, num, precision);
-        EVO_THROW_ERR_CHECK(evo::ExceptionStreamOut, "Stream text write number failed", error_, (excep_ && error_ != ENone));
-        return (error_ == ENone);
+        if (open_readable(mode))
+            bufrd_.open();
+        if (open_writable(mode))
+            bufwr_.open(flushlines);
     }
 
 private:
@@ -980,15 +1627,14 @@ private:
     bool readprep() {
         if (rwlast_ != rwlNONE) {
             if ((error_=bufwr_.flush(device_)) != ENone) {
-                EVO_THROW_ERR_CHECK(evo::ExceptionStreamOut, "Stream flush failed before switch to read mode", error_, excep_);
+                EVO_THROW_ERR_CHECK(ExceptionOutT, "Stream flush failed before switch to read mode", error_, excep_);
                 return false;
             }
             ulongl newpos = device_.pos(error_);
             if (error_ != ENone) {
-                EVO_THROW_ERR_CHECK(evo::ExceptionStreamIn, "Stream position read failed during switch to read mode", error_, excep_);
+                EVO_THROW_ERR_CHECK(ExceptionInT, "Stream position read failed during switch to read mode", error_, excep_);
                 return false;
             }
-            // TODO: account for read filters??
             if (newpos > savepos_ || bufrd_.readbuf.used > savepos_ || newpos < savepos_-bufrd_.readbuf.used) {
                 bufrd_.readbuf.used = bufrd_.curbuf_offset = 0; // seeking outside buffered data
                 device_.seek(error_, newpos, sBegin);
@@ -997,7 +1643,7 @@ private:
                 device_.seek(error_, savepos_, sBegin);
             }
             if (error_ != ENone) {
-                EVO_THROW_ERR_CHECK(evo::ExceptionStreamIn, "Stream seek failed during switch to read mode", error_, excep_);
+                EVO_THROW_ERR_CHECK(ExceptionInT, "Stream seek failed during switch to read mode", error_, excep_);
                 return false;
             }
             savepos_ = 0;
@@ -1011,13 +1657,12 @@ private:
         if (rwlast_ != rwlNONE) {
             savepos_ = device_.pos(error_);
             if (error_ != ENone) {
-                EVO_THROW_ERR_CHECK(evo::ExceptionStreamOut, "Stream position read failed during switch to write mode", error_, excep_);
+                EVO_THROW_ERR_CHECK(ExceptionOutT, "Stream position read failed during switch to write mode", error_, excep_);
                 return false;
             }
-            // TODO: account for read filters??
             device_.seek(error_, savepos_-(bufrd_.readbuf.used-bufrd_.curbuf_offset), sBegin);
             if (error_ != ENone) {
-                EVO_THROW_ERR_CHECK(evo::ExceptionStreamOut, "Stream seek failed during switch to write mode", error_, excep_);
+                EVO_THROW_ERR_CHECK(ExceptionOutT, "Stream seek failed during switch to write mode", error_, excep_);
                 return false;
             }
         }
@@ -1046,73 +1691,110 @@ if (!stream) {
 }
    \endcode
  .
- \tparam  T  Low-level I/O stream implementing SysIoDevice to use
+ \tparam  T  Low-level I/O stream implementing IoDevice to use
 */
 template<class T>
-class StreamIn : public StreamBase
-{
+class StreamIn : public StreamBase {
 public:
-    typedef typename T::Handle Handle;    ///< Low-level handle type (OS dependent)
-    typedef StreamIn<T> This;            ///< This stream type
+    typedef typename T::Handle Handle;  ///< Low-level handle type (OS dependent)
+    typedef StreamIn<T> This;           ///< This stream type
+
+    typedef typename T::ExceptionInT  ExceptionInT;     ///< %Stream input exception type
 
     /** Constructor.
-     \param  newlines  Newline type to use for text reading
+     \param  newlines  Newline value for text reading to convert newlines to (defaults to NL_SYS), doesn't affect reading by line
     */
-    StreamIn(Newline newlines=NL) :
+    StreamIn(Newline newlines=NL_SYS) :
         owned_(false),
         bufrd_(0, newlines)
         { }
 
-    /** \copydoc Stream::bufread() */
+    /** \copydoc evo::Stream::handle() */
+    Handle handle() const
+        { return device_.handle; }
+
+    /** \copydoc evo::Stream::bufread() */
     RawBuffer& bufread()
         { return bufrd_.readbuf; }
 
-    /** Attach existing stream.
-     \param  handle  Handle to attach
+    /** Attach existing input stream.
+     \param  handle  Handle to attach, must be valid
      \param  owned   Whether to take ownership and close handle, false detaches on close()
     */
     void attach(Handle handle, bool owned=true) {
         close();
         device_.handle = handle;
-        owned_         = owned;
-        init();
+        if (device_.isopen()) {
+            owned_ = owned;
+            init();
+        }
     }
 
-    /** \copydoc Stream::detach() */
-    Handle detach()
-        { owned_ = false; return device_.detach(); }
+    /** Detach current stream.
+     - Never throws an exception
+     .
+     \return  Detached handle
+    */
+    Handle detach() {
+        if (device_.isopen()) {
+            bufrd_.close();
+            owned_ = false;
+        }
+        return device_.detach();
+    }
 
     /** Close stream.
+     - Never throws an exception, even if close fails
+     .
      \return  Whether successful, always true
     */
     bool close() {
-        if (owned_)
-            device_.close();
-        else
-            device_.detach();
-        owned_ = false;
+        if (device_.isopen()) {
+            bufrd_.close();
+            if (owned_) {
+                device_.close();
+                owned_ = false;
+            } else
+                device_.detach();
+        }
         return true;
     }
 
-    ulong readbin(char* buf, ulong size)
-        { return bufrd_.readbin(error_, device_, buf, size); }
+    bool isopen() const {
+        return device_.isopen();
+    }
 
-    ulong readtext(char* buf, ulong size)
-        { return bufrd_.readtext(error_, device_, buf, size); }
+    // Read methods copied from Stream, with some modifications -- it's done this way to avoid more virtual method overhead
 
-    bool readline(String& str, ulong maxlen=0)
-        { error_ = bufrd_.readline(str, device_, maxlen); return (error_ == ENone); }
+    ulong readbin(void* buf, ulong size) {
+        size = bufrd_.readbin(error_, device_, buf, size);
+        EVO_THROW_ERR_CHECK(ExceptionInT, "Stream binary read failed", error_, (excep_ && size == 0 && error_ != ENone && error_ != EEnd));
+        return size;
+    }
+
+    ulong readtext(char* buf, ulong size) {
+        size = bufrd_.readtext(error_, device_, buf, size);
+        EVO_THROW_ERR_CHECK(ExceptionInT, "Stream text read failed", error_, (excep_ && size == 0 && error_ != ENone && error_ != EEnd));
+        return size;
+    }
+
+    bool readline(String& str, ulong maxlen=0) {
+        error_ = bufrd_.readline(str, device_, maxlen);
+        if (error_ != ENone && error_ != EEnd) {
+            EVO_THROW_ERR_CHECK(ExceptionInT, "Stream text line read failed", error_, excep_);
+            return false;
+        }
+        return true;
+    }
 
 protected:
-    T         device_;      ///< I/O handle
-    bool      owned_;       ///< TODO
-    SysReader bufrd_;       ///< Buffered reader
+    T        device_;       ///< I/O handle
+    bool     owned_;        ///< Whether handle is owned (to be closed here)
+    IoReader bufrd_;        ///< Buffered reader
 
     /** Initialize and reset buffers for a new stream. */
     void init() {
-        bufrd_.readbuf.used = bufrd_.curbuf_offset = 0;
-        if (bufrd_.readbuf.size == 0)
-            bufrd_.readbuf.resize(SysReader::DEFSIZE);
+        bufrd_.open();
     }
 
 private:
@@ -1150,19 +1832,23 @@ if (!stream) {
 }
    \endcode
  .
- \tparam  T  Low-level I/O stream implementing SysIoDevice to use
+ \tparam  T  Low-level I/O stream implementing IoDevice to use
 */
 template<class T>
-class StreamOut : public StreamBase
-{
+class StreamOut : public StreamBase {
 public:
-    typedef typename T::Handle Handle;    ///< Low-level handle type (OS dependent)
-    typedef StreamOut<T>       This;    ///< This stream type
+    typedef typename T::Handle Handle;                  ///< Low-level handle type (OS dependent)
+    typedef StreamOut<T>       This;                    ///< This stream type
+    typedef This               Out;                     ///< Type returned by write_out()
+
+    typedef StreamFormatter<This> Format;               ///< \copydoc evo::StreamFormatter
+
+    typedef typename T::ExceptionOutT ExceptionOutT;    ///< %Stream output exception type
 
     /** Constructor.
      \param  newlines  Newline type to use for text writing
     */
-    StreamOut(Newline newlines=NL) :
+    StreamOut(Newline newlines=NL_SYS) :
         owned_(false),
         bufwr_(0, newlines)
         { }
@@ -1171,144 +1857,361 @@ public:
     ~StreamOut()
         { close(); }
 
-    /** \copydoc Stream::bufwrite() */
-    SysWriter& bufwrite()
+    /** \copydoc evo::Stream::handle() */
+    Handle handle() const
+        { return device_.handle; }
+
+    /** \copydoc evo::Stream::bufwrite() */
+    IoWriter& bufwrite()
         { return bufwr_; }
 
-    /** Attach existing stream.
-     \param  handle      Handle to attach
+    /** Attach existing output stream.
+     \param  handle      Handle to attach, must be valid
      \param  owned       Whether to take ownership and close handle, false detaches on close()
      \param  flushlines  Whether to flush text output on newlines (line buffering)
     */
     void attach(Handle handle, bool owned=true, bool flushlines=false) {
         close();
         device_.handle = handle;
-        owned_         = owned;
-        init(flushlines);
+        if (device_.isopen()) {
+            owned_ = owned;
+            init(flushlines);
+        }
     }
 
-    /** \copydoc Stream::detach() */
-    Handle detach()
-        { owned_ = false; return device_.detach(); }
+    /** Detach current stream.
+    - This will flush output before detaching
+    - Never throws an exception, even if flush fails
+    .
+    \return  Detached handle
+    */
+    Handle detach() {
+        if (device_.isopen()) {
+            if (bufwr_.used > 0)
+                bufwr_.flush(device_);
+            bufwr_.close();
+            owned_ = false;
+        }
+        return device_.detach();
+    }
 
     /** Close stream.
      - This will flush output before closing
+     - Never throws an exception, even if flush or close fails
      .
      \return  Whether successful, false on flush error (stream will still close)
     */
     bool close() {
-        if (bufwr_.used > 0)
-            error_ = bufwr_.flush(device_);
-        else
-            error_ = ENone;
-        if (owned_)
-            device_.close();
-        else
-            device_.detach();
-        owned_ = false;
-        return (error_ == ENone);
+        if (device_.isopen()) {
+            if (bufwr_.used > 0)
+                error_ = bufwr_.flush(device_);
+            else
+                error_ = ENone;
+            bufwr_.close();
+            if (owned_) {
+                device_.close();
+                owned_ = false;
+            } else
+                device_.detach();
+            return (error_ == ENone);
+        }
+        return true;
     }
 
     bool isopen() const
         { return device_.isopen(); }
 
-    bool flush()
-        { return ( (error_=bufwr_.flush(device_)) == ENone ); }
+    // Write methods copied from Stream, with some modifications -- it's done this way to avoid more virtual method overhead
 
-    ulong writebin(const char* buf, ulong size) {
-        return bufwr_.writebin(error_, device_, buf, size);
+    bool flush() {
+        error_ = bufwr_.flush(device_);
+        if (error_ != ENone) {
+            EVO_THROW_ERR_CHECK(ExceptionOutT, "Stream flush failed", error_, (excep_ && error_ != ENone));
+            return false;
+        }
+        return true;
+    }
+
+    ulong writebin(const void* buf, ulong size) {
+        size = bufwr_.writebin(error_, device_, buf, size);
+        EVO_THROW_ERR_CHECK(ExceptionOutT, "Stream binary write failed", error_, (excep_ && size == 0 && error_ != ENone));
+        return size;
+    }
+
+    ulong writechar(char ch, ulong count=1) {
+        count = bufwr_.writetext_char(error_, device_, ch, count);
+        EVO_THROW_ERR_CHECK(ExceptionOutT, "Stream text write failed", error_, (excep_ && count == 0 && error_ != ENone));
+        return count;
     }
 
     ulong writetext(const char* buf, ulong size) {
-        return bufwr_.writetext(error_, device_, buf, size);
+        size = bufwr_.writetext(error_, device_, buf, size);
+        EVO_THROW_ERR_CHECK(ExceptionOutT, "Stream text write failed", error_, (excep_ && size == 0 && error_ != ENone));
+        return size;
     }
 
     ulong writeline(const char* buf, ulong size) {
         ulong writtensize = bufwr_.writetext(error_, device_, buf, size);
         bufwr_.partnl = 0;
-        if (writtensize == 0 || !bufwr_.writebin(error_, device_, bufwr_.newline, bufwr_.newlinesize) )
+        if (writtensize == 0 || !bufwr_.writebin(error_, device_, bufwr_.newline, bufwr_.newlinesize) ) {
+            EVO_THROW_ERR_CHECK(ExceptionOutT, "Stream text line write failed", error_, excep_);
             return 0;
+        }
         return writtensize + bufwr_.newlinesize;
     }
 
-    ulong writenewline() {
+    Out& write_out()
+        { return *this; }
+
+    char* write_direct(Size size) {
+        if (size > bufwr_.size) {
+            EVO_THROW_ERR_CHECK(ExceptionOutT, "Stream not large enough for write_direct()", error_, excep_);
+            return NULL;
+        }
+        if (bufwr_.avail() < size) {
+            error_ = bufwr_.flush(device_);
+            if (error_ != ENone) {
+                EVO_THROW_ERR_CHECK(ExceptionOutT, "Stream flush failed", error_, excep_);
+                return NULL;
+            }
+        }
         bufwr_.partnl = 0;
-        if (!bufwr_.writebin(error_, device_, bufwr_.newline, bufwr_.newlinesize))
-            return 0;
-        return bufwr_.newlinesize;
+        return bufwr_.data + bufwr_.used;
     }
 
-    // operator<<() overloads must match Stream
-    // Note: It's tempting to move to base and call virtual writes, but then operator<<() returns base type and calls require VTABLE lookups and
+    char* write_direct_multi(Size& available, Size reserve_size) {
+        if (reserve_size > bufwr_.avail()) {
+            error_ = bufwr_.flush(device_);
+            if (error_ != ENone) {
+                EVO_THROW_ERR_CHECK(ExceptionOutT, "Stream flush failed", error_, excep_);
+                return NULL;
+            }
+            if (reserve_size > bufwr_.size)
+                available = (Size)bufwr_.size;
+            else
+                available = reserve_size;
+        } else {
+            available = reserve_size;
+            if (reserve_size == 0)
+                return (char*)1; // finished
+        }
+        bufwr_.partnl = 0;
+        return bufwr_.data + bufwr_.used;
+    }
 
-    /** Write a newline to stream and flush output.
-     - This calls writenewline() then flush()
-     .
-     \return  This
-    */
-    This& operator<<(Newline)
-        { if (error_ == ENone) { writenewline(); flush(); } return *this; }
+    char* write_direct_flush(Size& available, Size written_size, Size reserve_size) {
+        bufwr_.used += written_size;
+        assert( bufwr_.used <= bufwr_.size );
 
-    /** Flush buffer by writing to stream.
-     - This calls flush()
-     - This is useful when writing a console prompt, flush so the prompt is immediately visible
-     .
-     \return  This
-    */
-    This& operator<<(Flush)
-        { if (error_ == ENone) flush(); return *this; }
+        error_ = bufwr_.flush(device_);
+        if (error_ != ENone) {
+            EVO_THROW_ERR_CHECK(ExceptionOutT, "Stream flush failed", error_, excep_);
+            return NULL;
+        }
 
-    /** Write character to stream.
-     - This effectively calls writetext()
-     .
-     \param  ch  Character to write
-     \return     This
-    */
+        if (reserve_size > bufwr_.size) {
+            available = (Size)bufwr_.size;
+        } else {
+            available = reserve_size;
+            if (reserve_size == 0)
+                return (char*)1; // finished
+        }
+
+        return bufwr_.data;
+    }
+
+    bool write_direct_finish(Size size) {
+        bufwr_.used += size;
+        assert( bufwr_.used <= bufwr_.size );
+        return true;
+    }
+
+    /** \copydoc evo::Stream::writenum() */
+    template<class TNum>
+    bool writenum(TNum num, int base=fDEC) {
+        if (error_ == ENone) {
+            error_ = bufwr_.writenum(device_, num, base);
+            if (error_ != ENone) {
+                EVO_THROW_ERR_CHECK(ExceptionOutT, "Stream text write number failed", error_, excep_);
+                return false;
+            }
+            return true;
+        }
+        EVO_THROW_ERR_CHECK(ExceptionOutT, "Stream text write number blocked by previous error", error_, excep_);
+        return false;
+    }
+
+    /** \copydoc evo::Stream::writenumu() */
+    template<class TNum>
+    bool writenumu(TNum num, int base=fDEC) {
+        if (error_ == ENone) {
+            error_ = bufwr_.writenumu(device_, num, base);
+            if (error_ != ENone) {
+                EVO_THROW_ERR_CHECK(ExceptionOutT, "Stream text write number failed", error_, excep_);
+                return false;
+            }
+            return true;
+        }
+        EVO_THROW_ERR_CHECK(ExceptionOutT, "Stream text write number blocked by previous error", error_, excep_);
+        return false;
+    }
+
+    /** \copydoc evo::Stream::writenumf() */
+    template<class TNum>
+    bool writenumf(TNum num, int precision=fPREC_AUTO) {
+        if (error_ == ENone) {
+            error_ = bufwr_.writenumf(device_, num, precision);
+            if (error_ != ENone) {
+                EVO_THROW_ERR_CHECK(ExceptionOutT, "Stream text write number failed", error_, excep_);
+                return false;
+            }
+            return true;
+        }
+        EVO_THROW_ERR_CHECK(ExceptionOutT, "Stream text write number blocked by previous error", error_, excep_);
+        return false;
+    }
+
+    /** \copydoc evo::Stream::writefmtchar() */
+    bool writefmtchar(char ch, ulong count, const FmtSetField& field) {
+        if (error_ == ENone) {
+            error_ = bufwr_.writefmtchar(device_, ch, count, field);
+            EVO_THROW_ERR_CHECK(ExceptionOutT, "Stream text formatted write char failed", error_, (excep_ && error_ != ENone));
+            return true;
+        }
+        EVO_THROW_ERR_CHECK(ExceptionOutT, "Stream text write formatted char blocked by previous error", error_, excep_);
+        return false;
+    }
+
+    /** \copydoc evo::Stream::writefmtstr() */
+    bool writefmtstr(const char* buf, ulong size, const FmtSetField& field) {
+        if (error_ == ENone) {
+            error_ = bufwr_.writefmtstr(device_, buf, size, field);
+            EVO_THROW_ERR_CHECK(ExceptionOutT, "Stream text formatted write failed", error_, (excep_ && error_ != ENone));
+            return true;
+        }
+        EVO_THROW_ERR_CHECK(ExceptionOutT, "Stream text formatted write blocked by previous error", error_, excep_);
+        return false;
+    }
+
+    /** \copydoc evo::Stream::writefmtnum() */
+    template<class TNum>
+    bool writefmtnum(TNum num, const FmtSetInt& fmt, const FmtSetField* field=NULL) {
+        if (error_ == ENone) {
+            error_ = bufwr_.writefmtnum(device_, num, fmt, field);
+            if (error_ != ENone) {
+                EVO_THROW_ERR_CHECK(ExceptionOutT, "Stream text write formatted number failed", error_, excep_);
+                return false;
+            }
+            return true;
+        }
+        EVO_THROW_ERR_CHECK(ExceptionOutT, "Stream text write formatted number blocked by previous error", error_, excep_);
+        return false;
+    }
+
+    /** \copydoc evo::Stream::writefmtnumu() */
+    template<class TNum>
+    bool writefmtnumu(TNum num, const FmtSetInt& fmt, const FmtSetField* field=NULL) {
+        if (error_ == ENone) {
+            error_ = bufwr_.writefmtnumu(device_, num, fmt, field);
+            if (error_ != ENone) {
+                EVO_THROW_ERR_CHECK(ExceptionOutT, "Stream text write formatted number failed", error_, excep_);
+                return false;
+            }
+            return true;
+        }
+        EVO_THROW_ERR_CHECK(ExceptionOutT, "Stream text write formatted number blocked by previous error", error_, excep_);
+        return false;
+    }
+
+    /** \copydoc evo::Stream::writefmtnumf() */
+    template<class TNum>
+    bool writefmtnumf(TNum num, const FmtSetFloat& fmt, const FmtSetField* field=NULL) {
+        if (error_ == ENone) {
+            error_ = bufwr_.writefmtnumf(device_, num, fmt, field);
+            if (error_ != ENone) {
+                EVO_THROW_ERR_CHECK(ExceptionOutT, "Stream text write formatted number failed", error_, excep_);
+                return false;
+            }
+            return true;
+        }
+        EVO_THROW_ERR_CHECK(ExceptionOutT, "Stream text write formatted number blocked by previous error", error_, excep_);
+        return false;
+    }
+
+    /** \copydoc evo::Stream::writefmtdump() */
+    bool writefmtdump(const FmtDump& fmt) {
+        if (error_ == ENone) {
+            error_ = bufwr_.writefmtdump(device_, fmt, bufwr_.newline, bufwr_.newlinesize);
+            if (error_ != ENone) {
+                EVO_THROW_ERR_CHECK(ExceptionOutT, "Stream text write hex dump failed", error_, excep_);
+                return false;
+            }
+            return true;
+        }
+        EVO_THROW_ERR_CHECK(ExceptionOutT, "Stream text write hex dump blocked by previous error", error_, excep_);
+        return false;
+    }
+
+    // operator<<() overloads copied from Stream
+
+    /** \copydoc evo::Stream::operator<<(Newline) */
+    This& operator<<(Newline nl) {
+        if (error_ == ENone) {
+            writebin(getnewline(nl), getnewlinesize(nl));
+            flush();
+        }
+        return *this;
+    }
+
+    /** \copydoc evo::Stream::operator<<(NewlineDefault) */
+    This& operator<<(NewlineDefault nl) {
+        if (error_ == ENone) {
+            writebin(bufwr_.newline, bufwr_.newlinesize);
+            flush();
+        }
+        return *this;
+    }
+
+    /** \copydoc evo::Stream::operator<<(Flush) */
+    This& operator<<(Flush) {
+        if (error_ == ENone)
+            flush();
+        return *this;
+    }
+
+    /** \copydoc evo::Stream::operator<<(bool) */
+    This& operator<<(bool val) {
+        if (error_ == ENone) {
+            if (val)
+                bufwr_.writetext(error_, device_, "true", 4);
+            else
+                bufwr_.writetext(error_, device_, "false", 5);
+        }
+        return *this;
+    }
+
+    /** \copydoc evo::Stream::operator<<(char) */
     This& operator<<(char ch) {
-        if (error_ == ENone) {
-            bufwr_.writetext(error_, device_, &ch, 1);
-            EVO_THROW_ERR_CHECK(evo::ExceptionStreamOut, "Stream text write (char) failed", error_, (excep_ && error_ != ENone));
-        }
+        if (error_ == ENone)
+            writechar(ch);
         return *this;
     }
 
-    /** Write terminated string to stream.
-     - This effectively calls writetext()
-     .
-     \param  str  String to write, must be terminated
-     \return      This
-    */
+    /** \copydoc evo::Stream::operator<<(const char*) */
     This& operator<<(const char* str) {
-        if (error_ == ENone && str != NULL) { // TODO: write null indicator?
-            bufwr_.writetext(error_, device_, str, strlen(str));
-            EVO_THROW_ERR_CHECK(evo::ExceptionStreamOut, "Stream text write (char*) failed", error_, (excep_ && error_ != ENone));
-        }
+        if (error_ == ENone && str != NULL)
+            bufwr_.writetext(error_, device_, str, (ulong)strlen(str));
         return *this;
     }
 
-    /** Write substring to stream.
-     - This effectively calls writetext()
-     .
-     \param  str  Substring to write
-     \return      This
-    */
+    /** \copydoc evo::Stream::operator<<(const SubString&) */
     This& operator<<(const SubString& str) {
-        if (error_ == ENone) {
+        if (error_ == ENone)
             bufwr_.writetext(error_, device_, str.data_, str.size_);
-            EVO_THROW_ERR_CHECK(evo::ExceptionStreamOut, "Stream text write (SubString) failed", error_, (excep_ && error_ != ENone));
-        }
         return *this;
     }
 
-    /** Write substring to stream.
-     - This effectively calls writetext()
-     - This handles all Evo character list or string types
-     .
-     \tparam  TSize  List size type (inferred from parameter)
-
-     \param  str  Substring to write
-     \return      This
-    */
+    /** \copydoc evo::Stream::operator<<(const ListBase<char,TSize>&) */
     template<class TSize>
     This& operator<<(const ListBase<char,TSize>& str) {
         if (error_ == ENone) {
@@ -1318,152 +2221,102 @@ public:
         return *this;
     }
 
-    /** Write formatted number to stream.
-     - This will flush current buffer if it's too full
-     - This formats directly to write buffer so it must be large enough
-     .
-     \param  num  Number to format and write
-     \return      This
-    */
-    This& operator<<(int num) {
-        if (error_ == ENone) {
-            error_ = bufwr_.writetext_num(device_, num, 10);
-            EVO_THROW_ERR_CHECK(evo::ExceptionStreamOut, "Stream text write (int) failed", error_, (excep_ && error_ != ENone));
-        }
-        return *this;
-    }
+    /** \copydoc evo::Stream::operator<<(int) */
+    This& operator<<(int num)
+        { writenum(num); return *this; }
 
-    /** Write formatted number to stream.
-     - This will flush current buffer if it's too full
-     - This formats directly to write buffer so it must be large enough
-     .
-     \param  num  Number to format and write
-     \return      This
-    */
-    This& operator<<(long num) {
-        if (error_ == ENone) {
-            error_ = bufwr_.writetext_num(device_, num, 10);
-            EVO_THROW_ERR_CHECK(evo::ExceptionStreamOut, "Stream text write (long) failed", error_, (excep_ && error_ != ENone));
-        }
-        return *this;
-    }
+    /** \copydoc evo::Stream::operator<<(long) */
+    This& operator<<(long num)
+        { writenum(num); return *this; }
 
-    /** Write formatted number to stream.
-     - This will flush current buffer if it's too full
-     - This formats directly to write buffer so it must be large enough
-     .
-     \param  num  Number to format and write
-     \return      This
-    */
-    This& operator<<(longl num) {
-        if (error_ == ENone) {
-            error_ = bufwr_.writetext_num(device_, num, 10);
-            EVO_THROW_ERR_CHECK(evo::ExceptionStreamOut, "Stream text write (longl) failed", error_, (excep_ && error_ != ENone));
-        }
-        return *this;
-    }
+    /** \copydoc evo::Stream::operator<<(longl) */
+    This& operator<<(longl num)
+        { writenum(num); return *this; }
 
-    /** Write formatted number to stream.
-     - This will flush current buffer if it's too full
-     - This formats directly to write buffer so it must be large enough
-     .
-     \param  num  Number to format and write
-     \return      This
-    */
-    This& operator<<(uint num) {
-        if (error_ == ENone) {
-            error_ = bufwr_.writetext_numu(device_, num, 10);
-            EVO_THROW_ERR_CHECK(evo::ExceptionStreamOut, "Stream text write (uint) failed", error_, (excep_ && error_ != ENone));
-        }
-        return *this;
-    }
+    /** \copydoc evo::Stream::operator<<(uint) */
+    This& operator<<(uint num)
+        { writenumu(num); return *this; }
 
-    /** Write formatted number to stream.
-     - This will flush current buffer if it's too full
-     - This formats directly to write buffer so it must be large enough
-     .
-     \param  num  Number to format and write
-     \return      This
-    */
-    This& operator<<(ulong num) {
-        if (error_ == ENone) {
-            error_ = bufwr_.writetext_numu(device_, num, 10);
-            EVO_THROW_ERR_CHECK(evo::ExceptionStreamOut, "Stream text write (ulong) failed", error_, (excep_ && error_ != ENone));
-        }
-        return *this;
-    }
+    /** \copydoc evo::Stream::operator<<(ulong) */
+    This& operator<<(ulong num)
+        { writenumu(num); return *this; }
 
-    /** Write formatted number to stream.
-     - This will flush current buffer if it's too full
-     - This formats directly to write buffer so it must be large enough
-     .
-     \param  num  Number to format and write
-     \return      This
-    */
-    This& operator<<(ulongl num) {
-        if (error_ == ENone) {
-            error_ = bufwr_.writetext_numu(device_, num, 10);
-            EVO_THROW_ERR_CHECK(evo::ExceptionStreamOut, "Stream text write (ulongl) failed", error_, (excep_ && error_ != ENone));
-        }
-        return *this;
-    }
+    /** \copydoc evo::Stream::operator<<(ulongl) */
+    This& operator<<(ulongl num)
+        { writenumu(num); return *this; }
 
-    /** Write formatted floating-point number to stream.
-     - This will flush current buffer if it's too full
-     - This formats directly to write buffer so it must be large enough
-     .
-     \param  num  Number to format and write
-     \return      This
-    */
-    This& operator<<(float num) {
-        if (error_ == ENone) {
-            error_ = bufwr_.writetext_numf(device_, num, PREC_AUTO);
-            EVO_THROW_ERR_CHECK(evo::ExceptionStreamOut, "Stream text write (float) failed", error_, (excep_ && error_ != ENone));
-        }
-        return *this;
-    }
+    /** \copydoc evo::Stream::operator<<(float) */
+    This& operator<<(float num)
+        { writenumf(num); return *this; }
 
-    /** Write formatted floating-point number to stream.
-     - This will flush current buffer if it's too full
-     - This formats directly to write buffer so it must be large enough
-     .
-     \param  num  Number to format and write
-     \return      This
-    */
-    This& operator<<(double num) {
-        if (error_ == ENone) {
-            error_ = bufwr_.writetext_numf(device_, num, PREC_AUTO);
-            EVO_THROW_ERR_CHECK(evo::ExceptionStreamOut, "Stream text write (double) failed", error_, (excep_ && error_ != ENone));
-        }
-        return *this;
-    }
+    /** \copydoc evo::Stream::operator<<(double) */
+    This& operator<<(double num)
+        { writenumf(num); return *this; }
 
-    /** Write formatted floating-point number to stream.
-     - This will flush current buffer if it's too full
-     - This formats directly to write buffer so it must be large enough
-     .
-     \param  num  Number to format and write
-     \return      This
-    */
-    This& operator<<(ldouble num) {
-        if (error_ == ENone) {
-            error_ = bufwr_.writetext_numf(device_, num, PREC_AUTO);
-            EVO_THROW_ERR_CHECK(evo::ExceptionStreamOut, "Stream text write (ldouble) failed", error_, (excep_ && error_ != ENone));
-        }
-        return *this;
-    }
+    /** \copydoc evo::Stream::operator<<(ldouble) */
+    This& operator<<(ldouble num)
+        { writenumf(num); return *this; }
+
+    /** \copydoc evo::Stream::operator<<(const FmtChar&) */
+    This& operator<<(const FmtChar& fmt)
+        { writechar(fmt.ch, fmt.count); return *this; }
+
+    /** \copydoc evo::Stream::operator<<(const FmtShort&) */
+    This& operator<<(const FmtShort& fmt)
+        { writefmtnum(fmt.num, fmt.fmt); return *this; }
+
+    /** \copydoc evo::Stream::operator<<(const FmtInt&) */
+    This& operator<<(const FmtInt& fmt)
+        { writefmtnum(fmt.num, fmt.fmt); return *this; }
+
+    /** \copydoc evo::Stream::operator<<(const FmtLong&) */
+    This& operator<<(const FmtLong& fmt)
+        { writefmtnum(fmt.num, fmt.fmt); return *this; }
+
+    /** \copydoc evo::Stream::operator<<(const FmtLongL&) */
+    This& operator<<(const FmtLongL& fmt)
+        { writefmtnum(fmt.num, fmt.fmt); return *this; }
+
+    /** \copydoc evo::Stream::operator<<(const FmtUShort&) */
+    This& operator<<(const FmtUShort& fmt)
+        { writefmtnumu(fmt.num, fmt.fmt); return *this; }
+
+    /** \copydoc evo::Stream::operator<<(const FmtUInt&) */
+    This& operator<<(const FmtUInt& fmt)
+        { writefmtnumu(fmt.num, fmt.fmt); return *this; }
+
+    /** \copydoc evo::Stream::operator<<(const FmtULong&) */
+    This& operator<<(const FmtULong& fmt)
+        { writefmtnumu(fmt.num, fmt.fmt); return *this; }
+
+    /** \copydoc evo::Stream::operator<<(const FmtULongL&) */
+    This& operator<<(const FmtULongL& fmt)
+        { writefmtnumu(fmt.num, fmt.fmt); return *this; }
+
+    /** \copydoc evo::Stream::operator<<(const FmtFloat&) */
+    This& operator<<(const FmtFloat& fmt)
+        { writefmtnumf(fmt.num, fmt.fmt); return *this; }
+
+    /** \copydoc evo::Stream::operator<<(const FmtFloatD&) */
+    This& operator<<(const FmtFloatD& fmt)
+        { writefmtnumf(fmt.num, fmt.fmt); return *this; }
+
+    /** \copydoc evo::Stream::operator<<(const FmtFloatL&) */
+    This& operator<<(const FmtFloatL& fmt)
+        { writefmtnumf(fmt.num, fmt.fmt); return *this; }
+
+    /** \copydoc evo::Stream::operator<<(const FmtDump&) */
+    This& operator<<(const FmtDump& fmt)
+        { writefmtdump(fmt); return *this; }
 
 protected:
-    T         device_;      ///< I/O handle
-    bool      owned_;       ///< Whether handle is owned (to be closed here)
-    SysWriter bufwr_;       ///< Write buffer
+    T        device_;       ///< I/O handle
+    bool     owned_;        ///< Whether handle is owned (to be closed here)
+    IoWriter bufwr_;        ///< Write buffer
 
     /** Initialize and reset buffers for a new stream. */
     void init(bool flushlines=false) {
-        bufwr_.used = 0;
-        if (bufwr_.size == 0)
-            bufwr_.resize(SysWriter::DEFSIZE);
-        bufwr_.flushlines = flushlines;
+        bufwr_.open(flushlines);
     }
 
 private:
@@ -1475,8 +2328,28 @@ private:
 
 /** %File I/O stream.
  - Use to read and write files
- - This is a Stream (read/write) using I/O device SysFile
+ - This is a Stream (read/write) using I/O device IoFile
  - This throws an ExceptionStream on error if exceptions are enabled, otherwise use error() to check for error
+
+\par Methods
+
+ - %File:
+   - open()
+     - isopen()
+   - close()
+   - seek()
+   - pos()
+ - Data:
+   - readline(), readtext(), readbin()
+     - bufread()
+   - writeline(), writetext(), writebin()
+     - operator<<()
+     - flush()
+     - bufwrite()
+ - Error handling:
+   - operator!()
+   - error()
+   - errormsg_out()
 
 \par Example
 
@@ -1490,7 +2363,7 @@ int main() {
 
     // Write new file
     {
-        File file(filename, oWriteNew);
+        File file(filename, oWRITE_NEW);
         file << "line one" << NL;
         file << "line " << 2 << NL;
         file << "line three" << NL;
@@ -1507,32 +2380,43 @@ int main() {
 }
 \endcode
 */
-class File : public Stream<SysFile>
-{
+class File : public Stream<IoFile> {
 public:
-    typedef Stream<SysFile> Base;    ///< Base class alias
+    typedef Stream<IoFile> Base;    ///< Base class alias
 
     /** Constructor.
      - This initializes without opening a file, use open() to open a file
      .
-     \param  newlines    Newline type to use for text reads/writes
+     \param  nl          Default newline value to use for text reads/writes
      \param  exceptions  Whether to enable exceptions on error, default set by Evo config: EVO_EXCEPTIONS
     */
-    File(Newline newlines=NL, bool exceptions=EVO_EXCEPTIONS) : Base(newlines)
+    File(Newline nl=NL_SYS, bool exceptions=EVO_EXCEPTIONS) : Base(nl)
         { excep(exceptions); }
 
     /** Constructor to open file.
-     - If exceptions disabled: Call error() to check for error
      - Throws ExceptionStreamOpen on error, if exceptions enabled
+     - If exceptions disabled: Call error() to check for error
      .
      \param  path        File path to use
      \param  mode        Access mode to use
      \param  flushlines  Whether to flush text output on newlines (line buffering)
-     \param  newlines    Newline type to use for text reads/writes
+     \param  nl          Default newline value to use for text reads/writes
      \param  exceptions  Whether to enable exceptions on error, default set by Evo config: EVO_EXCEPTIONS
     */
-    File(const char* path, Open mode=oRead, bool flushlines=false, Newline newlines=NL, bool exceptions=EVO_EXCEPTIONS) : Base(newlines)
+    File(const char* path, Open mode=oREAD, bool flushlines=false, Newline nl=NL_SYS, bool exceptions=EVO_EXCEPTIONS) : Base(nl)
         { excep(exceptions); open(path, mode, flushlines); }
+
+    /** Constructor to open file and set default newline.
+     - Throws ExceptionStreamOpen on error, if exceptions enabled
+     - If exceptions disabled: Call error() to check for error
+     .
+     \param  path        File path to use
+     \param  mode        Access mode to use
+     \param  nl          Default newline value to use for text reads/writes
+     \param  exceptions  Whether to enable exceptions on error, default set by Evo config: EVO_EXCEPTIONS
+    */
+    File(const char* path, Open mode, Newline nl, bool exceptions=EVO_EXCEPTIONS) : Base(nl)
+        { excep(exceptions); open(path, mode, false); }
 
     /** Open file for read and/or writing.
      - Current file is closed first
@@ -1543,31 +2427,13 @@ public:
      \param  flushlines  Whether to flush text output on newlines (line buffering)
      \return             Whether successful, false on error -- call error() for error code
     */
-    bool open(const char* path, Open mode=oRead, bool flushlines=false) {
+    bool open(const char* path, Open mode=oREAD, bool flushlines=false) {
         const bool result = ((error_=device_.open(path, mode)) == ENone);
         if (result) {
-            Base::init();
-            switch (mode) {
-                case oRead:
-                    bufrd_.open();
-                    break;
-                case oWrite:
-                case oWriteNew:
-                case oAppend:
-                case oAppendNew:
-                    Base::initwrite(flushlines);
-                    break;
-                case oReadWrite:
-                case oReadWriteNew:
-                case oReadAppend:
-                case oReadAppendNew:
-                    bufrd_.open();
-                    Base::initwrite(flushlines);
-                    break;
-            }
+            Base::init(mode, flushlines);
             owned_ = true;
         } else if (excep_ && error_ != ENone) {
-            EVO_THROW_ERR(evo::ExceptionStreamOpen, "File::open() failed", error_);
+            EVO_THROW_ERR(evo::ExceptionFileOpen, "File::open() failed", error_);
         }
         return result;
     }
@@ -1602,12 +2468,6 @@ public:
         return device_.seek(error_, offset, start);
     }
 
-/*    static Error mkdir(const char* path)
-        { return SysFile::mkdir(path); }
-
-    static Error rmdir(const char* path)
-        { return SysFile::mkdir(path); }*/
-
 private:
     File(const File&);
     File& operator=(const File&);
@@ -1617,16 +2477,16 @@ private:
 
 /** Input stream for reading from pipe.
 */
-class PipeIn : public StreamIn<SysFile>
-{
+class PipeIn : public StreamIn<IoFile> {
 public:
-    using StreamIn<SysFile>::Handle;
+    using StreamIn<IoFile>::Handle;
 
     /** Constructor.
      \param  exceptions  Whether to enable exceptions on error, default set by Evo config: EVO_EXCEPTIONS
     */
-    PipeIn(bool exceptions=EVO_EXCEPTIONS)
-        { excep(exceptions); }
+    PipeIn(bool exceptions=EVO_EXCEPTIONS) {
+        excep(exceptions);
+    }
 
 private:
     PipeIn(const PipeIn&);
@@ -1637,16 +2497,16 @@ private:
 
 /** Output stream for writing to pipe.
 */
-class PipeOut : public StreamOut<SysFile>
-{
+class PipeOut : public StreamOut<IoFile> {
 public:
-    using StreamOut<SysFile>::Handle;
+    using StreamOut<IoFile>::Handle;
 
     /** Constructor.
      \param  exceptions  Whether to enable exceptions on error, default set by Evo config: EVO_EXCEPTIONS
     */
-    PipeOut(bool exceptions=EVO_EXCEPTIONS)
-        { excep(exceptions); }
+    PipeOut(bool exceptions=EVO_EXCEPTIONS) {
+        excep(exceptions);
+    }
 
 private:
     PipeOut(const PipeOut&);
@@ -1655,11 +2515,9 @@ private:
 
 ///////////////////////////////////////////////////////////////////////////////
 
-// TODO: Needed? Add constructor/create()?
-/** Pipe stream access.
+/** %Pipe stream access.
 */
-struct Pipe
-{
+struct Pipe {
     PipeIn  in;
     PipeOut out;
 };
@@ -1668,8 +2526,9 @@ struct Pipe
 
 /** %Console I/O.
  - Use to read from console (STDIN) and/or write to console (STDOUT, STDERR)
- - Implemented as a singleton, call Console::get() or con() to get a reference
- - Evo text I/O uses automatic newline conversion and supports all the big newline types (CR, LF, CRLF, LFCR), see Stream
+ - Call Console::get() or con() (shortcut) to get a console reference, or use \link EVO_CONSOLE\endlink (shortcut macro)
+ - Evo text I/O uses <em>automatic newline conversion</em> and supports all the common newline types (CR, LF, CRLF, LFCR), see Stream
+ - For a \b thread-safe console see ConsoleMT
  .
 
 \par Example
@@ -1685,7 +2544,7 @@ int main() {
     c.err << "testing stderr " << 123 << NL;
 
     // Need to FLUSH so prompt appears before input is read
-    c.out << "Type something: " << FLUSH;
+    c.out << "Type something: " << fFLUSH;
 
     String str;
     c.in.readline(str);
@@ -1695,19 +2554,20 @@ int main() {
 }
 \endcode
 */
-struct Console
-{
-    PipeIn  in;     ///< Read console input
-    PipeOut out;    ///< Write console normal output
-    PipeOut err;    ///< Write console error output
+struct Console {
+    typedef PipeOut::Format Format;     ///< \copydoc evo::StreamFormatter
 
-    // TODO: redirect err -> out, and back
+    PipeIn  in;     ///< Read console input
+    PipeOut out;    ///< Write to console, normal output
+    PipeOut err;    ///< Write to console, error output
 
     /** Get console instance to use.
      \return  Console instance
     */
-    static Console& get()
-        { static Console console; return console; }
+    static Console& get() {
+        static Console console;
+        return console;
+    }
 
 private:
     static const PipeIn::Handle  HIN  = 0;
@@ -1727,6 +2587,7 @@ private:
         out.attach(HOUT, false, false);
         err.attach(HERR, false, true);
     }
+
     Console(const Console&);
     Console& operator=(const Console&);
 };
@@ -1734,207 +2595,14 @@ private:
 /** Shortcut for Console::get().
  \return  Console reference
 */
-inline Console& con()
-    { return Console::get(); }
-
-///////////////////////////////////////////////////////////////////////////////
-
-// TODO: Use Array?
-// TODO: Useful? Yes for MemStream
-#if 0
-/** %Buffer for holding and streaming data.
-*/
-class Buffer : public Stream
-{
-public:
-    /** Constructor creates empty buffer.
-     - Call resize() to set size
-    */
-    Buffer() {
-        data_ = NULL;
-        size_ = 0;
-        pos_  = 0;
-        used_ = 0;
-    }
-
-    /** Constructor creates empty buffer.
-     \param  size  Buffer size to allocate
-    */
-    Buffer(ulong size) {
-        data_ = (char*)malloc(size);
-        size_ = size;
-        pos_  = 0;
-        used_ = 0;
-    }
-
-    /** Destructor. */
-    ~Buffer() {
-        if (data_ != NULL)
-            free(data_);
-    }
-
-    /** Get buffer size allocated.
-     \return  Buffer size
-    */
-    ulong size() const
-        { return size_; }
-
-    /** Get buffer size used.
-     \return  Buffer used size, 0 if unused
-    */
-    ulong used() const
-        { return used_; }
-
-    /** Get buffer size available (not used).
-     \return  Buffer size available
-    */
-    ulong avail() const
-        { return (size_ - used_); }
-
-    /** Resize buffer.
-     - This resizes by allocating a new buffer and preserves existing data, if possible
-     .
-     \param  size  New size, 0 to free buffer and leave empty
-    */
-    void resize(ulong size) {
-        if (size != size_) {
-            if (size > 0) {
-                char* olddata = data_;
-                data_ = (char*)malloc(size);
-                if (used_ > 0) {
-                    if (used_ > size)
-                        used_ = size;
-                    memcpy(data_, olddata+pos_, used_);
-                }
-                size_ = size;
-                pos_  = 0;
-                free(olddata);
-            } else if (data_ != NULL) {
-                free(data_);
-                data_ = NULL;
-                size_ = 0;
-                pos_  = 0;
-                used_ = 0;
-            }
-        }
-    }
-
-    /** Get buffer pointer for read/write.
-     - After writing to buffer, call bufupd() to set new size used
-     .
-     \return  Buffer pointer, NULL if none
-    */
-    char* buf() {
-        assert( used_ <= size_ );
-        if (used_ > 0 && pos_ > 0) {
-            memmove(data_, data_+pos_, used_);
-            pos_ = 0;
-        }
-        return data_;
-    }
-
-    /** Set new buffer size used after update.
-     - Call this to set new size used after writing to buffer using buf()
-     .
-     \param  size  New size used
-    */
-    void bufupd(ulong size)
-        { used_ = (size > size_ ? size_ : size); }
-
-    /** Peek at read buffer (const).
-     - Call used() to get buffer size used
-     - Call read() with buf=NULL to "consume" peeked data, with up to size=used()
-     .
-     \return  Buffer data
-    */
-    const char* peek() const
-        { return (data_ + pos_); }
-
-    using Stream::read;
-    using Stream::write;
-
-    // Documented in parent
-    ulong read(Error& err, char* buf, ulong size) {
-        assert( used_ <= size_ );
-        err = ENone;
-        if (size > used_)
-            size = used_;
-        if (size > 0) {
-            if (buf != NULL)
-                memcpy(buf, data_+pos_, size);
-            pos_  += size;
-            used_ -= size;
-        }
-        return size;
-    }
-
-    // Documented in parent
-    ulong write(Error& err, const char* buf, ulong size) {
-        assert( used_ <= size_ );
-        err = ENone;
-        const ulong avail = (size_ - used_);
-        if (size > avail)
-            size = avail;
-        if (size > 0) {
-            if (size > (avail - pos_)) {
-                memmove(data_, data_+pos_, used_);
-                pos_ = 0;
-            }
-            memcpy(data_+used_, buf, size);
-            used_ += size;
-        }
-        return size;
-    }
-
-    /** Fill buffer by reading from stream.
-     - This will read from given stream until the buffer is full, end-of-stream reached, or error occurs
-     .
-     \param  in  Stream to read from
-     \return     Bytes read from stream and stored, 0 if end-of-stream or error
-    */
-    ulong fill(Stream& in) {
-        assert( used_ <= size_ );
-        if (used_ > 0 && pos_ > 0) {
-            memmove(data_, data_+pos_, used_);
-            pos_ = 0;
-        }
-
-        ulong readtotal = 0;
-        ulong readsize;
-        while (used_ < size_) {
-            readsize = in.read(err, data_+used_, (size_-used_));
-            if (readsize == 0 || err != ENone)
-                break;
-            used_     += readsize;
-            readtotal += readsize;
-        }
-        return readtotal;
-    }
-
-    /** Fill buffer by reading from stream with exceptions.
-     - This calls fill(Error&,Stream&) and throws exception ExceptionIoRead on error
-     - For best performance use fill(Error&,Stream&) since exceptions add overhead
-     .
-     \param  in  Stream to read from
-     \return     Bytes read from stream and stored, 0 if end-of-stream
-    */
-    ulong fill(Stream& in) {
-        Error err;
-        ulong result = fill(err, in);
-        if (err != ENone)
-            THROW_T(ExceptionIoRead, error_msg(err));
-        return result;
-    }
-
-private:
-    char* data_;
-    ulong size_;
-    ulong pos_;
-    ulong used_;
-};
-#endif
+inline Console& con() {
+    return Console::get();
+}
 
 ///////////////////////////////////////////////////////////////////////////////
 //@}
-} // Namespace: evo
+}
+#if defined(_MSC_VER)
+    #pragma warning(pop)
+#endif
 #endif

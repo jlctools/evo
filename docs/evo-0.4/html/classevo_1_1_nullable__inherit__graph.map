@@ -1,0 +1,6 @@
+<map id="Nullable&lt; T &gt;" name="Nullable&lt; T &gt;">
+<area shape="rect" id="node3" href="$structevo_1_1_char_t.html" title="Nullable primitive character base type. " alt="" coords="5,169,101,196"/>
+<area shape="rect" id="node4" href="$structevo_1_1_float_t.html" title="Nullable basic floating&#45;point base type. " alt="" coords="126,169,223,196"/>
+<area shape="rect" id="node5" href="$structevo_1_1_integer_t.html" title="Basic integer type. " alt="" coords="247,169,358,196"/>
+<area shape="rect" id="node2" href="$classevo_1_1_safe_bool.html" title="SafeBool\&lt; Nullable\l\&lt; T \&gt; \&gt;" alt="" coords="102,5,247,47"/>
+</map>

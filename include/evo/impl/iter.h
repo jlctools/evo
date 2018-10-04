@@ -1,8 +1,6 @@
 // Evo C++ Library
-/* Copyright (c) 2016 Justin Crowell
- This Source Code Form is subject to the terms of the Mozilla Public
- License, v. 2.0. If a copy of the MPL was not distributed with this
- file, You can obtain one at http://mozilla.org/MPL/2.0/.
+/* Copyright 2018 Justin Crowell
+Distributed under the BSD 2-Clause License -- see included file LICENSE.txt for details.
 */
 ///////////////////////////////////////////////////////////////////////////////
 /** \file iter.h Evo implementation detail: Container iterators. */
@@ -10,29 +8,26 @@
 #ifndef INCL_evo_impl_iter_h
 #define INCL_evo_impl_iter_h
 
-// Includes
 #include "../type.h"
 
-// Namespace: evo
 namespace evo {
-
-/** \addtogroup EvoIterators */
+/** \addtogroup EvoContainers */
 //@{
 
 ///////////////////////////////////////////////////////////////////////////////
 
 /** Iterator position value. */
 enum IteratorPos {
-    iterFirst,        ///< First item iterator position
-    iterLast,        ///< Last item iterator position
-    iterEnd            ///< End iterator position
+    iterFIRST,          ///< First item iterator position
+    iterLAST,           ///< Last item iterator position
+    iterEND             ///< End iterator position
 };
 
 /** Iterator direction value. */
 enum IteratorDir {
-    iterNone,        ///< No iterator direction
-    iterFw,            ///< Forward iterator direction
-    iterRv            ///< Reverse iterator direction
+    iterNONE,           ///< No iterator direction
+    iterFW,             ///< Forward iterator direction
+    iterRV              ///< Reverse iterator direction
 };
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -45,28 +40,26 @@ enum IteratorDir {
  .
 */
 template<class T>
-struct IteratorBase : public SafeBool< IteratorBase<T> >
-{
-    typedef typename T::Size    Size;        ///< Size type to use
-    typedef typename T::IterKey Key;        ///< Iterator key type
+struct IteratorBase : public SafeBool< IteratorBase<T> > {
+    typedef typename T::Size    Size;               ///< Size type to use
+    typedef typename T::IterKey Key;                ///< Iterator key type
     typedef typename StaticIf< IsConst<T>::value,
         const typename T::IterItem,
         typename T::IterItem
-    >::Type                     Item;        ///< Iterator item type
+    >::Type                     Item;               ///< Iterator item type
 
-    typedef IteratorBase<T> IterBaseType;    ///< Iterator base type for parameter passing
+    typedef IteratorBase<T> IterBaseType;           ///< Iterator base type for parameter passing
 
-    typedef IteratorBase<const T>                                    Const;            ///< Const iterator type
-    typedef IteratorBase<typename RemoveConst<T>::Type>              Mutable;        ///< Mutable iterator type
-    typedef typename StaticIf<IsConst<T>::value,Mutable,Const>::Type ToggleConst;    ///< Used for converting between Const/Mutable iterators
+    typedef IteratorBase<const T>                                    Const;         ///< Const iterator type
+    typedef IteratorBase<typename RemoveConst<T>::Type>              Mutable;       ///< Mutable iterator type
+    typedef typename StaticIf<IsConst<T>::value,Mutable,Const>::Type ToggleConst;   ///< Used for converting between Const/Mutable iterators
 
-    typedef T Target;        ///< Iterator target type
+    typedef T Target;                               ///< Iterator target type
 
     /** Constructor. This sets iterator to end.
      \param  obj  Container object to iterate through
     */
-    explicit IteratorBase(T& obj) :
-        obj_(&obj), end_(true), data_(NULL)
+    explicit IteratorBase(T& obj) : obj_(&obj), end_(true), data_(NULL)
         { init(); }
 
     /** Constructor. This initializes iterator with given position data.
@@ -74,8 +67,7 @@ struct IteratorBase : public SafeBool< IteratorBase<T> >
      \param  key   Iterator key to set
      \param  data  Iterator data pointer to set
     */
-    IteratorBase(T& obj, const Key& key, Item* data) :
-        obj_(&obj), end_(false), key_(key), data_(data)
+    IteratorBase(T& obj, const Key& key, Item* data) : obj_(&obj), end_(false), key_(key), data_(data)
         { init(); }
 
     /** Copy constructor.
@@ -84,14 +76,14 @@ struct IteratorBase : public SafeBool< IteratorBase<T> >
     IteratorBase(const IterBaseType& src)
         { memcpy(this, &src, sizeof(src)); init(); }
 
-    /** Copy/Assignment operator.
+    /** Copy/Assignment operator to copy from source iterator.
      \param  src  Source iterator to copy
      \return      This
     */
     IterBaseType& operator=(const IterBaseType& src)
         { memcpy(this, &src, sizeof(src)); init(); return *this; }
 
-    /** Assignment operator.
+    /** Assignment operator to copy from source iterator.
      - This allows assigning a mutable iterator to a const iterator
      - This triggers a compiler error on attempt to assign a const iterator to a mutable iterator
      .
@@ -104,14 +96,14 @@ struct IteratorBase : public SafeBool< IteratorBase<T> >
         return *this;
     }
 
-    /** Assignment operator. Assigns iterator to new object, at end.
+    /** Assignment operator to reset with new object, at end.
      \param  obj  Container object to iterate through
      \return      This
     */
     IterBaseType& operator=(T& obj)
         { obj_ = &obj; end_ = true; data_ = NULL; return *this; }
 
-    /** Assignment operator.
+    /** Assignment operator to set position.
      \param  pos  Position to set -- ignored, sets to end
      \return      This
     */
@@ -176,21 +168,26 @@ struct IteratorBase : public SafeBool< IteratorBase<T> >
     /** Get parent object (used internally). */
     T& getParent() const
         { return *obj_; }
+
     /** Get end flag (used internally). */
     bool getEnd() const
         { return end_; }
+
     /** Get key (used internally). */
     const Key& getKey() const
         { return key_; }
+
     /** Get key (used internally). */
     Key& getKey()
         { return key_; }
+
     /** Set new key/pointer (used internally) */
     void set(const Key& key, const Item* data) {
         key_  = key;
         data_ = (Item*)data;
         end_  = (data_ == NULL);
     }
+
     /** Set item pointer (used internally). */
     void setData(const Item* item)
         { data_ = (Item*)item; }
@@ -201,14 +198,13 @@ struct IteratorBase : public SafeBool< IteratorBase<T> >
         { static const IterBaseType End; return End; }
 
 protected:
-    T*    obj_;            ///< Container object pointer
-    bool  end_;            ///< End flag
-    Key   key_;            ///< Iterator key
-    Item* data_;        ///< Item pointer
+    T*    obj_;             ///< Container object pointer
+    bool  end_;             ///< End flag
+    Key   key_;             ///< Iterator key
+    Item* data_;            ///< Item pointer
 
     /** Constructor (used internally). */
-    explicit IteratorBase() :
-        obj_(NULL), end_(true), data_(NULL)
+    explicit IteratorBase() : obj_(NULL), end_(true), data_(NULL)
         { }
 
     /** Constructor (used internally).
@@ -228,35 +224,39 @@ private:
 
 ///////////////////////////////////////////////////////////////////////////////
 
-/** Forward iterator. Used to iterate through container items. Forward iterators only support forward iteration.
+/** Forward iterator.
+Used to iterate through container items.
+ - Forward iterators only support forward iteration.
+ .
  \tparam  T  Container type (must not be const)
+
 \par Usage
+
 Iterators work like normal pointers.
- - Supported containers will have built-in Iter (const) and IterM (mutable) iterator types in the container class
+ - Containers with iterators will have built-in Iter (const) and IterM (mutable) iterator types for iteration
  - Create iterator for given container, normally set to first position by default
- - Use iterator operators to move iterator position or dereference iterator to get current item
  - Explicitly set to start/end position using operator=(IteratorPos):
    \code
-iter = iterFirst;
-iter = iterEnd;
+    iter = iterFIRST;
+    iter = iterEND;
    \endcode
  - Increment to move to next item:
    \code
-++iter;
-iter++;
+    ++iter;
+    iter++;
    \endcode
  - Dereference to access item data:
    \code
-*iter
+    *iter
    \endcode
  - Evaluate iterator as a bool to check if active (at valid position) or has reached the end:
    \code
-if (iter) {
-    // Iter is active/valid position
-}
-if (!iter) {
-    // Iter is at end position
-}
+    if (iter) {
+        // Iter is active/valid position
+    }
+    if (!iter) {
+        // Iter is at end position
+    }
    \endcode
    Note: This is done through safe bool conversion to avoid implicit conversion side-effects (see SafeBool)
  - Caution:
@@ -264,31 +264,45 @@ if (!iter) {
    - Results are undefined if an invalidated iterator is dereferenced
    .
  .
-\par Example
-\code
-// Using simple List container
-List<int> list;
-list.add(1);
-list.add(2);
-list.add(3);
 
-// Const iterator (prints items)
-for (List<int>::Iter iter(list, iterFirst); iter; ++iter)
-    printf("%i\n", *iter);
-// Mutable iterator (changes all item values to 1)
-for (List<int>::IterM iter(list, iterFirst); iter; ++iter)
-    *iter = 1;
+\par Example
+
+\code
+#include <evo/list.h>
+#include <evo/io.h>
+using namespace evo;
+static Console& c = con();
+
+int main() {
+    // Using simple List container
+    List<int> list;
+    list.add(1);
+    list.add(2);
+    list.add(3);
+
+    // Const iterator (prints items)
+    for (List<int>::Iter iter(list, iterFIRST); iter; ++iter)
+        c.out << *iter << NL;
+
+    // Mutable iterator (changes all item values to 1)
+    for (List<int>::IterM iter(list, iterFIRST); iter; ++iter)
+        *iter = 1;
+
+    return 0;
+}
 \endcode
+
 \par Container Definition
+
 Containers normally define iterator types via member typedefs with const and mutable (non-const) variations, normally named Iter (const) and IterM (mutable).
-The iterator key type is stored by the iterator as a handle -- the container actually manipulates the key.
+The iterator key type is stored by the iterator as a handle and is used to implement the iterator.
 \n\n Example:
 \code
 // Example container class
 template<class T> class Container {
 public:
-    // Iterator key -- used internally by container (using int here as example)
-    typedef int IterKey;
+    // Iterator key -- used internally by container (using uint here as example)
+    typedef uint IterKey;
 
     // Container iterator types
     typedef typename IteratorFw< Container<T>,IterKey,T >::Const Iter;
@@ -297,22 +311,32 @@ public:
     // ...
 };
 \endcode
+
 \par Implementation Detail - Container Interface
+
 Iterators interact with containers using an expected interface implemented by the container -- this is used internally:
  - Iterators store a Key value that is passed to the container for internal tracking
  - Forward iterators require the following container interface -- const-correctness is expected as shown:
    \code
-// Called by mutable iterator constructor to notify container object that items may change
-void iterInitMutable();
-// Return pointer to first item or NULL if none
-const IterItem* iterFirst(IterKey& key) const;
-// Return pointer to next item data or NULL if no more
-const IterItem* iterNext(IterKey& key) const;
+    // Iterator key and state, keeps state for iterator, holds iterator key/position
+    struct IterKey { ... };
+    typedef ... IterKey;
+
+    // Iterator item pointer, dereferences to iterator value
+    typedef ... IterItem;
+
+    // Called by mutable iterator constructor to notify container object that items may change
+    void iterInitMutable();
+
+    // Return pointer to first item or NULL if none
+    const IterItem* iterFirst(IterKey& key) const;
+
+    // Return pointer to next item data or NULL if no more
+    const IterItem* iterNext(IterKey& key) const;
    \endcode
 */
 template<class T>
-struct IteratorFw : public IteratorBase<T>
-{
+struct IteratorFw : public IteratorBase<T> {
 protected:
     using IteratorBase<T>::obj_;
     using IteratorBase<T>::end_;
@@ -320,16 +344,16 @@ protected:
     using IteratorBase<T>::data_;
 
 public:
-    typedef typename IteratorBase<T>::Size Size;    ///< Size type to use
-    typedef typename IteratorBase<T>::Key  Key;        ///< Iterator key type
-    typedef typename IteratorBase<T>::Item Item;    ///< Iterator item type
+    typedef typename IteratorBase<T>::Size Size;                                    ///< Size type to use
+    typedef typename IteratorBase<T>::Key  Key;                                     ///< Iterator key type
+    typedef typename IteratorBase<T>::Item Item;                                    ///< Iterator item type
 
-    typedef IteratorFw<const T>                       Const;            ///< Forward const iterator type
-    typedef IteratorFw<typename RemoveConst<T>::Type> Mutable;            ///< Forward mutable iterator type
-    typedef IteratorFw<T>                             IterType;            ///< Iterator type for parameter passing
-    typedef IteratorBase<T>                           IterBaseType;        ///< Iterator base type for parameter passing
+    typedef IteratorFw<const T>                       Const;                        ///< Forward const iterator type
+    typedef IteratorFw<typename RemoveConst<T>::Type> Mutable;                      ///< Forward mutable iterator type
+    typedef IteratorFw<T>                             IterType;                     ///< Iterator type for parameter passing
+    typedef IteratorBase<T>                           IterBaseType;                 ///< Iterator base type for parameter passing
 
-    typedef typename StaticIf<IsConst<T>::value,Mutable,Const>::Type ToggleConst;    ///< Used for converting between Const/Mutable iterators
+    typedef typename StaticIf<IsConst<T>::value,Mutable,Const>::Type ToggleConst;   ///< Used for converting between Const/Mutable iterators
 
     /** Constructor. This sets empty iterator. */
     IteratorFw() : IteratorBase<T>()
@@ -343,12 +367,12 @@ public:
 
     /** Constructor. This sets iterator to first or end position.
      \param  obj  Container object for iterator
-     \param  pos  Position to set, either iterFirst or iterEnd
+     \param  pos  Position to set, either iterFIRST or iterEND
     */
     explicit IteratorFw(T& obj, IteratorPos pos) : IteratorBase<T>(&obj) {
         switch (pos) {
-            case iterFirst: first(); break;
-            default: end_ = true; data_ = NULL;
+            case iterFIRST: first(); break;
+            default: end_ = true; data_ = NULL; break;
         };
     }
 
@@ -363,31 +387,29 @@ public:
     /** Copy constructor.
      \param  src  Source iterator to copy
     */
-    IteratorFw(const  IterType& src) : IteratorBase<T>(src)
+    IteratorFw(const IterType& src) : IteratorBase<T>(src)
         { }
 
-    /** Copy constructor.
-     \param  src  Source iterator to copy
-    */
+    /** \copydoc IteratorFw(const IterType&) */
     IteratorFw(const IterBaseType& src) : IteratorBase<T>(src)
         { }
 
-    //[props:doxycopy=evo::IteratorBase<class T>::operator=(const IterBaseType&)]
+    /** \copydoc IteratorBase::operator=(const IterBaseType&) */
     IterType& operator=(const IterType& src)
         { IterBaseType::operator=(src); return *this; }
 
-    //[props:doxycopy=evo::IteratorBase<class T>::operator=(const IterBaseType&)]
+    /** \copydoc IteratorBase::operator=(const IterBaseType&) */
     IterType& operator=(const IterBaseType& src)
         { IterBaseType::operator=(src); return *this; }
 
-    //[props:doxycopy=evo::IteratorBase<class T>::operator=(const ToggleConst&)]
+    /** \copydoc IteratorBase::operator=(const ToggleConst&) */
     IterType& operator=(const ToggleConst& src) {
         STATIC_ASSERT(IsConst<T>::value, ERROR_cannot_assign_const_iterator_to_mutable_iterator);
         IterBaseType::operator=((IterType&)src);
         return *this;
     }
 
-    //[props:doxycopy=evo::IteratorBase<class T>::operator=(const ToggleConst&)]
+    /** \copydoc IteratorBase::operator=(const ToggleConst&) */
     IterType& operator=(const typename IterBaseType::ToggleConst& src) {
         STATIC_ASSERT(IsConst<T>::value, ERROR_cannot_assign_const_iterator_to_mutable_iterator);
         IterBaseType::operator=((IterType&)src);
@@ -401,14 +423,14 @@ public:
     IterType& operator=(T& obj)
         { IterBaseType::operator=(obj); first(); return *this; }
 
-    /** Assignment operator.
-     \param  pos  Position to set, either iterFirst or iterEnd
+    /** Assignment operator to set position.
+     \param  pos  Position to set, either iterFIRST or iterEND
      \return      This
     */
     IterType& operator=(IteratorPos pos) {
         switch (pos) {
-            case iterFirst: first(); break;
-            default: end_ = true; data_ = NULL;
+            case iterFIRST: first(); break;
+            default: end_ = true; data_ = NULL; break;
         };
         return *this;
     }
@@ -459,41 +481,45 @@ protected:
 
 ///////////////////////////////////////////////////////////////////////////////
 
-/** Bidirectional iterator. Used to iterate through container items. Bidirectional iterators support forward and reverse iteration.
+/** Bidirectional iterator.
+Used to iterate through container items.
+ - Bidirectional iterators support forward and reverse iteration.
+ .
  \tparam  T  Container type (must not be const)
+
 \par Usage
+
 Iterators work like normal pointers.
- - Supported containers will have built-in Iter (const) and IterM (mutable) iterator types in the container class
+ - Containers with iterators will have built-in Iter (const) and IterM (mutable) iterator types for iteration
  - Create iterator for given container, normally set to first position by default
- - Use iterator operators to move iterator position or dereference iterator to get current item
  - Explicitly set to start/last/end position using operator=(IteratorPos):
    \code
-iter = iterFirst;
-iter = iterLast;
-iter = iterEnd;
+    iter = iterFIRST;
+    iter = iterLAST;
+    iter = iterEND;
    \endcode
  - Increment to move to next item:
    \code
-++iter;
-iter++;
+    ++iter;
+    iter++;
    \endcode
  - Decrement to move to previous item:
    \code
---iter;
-iter--;
+    --iter;
+    iter--;
    \endcode
  - Dereference to access item data:
    \code
-*iter
+    *iter
    \endcode
  - Evaluate iterator as a bool to check if active (at valid position) or has reached the end:
    \code
-if (iter) {
-    // Iter is active/valid position
-}
-if (!iter) {
-    // Iter is at end position
-}
+    if (iter) {
+        // Iter is active/valid position
+    }
+    if (!iter) {
+        // Iter is at end position
+    }
    \endcode
    Note: This is done through safe bool conversion to avoid implicit conversion side-effects (see SafeBool)
  - Caution:
@@ -501,33 +527,47 @@ if (!iter) {
    - Results are undefined if an invalidated iterator is dereferenced
    .
  .
-\par Example
-\code
-// Using simple List container
-List<int> list;
-list.add(1);
-list.add(2);
-list.add(3);
 
-// Const iterator (prints items in order and then in reverse)
-for (List<int>::Iter iter(list, iterFirst); iter; ++iter)
-    printf("%i\n", *iter);
-for (List<int>::Iter iter(list, iterLast); iter; --iter)
-    printf("%i\n", *iter);
-// Mutable iterator (changes all item values to 1)
-for (List<int>::IterM iter(list, iterFirst); iter; ++iter)
-    *iter = 1;
+\par Example
+
+\code
+#include <evo/list.h>
+#include <evo/io.h>
+using namespace evo;
+static Console& c = con();
+
+int main() {
+    // Using simple List container
+    List<int> list;
+    list.add(1);
+    list.add(2);
+    list.add(3);
+
+    // Const iterator (prints items in order and then in reverse)
+    for (List<int>::Iter iter(list); iter; ++iter)
+        c.out << *iter << NL;
+    for (List<int>::Iter iter(list, iterLAST); iter; --iter)
+        c.out << *iter << NL;
+
+    // Mutable iterator (changes all item values to 1)
+    for (List<int>::IterM iter(list); iter; ++iter)
+        *iter = 1;
+
+    return 0;
+}
 \endcode
+
 \par Container Definition
+
 Containers normally define iterator types via member typedefs with const and mutable (non-const) variations, normally named Iter (const) and IterM (mutable).
-The iterator key type is stored by the iterator as a handle -- the container actually manipulates the key.
+The iterator key type is stored by the iterator as a handle and is used to implement the iterator.
 \n\n Example:
 \code
 // Example container class
 template<class T> class Container {
 public:
-    // Iterator key -- used internally by container (using int here as example)
-    typedef int IterKey;
+    // Iterator key -- used internally by container (using uint here as example)
+    typedef uint IterKey;
 
     // Container iterator types
     typedef typename IteratorBi< Container<T>,IterKey,T >::Const Iter;
@@ -536,26 +576,38 @@ public:
     // ...
 };
 \endcode
+
 \par Implementation Detail - Container Interface
+
 Iterators interact with containers using an expected interface implemented by the container -- this is used internally:
  - Iterators store a Key value that is passed to the container for internal tracking
  - Bidirectional iterators require the following container interface -- const-correctness is expected as shown:
    \code
-// Called by mutable iterator constructor to notify container object that items may change
-void iterInitMutable();
-// Return pointer to first item or NULL if none
-const IterItem* iterFirst(IterKey& key) const;
-// Return pointer to next item data or NULL if no more
-const IterItem* iterNext(IterKey& key) const;
-// Return pointer to last item or NULL if none
-const IterItem* iterLast(IterKey& key) const;
-// Return pointer to previous item data or NULL if no more
-const IterItem* iterPrev(IterKey& key) const;
+    // Iterator key and state, keeps state for iterator, holds iterator key/position
+    struct IterKey { ... };
+    typedef ... IterKey;
+
+    // Iterator item pointer, dereferences to iterator value
+    typedef ... IterItem;
+
+    // Called by mutable iterator constructor to notify container object that items may change
+    void iterInitMutable();
+
+    // Return pointer to first item or NULL if none
+    const IterItem* iterFirst(IterKey& key) const;
+
+    // Return pointer to next item data or NULL if no more
+    const IterItem* iterNext(IterKey& key) const;
+
+    // Return pointer to last item or NULL if none
+    const IterItem* iterLast(IterKey& key) const;
+
+    // Return pointer to previous item data or NULL if no more
+    const IterItem* iterPrev(IterKey& key) const;
    \endcode
 */
 template<class T>
-struct IteratorBi : public IteratorFw<T>
-{
+struct IteratorBi : public IteratorFw<T> {
 protected:
     using IteratorBase<T>::obj_;
     using IteratorBase<T>::end_;
@@ -565,16 +617,16 @@ protected:
     using IteratorFw<T>::first;
 
 public:
-    typedef typename IteratorBase<T>::Size Size;    ///< Size type to use
-    typedef typename IteratorBase<T>::Key  Key;        ///< Iterator key type
-    typedef typename IteratorBase<T>::Item Item;    ///< Iterator item type
+    typedef typename IteratorBase<T>::Size Size;                                    ///< Size type to use
+    typedef typename IteratorBase<T>::Key  Key;                                     ///< Iterator key type
+    typedef typename IteratorBase<T>::Item Item;                                    ///< Iterator item type
 
-    typedef IteratorBi<const T>                       Const;            ///< Bidirectional const iterator type
-    typedef IteratorBi<typename RemoveConst<T>::Type> Mutable;            ///< Bidirectional mutable iterator type
-    typedef IteratorBi<T>                             IterType;            ///< Iterator type
-    typedef IteratorBase<T>                           IterBaseType;        ///< Iterator base type for parameter passing
+    typedef IteratorBi<const T>                       Const;                        ///< Bidirectional const iterator type
+    typedef IteratorBi<typename RemoveConst<T>::Type> Mutable;                      ///< Bidirectional mutable iterator type
+    typedef IteratorBi<T>                             IterType;                     ///< Iterator type
+    typedef IteratorBase<T>                           IterBaseType;                 ///< Iterator base type for parameter passing
 
-    typedef typename StaticIf<IsConst<T>::value,Mutable,Const>::Type ToggleConst;    ///< Used for converting between Const/Mutable iterators
+    typedef typename StaticIf<IsConst<T>::value,Mutable,Const>::Type ToggleConst;   ///< Used for converting between Const/Mutable iterators
 
     /** Constructor. This sets empty iterator at end. */
     IteratorBi() : IteratorFw<T>()
@@ -588,14 +640,13 @@ public:
 
     /** Constructor setting position. This sets iterator to given position (or end if empty).
      \param  obj  Container object for iterator
-     \param  pos  Position to set, either iterFirst, iterLast, or iterEnd
+     \param  pos  Position to set, either iterFIRST, iterLAST, or iterEND
     */
     explicit IteratorBi(T& obj, IteratorPos pos) : IteratorFw<T>(&obj) {
         switch (pos) {
-            case iterFirst: first(); break;
-            case iterLast:    last();  break;
-            default:
-                end_ = true; data_ = NULL; break;
+            case iterFIRST: first(); break;
+            case iterLAST:  last();  break;
+            default: end_ = true; data_ = NULL; break;
         };
     }
 
@@ -613,38 +664,45 @@ public:
     IteratorBi(const IterType& src) : IteratorFw<T>(src)
         { }
 
-    /** Copy constructor.
-     \param  src  Source iterator to copy.
-    */
+    /** \copydoc IteratorBi(const IterType&) */
     IteratorBi(const IterBaseType& src) : IteratorFw<T>(src)
         { }
 
+    /** \copydoc IteratorBase::operator=(const IterBaseType&) */
     IterType& operator=(const IterType& src)
         { IterBaseType::operator=(src); return *this; }
 
+    /** \copydoc IteratorBase::operator=(const IterBaseType&) */
     IterType& operator=(const IterBaseType& src)
         { IterBaseType::operator=(src); return *this; }
 
+    /** \copydoc IteratorBase::operator=(const ToggleConst&) */
     IterType& operator=(const ToggleConst& src) {
         STATIC_ASSERT(IsConst<T>::value, ERROR_cannot_assign_const_iterator_to_mutable_iterator);
         IterBaseType::operator=((IterType&)src);
         return *this;
     }
 
+    /** \copydoc IteratorBase::operator=(const ToggleConst&) */
     IterType& operator=(const typename IterBaseType::ToggleConst& src) {
         STATIC_ASSERT(IsConst<T>::value, ERROR_cannot_assign_const_iterator_to_mutable_iterator);
         IterBaseType::operator=((IterType&)src);
         return *this;
     }
 
+    /** \copydoc IteratorFw::operator=(T&) */
     IterType& operator=(T& obj)
         { IterBaseType::operator=(obj); first(); return *this; }
 
+    /** Assignment operator to set position.
+     \param  pos  Position to set, either iterFIRST, iterLAST, or iterEND
+     \return      This
+    */
     IterType& operator=(IteratorPos pos) {
         switch (pos) {
-            case iterFirst: first(); break;
-            case iterLast:  last();  break;
-            default: end_ = true; data_ = NULL;
+            case iterFIRST: first(); break;
+            case iterLAST:  last();  break;
+            default: end_ = true; data_ = NULL; break;
         };
         return *this;
     }
@@ -697,48 +755,51 @@ protected:
 ///////////////////////////////////////////////////////////////////////////////
 
 /** Random access iterator.
-Used to iterate through container items. Random access iterators support forward and reverse iteration as well as random access by numeric index.
-Random access iterators always have a numeric key and support numeric comparison.
+Used to iterate through container items.
+ - Random access iterators support forward and reverse iteration as well as random access by numeric index
+ - Random access iterators always have a numeric key and support numeric comparison
+ .
  \tparam  T  Container type (must not be const)
+
 \par Usage
+
 Iterators work like normal pointers.
- - Supported containers will have built-in Iter (const) and IterM (mutable) iterator types in the container class
+ - Containers with iterators will have built-in Iter (const) and IterM (mutable) iterator types for iteration
  - Create iterator for given container, normally set to first position by default
- - Use iterator operators to move iterator position or dereference iterator to get current item
  - Explicitly set to start/last/end position using operator=(IteratorPos):
    \code
-iter = iterFirst;
-iter = iterLast;
-iter = iterEnd;
+    iter = iterFIRST;
+    iter = iterLAST;
+    iter = iterEND;
    \endcode
- - Explicitly set index position using operator=(IterKey):
+ - Explicitly set index position using operator=(Key):
    \code
-iter = 5;
+    iter = 5;
    \endcode
  - Increment to move to next item:
    \code
-++iter;
-iter++;
-iter += 2;
+    ++iter;
+    iter++;
+    iter += 2;
    \endcode
  - Decrement to move to previous item:
    \code
---iter;
-iter--;
-iter -= 2;
+    --iter;
+    iter--;
+    iter -= 2;
    \endcode
  - Dereference to access item data:
    \code
-*iter
+    *iter
    \endcode
  - Evaluate iterator as a bool to check if active (at valid position) or has reached the end:
    \code
-if (iter) {
-    // Iter is active/valid position
-}
-if (!iter) {
-    // Iter is at end position
-}
+    if (iter) {
+        // Iter is active/valid position
+    }
+    if (!iter) {
+        // Iter is at end position
+    }
    \endcode
    Note: This is done through safe bool conversion to avoid implicit conversion side-effects (see SafeBool)
  - Caution:
@@ -746,39 +807,54 @@ if (!iter) {
    - Results are undefined if an invalidated iterator is dereferenced
    .
  .
-\par Example
-\code
-// Using simple List container
-List<int> list;
-list.add(1);
-list.add(2);
-list.add(3);
 
-// Const iterator (prints items in order and then in reverse)
-for (List<int>::Iter iter(list, iterFirst); iter; ++iter)
-    printf("%i\n", *iter);
-for (List<int>::Iter iter(list, iterLast); iter; --iter)
-    printf("%i\n", *iter);
-// Mutable iterator (changes all item values to 1)
-for (List<int>::IterM iter(list, iterFirst); iter; ++iter)
-    *iter = 1;
-// Mutable iterator (change first item to 2)
-{
-    List<int>::IterM iter(list);
-    iter = 0;
-    *iter = 2;
+\par Example
+
+\code
+#include <evo/list.h>
+#include <evo/io.h>
+using namespace evo;
+static Console& c = con();
+
+int main() {
+    // Using simple List container
+    List<int> list;
+    list.add(1);
+    list.add(2);
+    list.add(3);
+
+    // Const iterator (prints items in order and then in reverse)
+    for (List<int>::Iter iter(list, iterFIRST); iter; ++iter)
+        c.out << *iter << NL;
+    for (List<int>::Iter iter(list, iterLAST); iter; --iter)
+        c.out << *iter << NL;
+
+    // Mutable iterator (changes all item values to 1)
+    for (List<int>::IterM iter(list, iterFIRST); iter; ++iter)
+        *iter = 1;
+
+    // Mutable iterator (change first item to 2)
+    {
+        List<int>::IterM iter(list);
+        iter = 0;
+        *iter = 2;
+    }
+
+    return 0;
 }
 \endcode
+
 \par Container Definition
+
 Containers normally define iterator types via member typedefs with const and mutable (non-const) variations, normally named Iter (const) and IterM (mutable).
-The iterator key type is stored by the iterator as a handle -- the container actually manipulates the key.
+The iterator key type is stored by the iterator as a handle and is used to implement the iterator.
 \n\n Example:
 \code
 // Example container class
 template<class T> class Container {
 public:
-    // Iterator key -- used internally by container (using int here as example)
-    typedef int IterKey;
+    // Iterator key -- used internally by container (using uint here as example)
+    typedef uint IterKey;
 
     // Container iterator types
     typedef typename IteratorBi< Container<T>,IterKey,T >::Const Iter;
@@ -787,30 +863,44 @@ public:
     // ...
 };
 \endcode
+
 \par Implementation Detail - Container Interface
+
 Iterators interact with containers using an expected interface implemented by the container -- this is used internally:
  - Iterators store a Key value that is passed to the container for internal tracking
  - Random access iterators require the following container interface -- const-correctness is expected as shown:
    \code
-// Called by mutable iterator constructor to notify container object that items may change
-void iterInitMutable();
-// Return pointer to first item or NULL if none
-const IterItem* iterFirst(IterKey& key) const;
-// Return pointer to next item data or NULL if no more
-const IterItem* iterNext(IterKey& key) const;
-// Return pointer to last item or NULL if none
-const IterItem* iterLast(IterKey& key) const;
-// Return pointer to previous item data or NULL if no more
-const IterItem* iterPrev(IterKey& key) const;
-// Return pointer to item data at given numeric key index, or NULL if not valid
-const IterItem* iterSet(IterKey key) const;
-// Return item count
-Size iterCount() const;
+    // Iterator key and state, keeps state for iterator, holds iterator key/position
+    struct IterKey { ... };
+    typedef ... IterKey;
+
+    // Iterator item pointer, dereferences to iterator value
+    typedef ... IterItem;
+
+    // Called by mutable iterator constructor to notify container object that items may change
+    void iterInitMutable();
+
+    // Return pointer to first item or NULL if none
+    const IterItem* iterFirst(IterKey& key) const;
+
+    // Return pointer to next item data or NULL if no more
+    const IterItem* iterNext(IterKey& key) const;
+
+    // Return pointer to last item or NULL if none
+    const IterItem* iterLast(IterKey& key) const;
+
+    // Return pointer to previous item data or NULL if no more
+    const IterItem* iterPrev(IterKey& key) const;
+
+    // Return pointer to item data at given numeric key index, or NULL if not valid
+    const IterItem* iterSet(IterKey key) const;
+
+    // Return item count
+    Size iterCount() const;
    \endcode
 */
 template<class T>
-struct IteratorRa : public IteratorBi<T>
-{
+struct IteratorRa : public IteratorBi<T> {
 protected:
     using IteratorBase<T>::obj_;
     using IteratorBase<T>::end_;
@@ -820,16 +910,16 @@ protected:
     using IteratorFw<T>::first;
 
 public:
-    typedef typename IteratorBase<T>::Size Size;    ///< Size type to use
-    typedef typename IteratorBase<T>::Key  Key;        ///< Iterator key type
-    typedef typename IteratorBase<T>::Item Item;    ///< Iterator item type
+    typedef typename IteratorBase<T>::Size Size;                                    ///< Size type to use
+    typedef typename IteratorBase<T>::Key  Key;                                     ///< Iterator key type
+    typedef typename IteratorBase<T>::Item Item;                                    ///< Iterator item type
 
-    typedef IteratorRa<const T>                       Const;            ///< Random access const iterator type
-    typedef IteratorRa<typename RemoveConst<T>::Type> Mutable;            ///< Random access mutable iterator type
-    typedef IteratorRa<T>                             IterType;            ///< Iterator type
-    typedef IteratorBase<T>                           IterBaseType;        ///< Iterator base type for parameter passing
+    typedef IteratorRa<const T>                       Const;                        ///< Random access const iterator type
+    typedef IteratorRa<typename RemoveConst<T>::Type> Mutable;                      ///< Random access mutable iterator type
+    typedef IteratorRa<T>                             IterType;                     ///< Iterator type
+    typedef IteratorBase<T>                           IterBaseType;                 ///< Iterator base type for parameter passing
 
-    typedef typename StaticIf<IsConst<T>::value,Mutable,Const>::Type ToggleConst;    ///< Used for converting between Const/Mutable iterators
+    typedef typename StaticIf<IsConst<T>::value,Mutable,Const>::Type ToggleConst;   ///< Used for converting between Const/Mutable iterators
 
     /** Constructor. This sets empty iterator at end. */
     IteratorRa() : IteratorBi<T>()
@@ -843,7 +933,7 @@ public:
 
     /** Constructor setting position. This sets iterator to given position (or end if empty).
      \param  obj  Container object for iterator
-     \param  pos  Position to set, either iterFirst, iterLast, or iterEnd
+     \param  pos  Position to set, either iterFIRST, iterLAST, or iterEND
     */
     explicit IteratorRa(T& obj, IteratorPos pos) : IteratorBi<T>(obj, pos)
         { }
@@ -872,37 +962,41 @@ public:
     IteratorRa(const IterType& src) : IteratorBi<T>(src)
         { }
 
-    /** Copy constructor.
-     \param  src  Source iterator to copy
-    */
+    /** \copydoc IteratorRa(const IterType&) */
     IteratorRa(const IterBaseType& src) : IteratorBi<T>(src)
         { }
 
+    /** \copydoc IteratorBase::operator=(const IterBaseType&) */
     IterType& operator=(const IterType& src)
         { IterBaseType::operator=(src); return *this; }
 
+    /** \copydoc IteratorBase::operator=(const IterBaseType&) */
     IterType& operator=(const IterBaseType& src)
         { IterBaseType::operator=(src); return *this; }
 
+    /** \copydoc IteratorBase::operator=(const ToggleConst&) */
     IterType& operator=(const ToggleConst& src) {
         STATIC_ASSERT(IsConst<T>::value, ERROR_cannot_assign_const_iterator_to_mutable_iterator);
         IterBaseType::operator=((IterType&)src);
         return *this;
     }
 
+    /** \copydoc IteratorBase::operator=(const ToggleConst&) */
     IterType& operator=(const typename IterBaseType::ToggleConst& src) {
         STATIC_ASSERT(IsConst<T>::value, ERROR_cannot_assign_const_iterator_to_mutable_iterator);
         IterBaseType::operator=((IterType&)src);
         return *this;
     }
 
+    /** \copydoc IteratorFw::operator=(T&) */
     IterType& operator=(T& obj)
         { IterBaseType::operator=(obj); first(); return *this; }
 
+    /** \copydoc IteratorBi::operator=(IteratorPos) */
     IterType& operator=(IteratorPos pos)
         { IteratorBi<T>::operator=(pos); return *this; }
 
-    /** Assignment operator.
+    /** Assignment operator for random access position index.
      \param  num  Iterator index to set
      \return      This
     */
@@ -935,6 +1029,7 @@ public:
     */
     IterType operator+(Size count) const
         { IterType tmp(*this); tmp.next(count); return tmp; }
+
     /** Subtraction (multi decrement) operator. Same as prev(Size) on the returned temporary iterator.
      - In-place operator-=() is preferred to avoid creating temporary object
      .
@@ -944,7 +1039,7 @@ public:
     IterType operator-(Size count) const
         { IterType tmp(*this); tmp.prev(count); return tmp; }
 
-    /** Compare to another iterator.
+    /** %Compare to another iterator.
      \param  iter  Iterator to compare
      \return       Comparison result, -1: this is less, 0: equal, 1: this is greater
     */
@@ -959,7 +1054,7 @@ public:
             return (key_ < iter.getKey() ? -1 : 1);
     }
 
-    /** Compare to a position index.
+    /** %Compare to a position index.
      \param  num  Position index to compare, END for end position
      \return      Comparison result, -1: this is less, 0: equal, 1: this is greater
     */
@@ -980,6 +1075,7 @@ public:
     */
     bool operator<(const IterBaseType& iter) const
         { return (compare(iter) < 0); }
+
     /** Less-than operator.
      \param  num  Position index to compare
      \return      Whether less than index
@@ -993,6 +1089,7 @@ public:
     */
     bool operator<=(const IterBaseType& iter) const
         { return (compare(iter) <= 0); }
+
     /** Less-than-or-equal operator.
      \param  num  Position index to compare
      \return      Whether less than or equal to index
@@ -1006,6 +1103,7 @@ public:
     */
     bool operator>(const IterBaseType& iter) const
         { return (compare(iter) > 0); }
+
     /** Greater-than operator.
      \param  num  Position index to compare
      \return      Whether greater than index
@@ -1019,6 +1117,7 @@ public:
     */
     bool operator>=(const IterBaseType& iter) const
         { return (compare(iter) >= 0); }
+
     /** Greater-than-or-equal operator.
      \param  num  Position index to compare
      \return      Whether greater than or equal to index
@@ -1054,7 +1153,7 @@ public:
      \return  Position index, END if end
     */
     Key index() const
-        { return (end_ ? END : key_); }
+        { return (end_ ? Key(END) : key_); }
 
 protected:
     /** Go to next item, skipping given count (used internally).
@@ -1086,5 +1185,5 @@ protected:
 
 ///////////////////////////////////////////////////////////////////////////////
 //@}
-} // Namespace: evo
+}
 #endif

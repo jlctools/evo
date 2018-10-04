@@ -1,8 +1,6 @@
 // Evo C++ Library
-/* Copyright (c) 2016 Justin Crowell
- This Source Code Form is subject to the terms of the Mozilla Public
- License, v. 2.0. If a copy of the MPL was not distributed with this
- file, You can obtain one at http://mozilla.org/MPL/2.0/.
+/* Copyright 2018 Justin Crowell
+Distributed under the BSD 2-Clause License -- see included file LICENSE.txt for details.
 */
 ///////////////////////////////////////////////////////////////////////////////
 /** \file alg.h Evo general algorithms. */
@@ -10,11 +8,7 @@
 #ifndef INCL_evo_alg_h
 #define INCL_evo_alg_h
 
-// Includes
-
-// Namespace: evo
 namespace evo {
-
 /** \addtogroup EvoAlgs */
 //@{
 
@@ -62,9 +56,6 @@ template<class T> inline T& max(T& a, T& b)
 template<class T> inline T& max(T& a, T& b, T& c)
     { return (a<b ? (b<c ? c : b) : (a<c ? c : a)); }
 
-// TODO -- always pass by ref???
-
-// TODO
 template<class T> inline T& applyminmax(T& val, T& min, T& max)
     { if (val < min) val = min; }
 
@@ -74,7 +65,6 @@ template<class T> inline T& applymin(T& val, T& min)
 template<class T> inline T& applymax(T& val, T& max)
     { if (val > max) val = max; }
 
-// TODO
 template<class T> inline T& constrain(T& val, T& min, T& max)
     { return ( val<min ? min : (val>max?max:val) ); }
 
@@ -90,16 +80,13 @@ template<class T> inline bool validate(T& val, T& min, T& max)
 template<class T> inline T& validate(T& val, T& min, T& max, T& invalid)
     { return ( (val<min || val>max) ? invalid : val ); }
 
-// TODO
 template<class T> inline T first(T val1, T val2)
     { return ( val1 ? val1 : val2 ); }
 
 template<class T> inline T first(T val1, T val2, T val3)
     { return ( val1 ? val1 : (val2?val2:val3) ); }
 
-// TODO - make all these member of int/type
-
 ///////////////////////////////////////////////////////////////////////////////
 //@}
-} // Namespace: evo
+}
 #endif

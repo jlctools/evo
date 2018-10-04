@@ -1,8 +1,6 @@
 // Evo C++ Library
-/* Copyright (c) 2016 Justin Crowell
- This Source Code Form is subject to the terms of the Mozilla Public
- License, v. 2.0. If a copy of the MPL was not distributed with this
- file, You can obtain one at http://mozilla.org/MPL/2.0/.
+/* Copyright 2018 Justin Crowell
+Distributed under the BSD 2-Clause License -- see included file LICENSE.txt for details.
 */
 ///////////////////////////////////////////////////////////////////////////////
 /** \file list.h Evo List container. */
@@ -10,14 +8,16 @@
 #ifndef INCL_evo_list_h
 #define INCL_evo_list_h
 
-// Includes
-#include "evo_config.h"
 #include "impl/container.h"
 #include "impl/iter.h"
 
-// Namespace: evo
-namespace evo {
+// Disable certain MSVC warnings for this file
+#if defined(_MSC_VER)
+    #pragma warning(push)
+    #pragma warning(disable:4458)
+#endif
 
+namespace evo {
 /** \addtogroup EvoContainers */
 //@{
 
@@ -30,16 +30,16 @@ namespace evo {
 
 \par Features
 
- - Similar to STL vector as well as deque, queue, stack
+ - Similar to STL vector
  - Items are stored sequentially in memory as a dynamic array -- random access uses constant time
  - Preallocates extra memory when buffer grows -- see capacity(), resize(), capacity(Size)
  - No memory allocated by new empty list
-
+ .
  - Some methods have a read-only (const) version and modifier version with suffix "M" -- example: item() and itemM()
  - operator[]() is read-only -- use operator()() for mutable access
  - Supports efficient use as stack or queue -- see add(const Item&), pop(), popq()
  - Advanced methods have "adv" prefix -- these allow some intrusive control
-
+ .
  - \ref Sharing "Sharing" and \ref Slicing "Slicing" make for simple and efficient copying/splitting
  - \b Caution: Copying from a raw pointer will use \ref UnsafePtrRef "Unsafe Pointer Referencing"
  .
@@ -128,19 +128,19 @@ namespace evo {
    - copy(const Item*,Size)
    - fill()
  - add(const Item&)
-   - add(const ListType&)
+   - add(const ListBaseType&)
    - add(const Item*,Size)
    - addnew()
    - operator<<(const Item&)
-   - operator<<(const ListType&)
+   - operator<<(const ListBaseType&)
    - operator<<(const ValNull&)
    - operator<<(const ValEmpty&)
  - prepend(const Item&)
-   - prepend(const ListType&)
+   - prepend(const ListBaseType&)
    - prepend(const Item*,Size)
    - prependnew()
  - insert(Key,const Item&)
-   - insert(Key,const ListType&)
+   - insert(Key,const ListBaseType&)
    - insert(Key,const Item*,Size)
    - insertnew()
  - pop(T&)
@@ -162,6 +162,8 @@ namespace evo {
  - advBuffer(Size)
    - advBuffer()
    - advSize()
+ - advWrite()
+   - advWriteDone()
  - advEdit()
    - advEditDone()
  - advAdd()
@@ -175,7 +177,9 @@ namespace evo {
 
 \code
 #include <evo/list.h>
+#include <evo/io.h>
 using namespace evo;
+static Console& c = con();
 
 int main() {
     // Create number list, add some numbers
@@ -196,36 +200,35 @@ int main() {
 
     // Iterate and print items (read-only)
     for (List<int>::Iter iter(list); iter; ++iter)
-        printf("Item: %i\n", *iter);
+        c.out << "Item: " << *iter << NL;
 
     return 0;
 }
 \endcode
 
 Output:
-\verbatim
+\code{.unparsed}
 Item: 10
 Item: 12
 Item: 13
-\endverbatim
+\endcode
 */
 template<class T,class TSize=SizeT>
-class List : public ListBase<T,TSize>
-{
+class List : public ListBase<T,TSize> {
 protected:
     using ListBase<T,TSize>::data_; // Slice data pointer, NULL if null, EVO_PEMPTY if empty (null/empty: buffer unused, no reference)
     using ListBase<T,TSize>::size_; // Slice size, 0 if empty
 
 public:
     EVO_CONTAINER_TYPE;
-    typedef TSize               Size;               ///< List size integer type
-    typedef Size                Key;                ///< Key type (item index)
-    typedef T                   Value;              ///< Value type (same as Item)
-    typedef T                   Item;               ///< Item type (same as Value)
-    typedef typename DataOp<T>::ParamT ItemVal;     ///< Item type as parameter (POD types passed by value, otherwise by const-ref)
+    typedef TSize               Size;               ///< %List size integer type
+    typedef Size                Key;                ///< %Key type (item index)
+    typedef T                   Value;              ///< %Value type (same as Item)
+    typedef T                   Item;               ///< %Item type (same as Value)
+    typedef typename DataCopy<T>::PassType ItemVal; ///< %Item type as parameter (POD types passed by value, otherwise by const-ref)
 
     typedef List<T,Size>        ThisType;           ///< This list type
-    typedef List<T,Size>        ListType;           ///< List type for parameters
+    typedef List<T,Size>        ListType;           ///< %List type for parameters
     typedef ListBase<T,Size>    ListBaseType;       ///< %List base type for any Evo list
 
     /** %Edit buffer for advEdit().
@@ -244,7 +247,6 @@ public:
 
         /** Destructor, frees buffer if needed. */
         ~Edit() {
-            // TODO EVO_ALLOCATORS
             if (header != NULL)
                 ::free(header);
         }
@@ -275,7 +277,7 @@ public:
                 const Size maxcount = src.size_ - start;
                 if (count > maxcount)
                     count = maxcount;
-                ContainerOp<Item>::init(ptr + size, src.data_, count);
+                DataInit<Item>::init(ptr + size, src.data_, count);
                 size += count;
             } else
                 count = 0;
@@ -295,7 +297,7 @@ public:
         Size write(const Item* data, Size count) {
             if (count > 0) {
                 assert( data != NULL );
-                ContainerOp<Item>::init(ptr + size, data, count);
+                DataInit<Item>::init(ptr + size, data, count);
                 size += count;
             }
             return count;
@@ -303,7 +305,6 @@ public:
     };
 
     /** Default constructor sets as null. */
-    //[tags: self, set_null! ]
     List() {
         data_ = NULL;
         size_ = 0;
@@ -313,9 +314,8 @@ public:
     }
 
     /** Constructor sets as empty but not null.
-     \param  val  vEmpty
+     \param  val  vEMPTY
     */
-    //[tags: self, set_empty! ]
     explicit List(const ValEmpty& val) {
         EVO_PARAM_UNUSED(val);
         data_ = EVO_PEMPTY;
@@ -330,7 +330,6 @@ public:
      .
      \param  data  Data to copy
     */
-    //[tags: self, set_list!, slice(), unshare() ]
     List(const ListType& data) {
         data_ = NULL;
         size_ = 0;
@@ -347,7 +346,6 @@ public:
      \param  index  Start index of data to copy, END to set as empty
      \param  size   Size as item count, ALL for all from index
     */
-    //[tags: self, set_list!, slice(), unshare() ]
     List(const ListType& data, Key index, Key size=ALL) {
         data_ = NULL;
         size_ = 0;
@@ -364,7 +362,6 @@ public:
      \param  index  Start index of data to reference, END to set as empty
      \param  size   Size as item count, ALL for all from index
     */
-    //[tags: self, set_list!, slice(), unshare() ]
     List(const ListBaseType& data, Key index=0, Key size=ALL) {
         size_ = 0;
         #if EVO_LIST_OPT_REFTERM
@@ -391,7 +388,6 @@ public:
      \param  index  Start index of data to reference, END to set as empty
      \param  size   Size as item count, ALL for all from index
     */
-    //[tags: self, set_list!, slice(), unshare() ]
     List(const ListBaseType* data, Key index=0, Key size=ALL) {
         size_ = 0;
         #if EVO_LIST_OPT_REFTERM
@@ -417,7 +413,6 @@ public:
      \param  data  Data pointer to use
      \param  size  Data size as item count
     */
-    //[tags: self, set_ptr!, add_ptr!, slice(), unshare() ]
     List(const Item* data, Size size) {
         data_ = NULL;
         size_ = 0;
@@ -432,7 +427,6 @@ public:
      \param  data  Data pointer to use
      \param  size  Data size as item count
     */
-    //[tags: self, set_mptr!, copy(), unshare() ]
     List(const PtrBase<Item>& data, Size size) {
         data_ = NULL;
         size_ = 0;
@@ -451,7 +445,6 @@ public:
      \param  data  Data to copy
      \return       This
     */
-    //[tags: self, set_list, add_list!, slice(), unshare() ]
     ListType& operator=(const ListType& data)
         { return set(data); }
 
@@ -461,7 +454,6 @@ public:
      \param  data  Data to copy
      \return       This
     */
-    //[tags: self, set_list, add_list!, slice(), unshare() ]
     ListType& operator=(const ListBaseType& data) {
         if (data.data_ == NULL)
             set();
@@ -477,22 +469,20 @@ public:
      .
     Example:
     \code
-list = vNull;
+    list = vNULL;
     \endcode
      \return  This
     */
-    //[tags: self, set_null, add_item! ]
     ListType& operator=(const ValNull&)
         { return set(); }
 
     /** Assignment operator to set as empty but not null.
     Example:
     \code
-list = vEmpty;
+    list = vEMPTY;
     \endcode
      \return  This
     */
-    //[tags: self, set_empty, add_item! ]
     ListType& operator=(const ValEmpty&)
         { clear(); data_ = EVO_PEMPTY; return *this; }
 
@@ -501,13 +491,12 @@ list = vEmpty;
      - Append operators can be chained\n
        Example:
        \code
-// Clear character list and append two characters
-list.clear() << 'a' << 'b';
+        // Clear character list and append two characters
+        list.clear() << 'a' << 'b';
        \endcode
      .
      \return  This
     */
-    //[tags: self, set, unshare() ]
     ListType& clear() {
         if (data_ > EVO_PEMPTY) {
             if (buf_.ptr != NULL) {
@@ -521,7 +510,7 @@ list.clear() << 'a' << 'b';
                 } else if (buf_.header->used > 0) {
                     // Clear buffer, leave buffer for later use
                     assert( buf_.header->refs == 1 );
-                    ContainerOp<T>::unInit(buf_.ptr, buf_.header->used);
+                    DataInit<T>::uninit(buf_.ptr, buf_.header->used);
                     buf_.header->used = 0;
                     data_             = buf_.ptr;
                 }
@@ -544,38 +533,35 @@ list.clear() << 'a' << 'b';
         return *this;
     }
 
-    /** Set as null and empty.
+    /** %Set as null and empty.
      - Append operators can be chained\n
        Example:
        \code
-// Clear character list and append two characters
-list.set() << 'a' << 'b';
+        // Clear character list and append two characters
+        list.set() << 'a' << 'b';
        \endcode
      .
      \return  This
     */
-    //[tags: self, set_null, set, unshare() ]
     ListType& set()
         { clear(); data_ = NULL; return *this; }
 
-    /** Set from data pointer.
+    /** %Set from data pointer.
      - \b Caution: Uses \ref UnsafePtrRef "Unsafe Pointer Referencing"
      .
      \param  data  Data pointer to use
      \param  size  Data size as item count
      \return       This
     */
-    //[tags: self, set_ptr, set, slice(), unshare() ]
     ListType& set(const Item* data, Size size)
         { ref(data, size); return *this; }
 
-    /** Set from managed data pointer.
+    /** %Set from managed data pointer.
      - \b Caution: Uses \ref UnsafePtrRef "Unsafe Pointer Referencing"
      .
      \param  data  Data pointer to copy
      \param  size  Data size as item count
     */
-    //[tags: self, set_ptr, set, slice(), unshare() ]
     ListType& set(const PtrBase<Item>& data, Size size) {
         if (data.ptr_ == NULL)
             set();
@@ -584,17 +570,16 @@ list.set() << 'a' << 'b';
         return *this;
     }
 
-    /** Set from another list.
+    /** %Set from another list.
      - Makes shared copy if possible -- see \ref Sharing "Sharing"
      .
      \param  data  Data to copy
      \return       This
     */
-    //[tags: self, set_list, set, slice(), unshare() ]
     ListType& set(const ListType& data)
         { ref(data); return *this; }
 
-    /** Set from subset of another list.
+    /** %Set from subset of another list.
      - Makes shared copy if possible -- see \ref Sharing "Sharing"
      .
      \param  data   Data to copy
@@ -602,11 +587,10 @@ list.set() << 'a' << 'b';
      \param  size   Data size as item count, ALL for all from index
      \return        This
     */
-    //[tags: self, set_list, set, slice(), unshare() ]
     ListType& set(const ListType& data, Key index, Key size=ALL)
         { ref(data, index, size); return *this; }
 
-    /** Set as copy of sublist.
+    /** %Set as copy of sublist.
      - For best performance (and less safety) reference sublist instead with set(const Item*,Size)
      .
      \param  data   Data to copy
@@ -614,7 +598,6 @@ list.set() << 'a' << 'b';
      \param  size   Data size as item count, ALL for all from index
      \return        This
     */
-    //[tags: self, set_list, set, slice(), unshare() ]
     ListType& set(const ListBaseType& data, Key index=0, Key size=ALL) {
         if (data.data_ == NULL)
             set();
@@ -631,7 +614,7 @@ list.set() << 'a' << 'b';
         return *this;
     }
 
-    /** Set from subset of another list using start/end positions.
+    /** %Set from subset of another list using start/end positions.
      - Makes shared copy if possible -- see \ref Sharing "Sharing"
      - If index2 < index1 then index2 will be set to index1 (empty sublist)
      .
@@ -640,11 +623,10 @@ list.set() << 'a' << 'b';
      \param  index2  End index of new slice (this item not included), END for all after index1
      \return         This
     */
-    //[tags: self, set_list, set, slice2(), unshare() ]
     ListType& set2(const ListType& data, Key index1, Key index2)
         { ref(data, index1, (index1<index2?index2-index1:0)); return *this; }
 
-    /** Set as copy of sublist using start/end positions.
+    /** %Set as copy of sublist using start/end positions.
      - For best performance (and less safety) reference sublist instead with set(const Item*,Size)
      .
      \param  data    Data to copy
@@ -652,7 +634,6 @@ list.set() << 'a' << 'b';
      \param  index2  End index of sublist data (this item not included), END for all after index1
      \return         This
     */
-    //[tags: self, set_list, set, slice(), unshare() ]
     ListType& set2(const ListBaseType& data, Key index1, Key index2) {
         if (data.data_ == NULL) {
             set();
@@ -667,17 +648,16 @@ list.set() << 'a' << 'b';
         return *this;
     }
 
-    /** Set as empty but not null.
+    /** %Set as empty but not null.
      - Append operators can be chained\n
        Example:
        \code
-// Set as empty character list then append two characters
-list.setempty() << 'a' << 'b';
+        // Set as empty character list then append two characters
+        list.setempty() << 'a' << 'b';
        \endcode
      .
      \return  This
     */
-    //[tags: self, set_empty, set, unshare() ]
     ListType& setempty()
         { clear(); data_ = EVO_PEMPTY; return *this; }
 
@@ -688,7 +668,6 @@ list.setempty() << 'a' << 'b';
      .
      \return  Whether null
     */
-    //[tags: info_size, set_null! ]
     bool null() const
         { return (data_ == NULL); }
 
@@ -697,14 +676,12 @@ list.setempty() << 'a' << 'b';
      .
      \return  Whether empty
     */
-    //[tags: info_size, null(), set_empty! ]
     bool empty() const
         { return (size_ == 0); }
 
     /** Get size.
      \return  Size as item count
     */
-    //[tags: info_size, capacity!, slice!, item(), data() ]
     Size size() const
         { return size_; }
 
@@ -713,7 +690,6 @@ list.setempty() << 'a' << 'b';
      .
      \return  Whether shared
     */
-    //[tags: shared, reserve() ]
     bool shared() const
         { return (buf_.ptr == NULL ? (size_ > 0) : (buf_.header->refs > 1)); }
 
@@ -724,7 +700,6 @@ list.setempty() << 'a' << 'b';
      .
      \return  Capacity as item count, 0 if no buffer allocated
     */
-    //[tags: self, capacity, size() ]
     Size capacity() const
         { return (buf_.header == NULL ? 0 : buf_.header->size); }
 
@@ -734,7 +709,6 @@ list.setempty() << 'a' << 'b';
      .
      \return  Data pointer as read-only, NULL if null, may be invalid if empty (const)
     */
-    //[tags: info_item ]
     const Item* data() const
         { return data_; }
 
@@ -744,7 +718,6 @@ list.setempty() << 'a' << 'b';
      \param  index  Item index
      \return        Given item as read-only (const)
     */
-    //[tags: info_item ]
     const Item& operator[](Key index) const
         { assert( index < size_ ); return data_[index]; }
 
@@ -754,21 +727,18 @@ list.setempty() << 'a' << 'b';
      \param  index  Item index
      \return        Given item as read-only (const)
     */
-    //[tags: info_item ]
     const Item& item(Key index) const
         { assert( index < size_ ); return data_[index]; }
 
     /** Get first item (const).
      \return  First item pointer, NULL if empty
     */
-    //[tags: info_item ]
     const Item* first() const
         { return (size_ > 0 ? data_ : NULL); }
 
     /** Get last item (const).
      \return  Last item pointer, NULL if empty
     */
-    //[tags: info_item ]
     const Item* last() const
         { return (size_ > 0 ? data_+size_-1 : NULL); }
 
@@ -779,7 +749,6 @@ list.setempty() << 'a' << 'b';
      \param  offset  Offset from end, 0 for last item, 1 for second-last, etc
      \return         Resulting index, END if offset out of bounds
     */
-    //[tags: size(), info_item ]
     Key iend(Size offset=0) const
         { return (offset < size_ ? size_-1-offset : END); }
 
@@ -787,10 +756,8 @@ list.setempty() << 'a' << 'b';
      \param  seed  Seed value for hashing multiple values, 0 if none
      \return       Hash value
     */
-    //[tags: info_items ]
     ulong hash(ulong seed=0) const
-        // TODO: COV coverage
-        { return DataOp<T>::hash(data_, size_, seed); }
+        { return DataHash<T>::hash(data_, size_, seed); }
 
     // COMPARE
 
@@ -798,7 +765,6 @@ list.setempty() << 'a' << 'b';
      \param  data  Data to compare to
      \return       Result (<0 if this is less, 0 if equal, >0 if this is greater)
     */
-    //[tags: self, compare ]
     int compare(const ListBaseType& data) const {
         int result;
         if (data_ == NULL)
@@ -806,7 +772,7 @@ list.setempty() << 'a' << 'b';
         else if (data.data_ == NULL)
             result = 1;
         else
-            result = DataOp<T>::compare(data_, size_, data.data_, data.size_);
+            result = DataCompare<T>::compare(data_, size_, data.data_, data.size_);
         return result;
     }
 
@@ -814,7 +780,6 @@ list.setempty() << 'a' << 'b';
      \param  data  Data to compare to
      \return       Whether equal
     */
-    //[tags: self, compare ]
     bool operator==(const ListBaseType& data) const {
         bool result;
         if (data_ == NULL)
@@ -824,7 +789,7 @@ list.setempty() << 'a' << 'b';
         else if (size_ == 0 || data_ == data.data_) {
             result = true;
         } else
-            result = DataOp<T>::equal(data_, data.data_, data.size_);
+            result = DataEqual<T>::equal(data_, data.data_, data.size_);
         return result;
     }
     
@@ -832,7 +797,6 @@ list.setempty() << 'a' << 'b';
      \param  data  Data to compare to
      \return       Whether inequal
     */
-    //[tags: self, compare ]
     bool operator!=(const ListBaseType& data) const {
         bool result;
         if (data_ == NULL)
@@ -842,17 +806,16 @@ list.setempty() << 'a' << 'b';
         else if (size_ == 0 || data_ == data.data_) {
             result = false;
         } else
-            result = !DataOp<T>::equal(data_, data.data_, data.size_);
+            result = !DataEqual<T>::equal(data_, data.data_, data.size_);
         return result;
     }
 
-    /** Check if starts with given item.
+    /** Check if this starts with given item.
      - Uses item %operator==() for comparisons
      .
      \param  item  Item to check
      \return       Whether starts with item
     */
-    //[tags: self, compare_sub, find(), compare() ]
     bool starts(ItemVal item) const
         { return (size_ > 0 && data_[0] == item); }
 
@@ -863,90 +826,84 @@ list.setempty() << 'a' << 'b';
      \param  size   Size as item count to check
      \return        Whether starts with items
     */
-    //[tags: self, compare_sub, find(), compare() ]
     bool starts(const Item* items, Size size) const
-        { return (size > 0 && size_ >= size && DataOp<T>::equal(data_, items, size)); }
+        { return (size > 0 && size_ >= size && DataEqual<T>::equal(data_, items, size)); }
 
-    /** Check if starts with given items.
+    /** Check if this starts with given items.
      - Uses item %operator==() for comparisons
      .
      \param  items  Items to check
      \return        Whether starts with items
     */
-    //[tags: self, compare_sub, find(), compare() ]
     bool starts(const ListBaseType& items) const
-        { return (items.size_ > 0 && size_ >= items.size_ && DataOp<T>::equal(data_, items.data_, items.size_)); }
+        { return (items.size_ > 0 && size_ >= items.size_ && DataEqual<T>::equal(data_, items.data_, items.size_)); }
 
-    /** Check if ends with given item.
+    /** Check if this ends with given item.
      - Uses item %operator==() for comparisons
      .
      \param  item  Item to check
      \return       Whether ends with item
     */
-    //[tags: self, compare_sub, find(), compare() ]
     bool ends(ItemVal item) const
         { return (size_ > 0 && data_[size_-1] == item); }
 
-    /** Check if ends with given items.
+    /** Check if this ends with given items.
      - Uses item %operator==() for comparisons
      .
      \param  items  Items to check
      \param  size   Item count to check
      \return        Whether ends with items
     */
-    //[tags: self, compare_sub, find(), compare() ]
     bool ends(const Item* items, Size size) const
-        { return (size > 0 && size_ >= size && DataOp<T>::equal(data_+(size_-size), items, size)); }
+        { return (size > 0 && size_ >= size && DataEqual<T>::equal(data_+(size_-size), items, size)); }
 
-    /** Check if ends with given items.
+    /** Check if this ends with given items.
      - Uses item %operator==() for comparisons
      .
      \param  items  Items to check
      \return        Whether ends with items
     */
-    //[tags: self, compare_sub, find(), compare() ]
     bool ends(const ListBaseType& items) const
-        { return (items.size_ > 0 && size_ >= items.size_ && DataOp<T>::equal(data_+(size_-items.size_), items.data_, items.size_)); }
+        { return (items.size_ > 0 && size_ >= items.size_ && DataEqual<T>::equal(data_+(size_-items.size_), items.data_, items.size_)); }
 
     // FIND
 
     /** Find first occurrence of item with forward search.
      - This searches for given item, using item %operator==() for comparisons
      - Search stops before reaching end index or end of list
+     - Item at end index is not checked
      .
      \param  item   Item to find
      \param  start  Starting index for search
      \param  end    End index for search, END for end of list
      \return        Found item index or NONE if not found
     */
-    //[tags: self, find_item, split! ]
     Key find(ItemVal item, Key start=0, Key end=END) const {
         if (end > size_)
             end = size_;
-        for (; start<end; ++start)
+        for (; start < end; ++start)
             if (data_[start] == item)
                 return start;
-        return (Key)NONE;
+        return NONE;
     }
 
     /** Find last occurrence of item with reverse search.
      - This searches for given item, using item %operator==() for comparisons
-     - Same as find() but does reverse search starting right before end index, or at last item if end of list
-     - As with find(), item at end index is not checked
+     - This does a reverse search starting right before end index
+     - Item at end index is not checked
      .
      \param  item   Item to find
      \param  start  Starting index for search range -- last item checked in reverse search
      \param  end    End index for search range (reverse search starting point), END for end of list
      \return        Found item index or NONE if not found
     */
-    //[tags: self, find_item, find_item, split! ]
     Key findr(ItemVal item, Key start=0, Key end=END) const {
         if (end > size_)
             end = size_;
-        while (end>start)
+        while (end > start)
             if (data_[--end] == item)
                 return end;
-        return (Key)NONE;
+        return NONE;
     }
 
     /** Find first occurrence of any given items with forward search.
@@ -959,16 +916,15 @@ list.setempty() << 'a' << 'b';
      \param  end    End index for search, END for end of list
      \return        Found item index or NONE if not found
     */
-    //[tags: self, find_item, split! ]
     Key findany(const Item* items, Size count, Key start=0, Key end=END) const {
         Size j;
         if (end > size_)
             end = size_;
-        for (; start<end; ++start)
+        for (; start < end; ++start)
             for (j=0; j<count; ++j)
                 if (data_[start] == items[j])
                     return start;
-        return (Key)NONE;
+        return NONE;
     }
 
     /** Find last occurrence of any given items with reverse search.
@@ -982,18 +938,17 @@ list.setempty() << 'a' << 'b';
      \param  end    End index for search range (reverse search starting point), END for end of list
      \return        Found item index or NONE if not found
     */
-    //[tags: self, find_item, split! ]
     Key findanyr(const Item* items, Size count, Key start=0, Key end=END) const {
         Size j;
         if (end > size_)
             end = size_;
         while (end>start) {
             --end;
-            for (j=0; j<count; ++j)
+            for (j=0; j < count; ++j)
                 if (data_[end] == items[j])
                     return end;
         }
-        return (Key)NONE;
+        return NONE;
     }
 
     /** Check whether contains given item.
@@ -1002,10 +957,9 @@ list.setempty() << 'a' << 'b';
      \param  item  Item to check for
      \return       Whether item was found
     */
-    //[tags: self, find_item, compare_sub, compare() ]
     bool contains(ItemVal item) const {
         bool result = false;
-        for (Key i=0; i<size_; ++i)
+        for (Key i=0; i < size_; ++i)
             if (data_[i] == item)
                 { result = true; break; }
         return result;
@@ -1018,13 +972,12 @@ list.setempty() << 'a' << 'b';
      \param  size  Size as item count to check for
      \return       Whether data was found
     */
-    //[tags: self, find_items, compare_sub, find(), compare() ]
     bool contains(const Item* data, Size size) const {
         bool result = false;
         if (size > 0 && size_ >= size) {
             const Size end = size_ - size;
-            for (Key i=0; i<=end; ++i)
-                if (DataOp<T>::equal(data_+i, data, size))
+            for (Key i=0; i <= end; ++i)
+                if (DataEqual<T>::equal(data_+i, data, size))
                     { result = true; break; }
         }
         return result;
@@ -1036,13 +989,12 @@ list.setempty() << 'a' << 'b';
      \param  data  Data to check for
      \return       Whether data was found
     */
-    //[tags: self, find_items, compare_sub, find(), compare() ]
     bool contains(const ListBaseType& data) const {
         bool result = false;
         if (data.size_ > 0 && size_ >= data.size_) {
             const Size end = size_ - data.size_;
-            for (Key i=0; i<=end; ++i)
-                if (DataOp<T>::equal(data_+i, data.data_, data.size_))
+            for (Key i=0; i <= end; ++i)
+                if (DataEqual<T>::equal(data_+i, data.data_, data.size_))
                     { result = true; break; }
         }
         return result;
@@ -1059,11 +1011,10 @@ list.setempty() << 'a' << 'b';
      \tparam  T2    %List type to store right sublist
 
      \param  index  Index to split at, bad index (NONE or out-of-bounds) splits at end
-     \param  left   Set to sublist before index, set to this if bad index [out]
-     \param  right  Set to sublist after index, null if bad index [out]
+     \param  left   %Set to sublist before index, set to this if bad index [out]
+     \param  right  %Set to sublist after index, null if bad index [out]
      \return        Whether successful, false if bad index
     */
-    //[tags: self, find_item!, split ]
     template<class T1,class T2>
     bool splitat(Key index, T1& left, T2& right) const {
         bool result;
@@ -1087,10 +1038,9 @@ list.setempty() << 'a' << 'b';
      \tparam  T1    %List type to store left sublist
 
      \param  index  Index to split at, bad index (NONE or out-of-bounds) splits at end
-     \param  left   Set to sublist before index, set to this if bad index [out]
+     \param  left   %Set to sublist before index, set to this if bad index [out]
      \return        Whether successful, false if bad index
     */
-    //[tags: self, find_item!, split ]
     template<class T1>
     bool splitat(Key index, T1& left) const {
         bool result;
@@ -1112,11 +1062,10 @@ list.setempty() << 'a' << 'b';
      \tparam  T2    %List type to store right sublist
 
      \param  index  Index to split at, bad index (NONE or out-of-bounds) splits at end
-     \param  left   vNull (ignored)
-     \param  right  Set to sublist after index, null if bad index [out]
+     \param  left   vNULL (ignored)
+     \param  right  %Set to sublist after index, null if bad index [out]
      \return        Whether successful, false if bad index
     */
-    //[tags: self, find_item!, split ]
     template<class T2>
     bool splitat(Key index, ValNull left, T2& right) const {
         EVO_PARAM_UNUSED(left);
@@ -1137,10 +1086,9 @@ list.setempty() << 'a' << 'b';
      - Can use methods like find() or findany() for index
      - Sets this to sublist before index, unchanged if bad index [out]
      .
-     \param  index  Index to split at, bad index (NONE or out-of-bounds) splits at end
+     \param  index  Index to split at, bad index (NONE or out-of-bounds) splits at end (i.e. unchanged)
      \return        Whether successful, false if bad index
     */
-    //[tags: self, find_item!, split, set() ]
     bool splitat_setl(Key index) {
         bool result;
         if (index >= size_) {
@@ -1156,11 +1104,10 @@ list.setempty() << 'a' << 'b';
      - Can use methods like find() or findany() for index
      - Sets this to sublist before index, unchanged if bad index [out]
      .
-     \param  index  Index to split at, bad index (NONE or out-of-bounds) splits at end
-     \param  right  Set to sublist after index, null if bad index [out]
+     \param  index  Index to split at, bad index (NONE or out-of-bounds) splits at end (i.e. unchanged)
+     \param  right  %Set to sublist after index, null if bad index [out]
      \return        Whether successful, false if bad index
     */
-    //[tags: self, find_item!, split, set() ]
     template<class T2>
     bool splitat_setl(Key index, T2& right) {
         bool result;
@@ -1182,7 +1129,6 @@ list.setempty() << 'a' << 'b';
      \param  index  Index to split at, bad index (NONE or out-of-bounds) splits at end
      \return        Whether successful, false if bad index
     */
-    //[tags: self, find_item!, split, set() ]
     bool splitat_setr(Key index) {
         bool result;
         if (index >= size_) {
@@ -1200,10 +1146,9 @@ list.setempty() << 'a' << 'b';
      - Sets this to sublist after index, null if bad index [out]
      .
      \param  index  Index to split at, bad index (NONE or out-of-bounds) splits at end
-     \param  left   Set to sublist before index, set to this if bad index [out]
+     \param  left   %Set to sublist before index, set to this if bad index [out]
      \return        Whether successful, false if bad index
     */
-    //[tags: self, find_item!, split, set() ]
     template<class T1>
     bool splitat_setr(Key index, T1& left) {
         bool result;
@@ -1227,13 +1172,12 @@ list.setempty() << 'a' << 'b';
      \param  size  Trim size as item count to remove
      \return       This
     */
-    //[tags: trim, slice, unshare() ]
     ListType& triml(Size size) {
         if (size > size_)
             size = size_;
         if (size > 0) {
             size_ -= size;
-            data_  = data_ + size;
+            data_ += size;
         }
         return *this;
     }
@@ -1244,7 +1188,6 @@ list.setempty() << 'a' << 'b';
      \param  size  Trim size as item count to remove
      \return       This
     */
-    //[tags: trim, slice, unshare() ]
     ListType& trimr(Size size) {
         if (size > 0) {
             if (size < size_)
@@ -1264,7 +1207,6 @@ list.setempty() << 'a' << 'b';
      \param  size  Size to truncate to as item count
      \return       This
     */
-    //[tags: trim, slice, unshare() ]
     ListType& truncate(Size size=0) {
         if (size < size_) {
             size_       = size;
@@ -1277,14 +1219,12 @@ list.setempty() << 'a' << 'b';
 
     // SLICE
 
-    // TODO: link slicing page
     /** Slice beginning items.
      - This non-destructively trims beginning items
      .
      \param  index  Start index of new slice, END to slice (remove) all items from beginning
      \return        This
     */
-    //[tags: self, slice, trim! ]
     ListType& slice(Key index) {
         if (index > 0) {
             if (index >= size_) {
@@ -1307,13 +1247,11 @@ list.setempty() << 'a' << 'b';
      \param  size   Slice size as item count, ALL for all from index
      \return        This
     */
-    //[tags: self, slice, trim!, info_size!, unshare() ]
     ListType& slice(Key index, Size size) {
         if (index > 0) {
             if (index >= size_) {
                 // Empty end slice
                 size_ = 0;
-                // TODO - could still be terminated
                 #if EVO_LIST_OPT_REFTERM
                     terminated_ = false;
                 #endif
@@ -1345,7 +1283,6 @@ list.setempty() << 'a' << 'b';
      \param  index2  End index of new slice (this item not included), END for all after index1
      \return         This
     */
-    //[tags: slice, trim!, info_size!, unshare() ]
     ListType& slice2(Key index1, Key index2)
         { return slice(index1, (index1 < index2 ? index2-index1 : 0)); }
 
@@ -1355,7 +1292,6 @@ list.setempty() << 'a' << 'b';
      .
      \return  This
     */
-    //[tags: slice, unshare(), reserve() ]
     ListType& unslice() {
         if (buf_.ptr != NULL && buf_.header->used > size_) {
             if (buf_.header->refs > 1) {
@@ -1363,8 +1299,8 @@ list.setempty() << 'a' << 'b';
                 --buf_.header->refs;
                 if (size_ > 0) {
                     assert( data_ != NULL );
-                    buf_.ptr = (Item*)buf_.memalloc(SizeOp::init(size_+1), size_, buf_.header);
-                    ContainerOp<Item>::init(buf_.ptr, data_, size_);
+                    buf_.ptr = (Item*)buf_.memalloc(Capacity::init(size_+1), size_, buf_.header);
+                    DataInit<Item>::init(buf_.ptr, data_, size_);
                        data_ = buf_.ptr;
                 } else {
                     buf_.header = NULL;
@@ -1393,7 +1329,6 @@ list.setempty() << 'a' << 'b';
      .
      \return  Data pointer (mutable).
     */
-    //[tags: info_item ]
     T* dataM()
         { unshare(); return data_; }
 
@@ -1405,7 +1340,6 @@ list.setempty() << 'a' << 'b';
      \param  index  Item index
      \return        Given item (mutable)
     */
-    //[tags: info_item ]
     T& operator()(Key index)
         { assert( index < size_ ); unshare(); return data_[index]; }
 
@@ -1418,11 +1352,10 @@ list.setempty() << 'a' << 'b';
      \param  index  Item index
      \return        Given item (mutable)
     */
-    //[tags: info_item ]
     T& itemM(Key index)
         { assert( index < size_ ); unshare(); return data_[index]; }
 
-    /** Set new capacity (modifier).
+    /** %Set new capacity (modifier).
      - Consider using reserve() instead to allocate additional capacity in advance
      - Items that don't fit new capacity are removed, even if buffer isn't used
      - Effectively calls unshare() if buffer is shared
@@ -1432,7 +1365,6 @@ list.setempty() << 'a' << 'b';
      \param  size  New capacity
      \return       This
     */
-    //[tags: self, capacity, size(), dataM() ]
     ListType& capacity(Size size) {
         #if !EVO_LIST_OPT_LAZYBUF
             // Lazy buffer disabled
@@ -1473,7 +1405,7 @@ list.setempty() << 'a' << 'b';
                             unsliceBuffer(size_);
                             if (size < size_) {
                                 // Shrinking capacity, removing items
-                                ContainerOp<T>::unInit(buf_.ptr+size, buf_.header->used-size);
+                                DataInit<T>::uninit(buf_.ptr+size, buf_.header->used-size);
                                 buf_.ptr          = buf_.memrealloc(size);
                                 buf_.header->used = size;
                                 size_             = size;
@@ -1510,7 +1442,7 @@ list.setempty() << 'a' << 'b';
                         size_ = size;
                     buf_.ptr = buf_.memalloc(size, size_, buf_.header);
                     if (size_ > 0)
-                        ContainerOp<T>::init(buf_.ptr, data_, size_);
+                        DataInit<T>::init(buf_.ptr, data_, size_);
                     data_ = buf_.ptr;
                 } else {
                     assert( data_ != NULL );
@@ -1538,7 +1470,7 @@ list.setempty() << 'a' << 'b';
                     // Lazy buffer disabled so use buffer
                     buf_.ptr = buf_.memalloc(size, size_, buf_.header);
                     if (size_ > 0) {
-                        ContainerOp<T>::init(buf_.ptr, data_, size_);
+                        DataInit<T>::init(buf_.ptr, data_, size_);
                         data_ = buf_.ptr;
                     } else if (data_ != NULL)
                         data_ = buf_.ptr;
@@ -1558,7 +1490,7 @@ list.setempty() << 'a' << 'b';
         return *this;
     }
 
-    /** Set minimum capacity (modifier).
+    /** %Set minimum capacity (modifier).
      - This increases capacity to given minimum if it's less
      - Effectively calls unshare() if capacity changes and buffer is shared
      - May still reference external data even though buffer is allocated
@@ -1567,7 +1499,6 @@ list.setempty() << 'a' << 'b';
      \param  min  Minimum capacity
      \return      This
     */
-    //[tags: self, capacity, size(), data() ]
     ListType& capacitymin(Size min) {
         if (buf_.header == NULL)
             capacity(size_ > min ? size_ : min);
@@ -1576,7 +1507,7 @@ list.setempty() << 'a' << 'b';
         return *this;
     }
 
-    /** Set maximum capacity (modifier).
+    /** %Set maximum capacity (modifier).
      - This reduces capacity to given maximum if it's greater
      - Items that don't fit new capacity are removed, even if buffer isn't used
      - Effectively calls unshare() if capacity changes and buffer is shared
@@ -1586,7 +1517,6 @@ list.setempty() << 'a' << 'b';
      \param  max  Maximum capacity
      \return      This
     */
-    //[tags: self, capacity, size(), data() ]
     ListType& capacitymax(Size max) {
         if (buf_.header != NULL && buf_.header->size > max)
             capacity(max);
@@ -1605,10 +1535,9 @@ list.setempty() << 'a' << 'b';
      .
      \return  This
     */
-    //[tags: capacity, size(), unshare(), reserve() ]
     ListType& compact() {
         if (buf_.header != NULL && buf_.header->refs == 1) {
-            const Size min = size_ + CONSERVE; // TODO: protect Size overflow
+            const Size min = size_ + CONSERVE;
             if (buf_.header->size > min)
                 capacity(min);
         }
@@ -1617,13 +1546,13 @@ list.setempty() << 'a' << 'b';
 
     /** Reserve capacity for additional items (modifier).
      - Use to make buffer unique (not shared) and writable while reserving extra space
-     - This effectively calls unshare()
+     - This effectively calls unshare(), though may still be sliced if prefer_realloc is true
      .
-     \param  size  Size as item count to reserve
-     \return       This
+     \param  size            Size as item count to reserve
+     \param  prefer_realloc  Advanced: True to prefer realloc for certain conditition where would otherwise unslice via alloc and move to new buffer
+     \return                 This
     */
-    //[tags: capacity, size(), add(), dataM(), unshare(), compact() ]
-    ListType& reserve(Size size) {
+    ListType& reserve(Size size, bool prefer_realloc=false) {
         const Size minsize = size_ + size;
         if (buf_.header != NULL) {
             #if EVO_LIST_OPT_LAZYBUF
@@ -1634,7 +1563,7 @@ list.setempty() << 'a' << 'b';
                         assert( buf_.header->used == 0 );
                         buf_.ptr = (Item*)(buf_.header + 1);
                         if (size_ > 0)
-                            ContainerOp<Item>::init(buf_.ptr, data_, size_);
+                            DataInit<Item>::init(buf_.ptr, data_, size_);
                         buf_.header->used = size_;
                         data_ = buf_.ptr;
                         #if EVO_LIST_OPT_REFTERM
@@ -1656,19 +1585,21 @@ list.setempty() << 'a' << 'b';
                 assert( buf_.ptr != NULL );
                 --buf_.header->refs;
             } else {
-                // Already unique, ensure buffer is ready -- leave sliced items for later
+                // Already unique, ensure buffer is ready, unslice if sliced
                 assert( buf_.header->refs == 1 );
                 assert( buf_.ptr != NULL );
                 if (minsize > buf_.header->size) {
-                    // TODO: unslice?
                     if (data_ < buf_.ptr) {
+                        // Realloc previous buffer
                         data_ = buf_.ptr = buf_.memrealloc(minsize);
-                    } else {
+                    } else if (prefer_realloc || data_ == buf_.ptr) {
+                        // Either not sliced or prefer realloc
                         assert( data_ >= buf_.ptr && data_ <= buf_.ptr+buf_.header->used );
-                        const Size offset = (data_ - buf_.ptr);
+                        const Size offset = (Size)(data_ - buf_.ptr);
                         buf_.ptr = buf_.memrealloc(minsize);
                         data_ = buf_.ptr + offset;
-                    }
+                    } else
+                        goto newbuf;    // unslice and move to new buffer (below)
                 } else if (data_ <= EVO_PEMPTY)
                     data_ = buf_.ptr;
                 return *this;
@@ -1677,12 +1608,13 @@ list.setempty() << 'a' << 'b';
 
         // New buffer
         if (minsize > 0) {
+        newbuf:
             if (size_ > 0) {
-                buf_.ptr = buf_.memalloc(SizeOp::init(minsize+1), size_, buf_.header);
-                ContainerOp<T>::init(buf_.ptr, data_, size_);
+                buf_.ptr = buf_.memalloc(Capacity::init(minsize+1), size_, buf_.header);
+                DataInit<T>::init(buf_.ptr, data_, size_);
                 data_ = buf_.ptr;
             } else
-                data_ = buf_.ptr = buf_.memalloc(SizeOp::init(minsize+1), 0, buf_.header);
+                data_ = buf_.ptr = buf_.memalloc(Capacity::init(minsize+1), 0, buf_.header);
             #if EVO_LIST_OPT_REFTERM
                 terminated_ = false;
             #endif
@@ -1700,7 +1632,6 @@ list.setempty() << 'a' << 'b';
      .
      \return  This
     */
-    //[tags: shared, reserve() ]
     ListType& unshare() {
         if (buf_.header != NULL) {
             #if EVO_LIST_OPT_LAZYBUF
@@ -1711,7 +1642,7 @@ list.setempty() << 'a' << 'b';
                         assert( buf_.header->used == 0 );
                         buf_.ptr = (T*)(buf_.header + 1);
                         if (size_ > 0)
-                            ContainerOp<T>::init(buf_.ptr, data_, size_);
+                            DataInit<T>::init(buf_.ptr, data_, size_);
                         buf_.header->used = size_;
                         data_ = buf_.ptr;
                         #if EVO_LIST_OPT_REFTERM
@@ -1736,7 +1667,6 @@ list.setempty() << 'a' << 'b';
                 // Already unique
                 assert( buf_.header->refs == 1 );
                 assert( buf_.ptr != NULL );
-                // TODO?
                 if (data_ <= EVO_PEMPTY)
                     data_ = buf_.ptr;
                 return *this;
@@ -1746,8 +1676,8 @@ list.setempty() << 'a' << 'b';
         // New buffer
         if (size_ > 0) {
             assert( data_ != NULL );
-            buf_.ptr = (T*)buf_.memalloc(SizeOp::init(size_+1), size_, buf_.header);
-            ContainerOp<T>::init(buf_.ptr, data_, size_);
+            buf_.ptr = (T*)buf_.memalloc(Capacity::init(size_+1), size_, buf_.header);
+            DataInit<T>::init(buf_.ptr, data_, size_);
                data_ = buf_.ptr;
             #if EVO_LIST_OPT_REFTERM
                 terminated_ = false;
@@ -1769,7 +1699,6 @@ list.setempty() << 'a' << 'b';
      \param  size  New size as item count
      \return       This
     */
-    //[tags: capacity, set_ptr!, size(), dataM(), unshare() ]
     ListType& resize(Size size) {
         if (size == 0) {
             clear();
@@ -1786,11 +1715,11 @@ list.setempty() << 'a' << 'b';
                             // Grow previous buffer
                             buf_.memrealloc(size);
                         if (size <= size_) {
-                            ContainerOp<T>::init(buf_.ptr, data_, size);
+                            DataInit<T>::init(buf_.ptr, data_, size);
                         } else {
                             if (size_ > 0)
-                                ContainerOp<T>::init(buf_.ptr, data_, size_);
-                            ContainerOp<T>::initTailSafe(buf_.ptr, size_, size);
+                                DataInit<T>::init(buf_.ptr, data_, size_);
+                            DataInit<T>::init_tail_safe(buf_.ptr, size_, size);
                         }
                         data_ = buf_.ptr;
                         buf_.header->used = size_ = size;
@@ -1809,7 +1738,7 @@ list.setempty() << 'a' << 'b';
                         buf_.ptr = buf_.memrealloc(size);
                     if (buf_.header->used < size) {
                         // Add items
-                        ContainerOp<T>::initTailSafe(buf_.ptr, buf_.header->used, size);
+                        DataInit<T>::init_tail_safe(buf_.ptr, buf_.header->used, size);
                         buf_.header->used = size;
                     }
                     data_ = buf_.ptr;
@@ -1825,12 +1754,12 @@ list.setempty() << 'a' << 'b';
             // New buffer
             if (size_ > 0) {
                 assert( data_ != NULL );
-                buf_.ptr = (T*)buf_.memalloc(SizeOp::init(size+1), size, buf_.header);
-                ContainerOp<T>::initSafe(buf_.ptr, size, data_, size_);
+                buf_.ptr = (T*)buf_.memalloc(Capacity::init(size+1), size, buf_.header);
+                DataInit<T>::init_safe(buf_.ptr, size, data_, size_);
                 data_ = buf_.ptr;
             } else {
-                data_ = buf_.ptr = (T*)buf_.memalloc(SizeOp::init(size+1), size, buf_.header);
-                ContainerOp<T>::initSafe(data_, size);
+                data_ = buf_.ptr = (T*)buf_.memalloc(Capacity::init(size+1), size, buf_.header);
+                DataInit<T>::init_safe(data_, size);
             }
             size_ = size;
             #if EVO_LIST_OPT_REFTERM
@@ -1842,14 +1771,13 @@ list.setempty() << 'a' << 'b';
 
     // COPY
 
-    /** Set as full (unshared) copy using data pointer (modifier).
+    /** %Set as full (unshared) copy using data pointer (modifier).
      - Effectively calls unshare()
      .
      \param  data  Data to copy
      \param  size  Data size as item count
      \return       This
     */
-    //[tags: self, set_ptr, set, slice(), unshare() ]
     ListType& copy(const Item* data, Size size) {
         if (buf_.header != NULL) {
             if (buf_.header->refs > 1) {
@@ -1860,15 +1788,14 @@ list.setempty() << 'a' << 'b';
                 assert( buf_.header->refs == 1 );
                 buf_.ptr = (T*)(buf_.header + 1);
                 if (buf_.header->used > 0) {
-                    // TODO? don't uninitialize overwritten items??
-                    ContainerOp<T>::unInit(buf_.ptr, buf_.header->used);
+                    DataInit<T>::uninit(buf_.ptr, buf_.header->used);
                     buf_.header->used = 0;
                 }
                 if (size > buf_.header->size)
                     // Grow buffer
                     buf_.memrealloc(size);
                 if (size > 0) {
-                    ContainerOp<T>::init(buf_.ptr, data, size);
+                    DataInit<T>::init(buf_.ptr, data, size);
                     buf_.header->used = size;
                     data_ = buf_.ptr;
                 } else
@@ -1881,8 +1808,8 @@ list.setempty() << 'a' << 'b';
         // New buffer
         if (size > 0) {
             assert( data != NULL );
-            data_ = buf_.ptr = (T*)buf_.memalloc(SizeOp::init(size+1), size, buf_.header);
-            ContainerOp<T>::init(buf_.ptr, data, size);
+            data_ = buf_.ptr = (T*)buf_.memalloc(Capacity::init(size+1), size, buf_.header);
+            DataInit<T>::init(buf_.ptr, data, size);
         } else {
             buf_.header = NULL;
             buf_.ptr    = NULL;
@@ -1895,13 +1822,12 @@ list.setempty() << 'a' << 'b';
         return *this;
     }
 
-    /** Set as full (unshared) copy of another list (modifier).
+    /** %Set as full (unshared) copy of another list (modifier).
      - Effectively calls unshare()
      .
      \param  data  Data to copy
      \return       This
     */
-    //[tags: self, set_list, set, slice(), unshare() ]
     ListType& copy(const ListBaseType& data) {
         if (data.data_ == NULL)
             set();
@@ -1919,7 +1845,6 @@ list.setempty() << 'a' << 'b';
      \param  size  Size as item count to append
      \return       This
     */
-    //[tags: add_item, add, addrem_n, remove(), reserve() ]
     ListType& addnew(Size size=1)
         { modAppend(EVO_PDEFAULT, size); return *this; }
 
@@ -1931,7 +1856,6 @@ list.setempty() << 'a' << 'b';
      \param  size   Size as item count to append
      \return        This
     */
-    //[tags: self, add, addrem_ptr, set_ptr, remove(), reserve() ]
     ListType& add(const Item* data, Size size)
         { modAppend(data, size); return *this; }
 
@@ -1942,18 +1866,6 @@ list.setempty() << 'a' << 'b';
      \param  data  Data to append
      \return       This
     */
-    //[tags: self, add, addrem_list, set_list, remove(), reserve() ]
-    ListType& add(const ListType& data)
-        { modAppend(data.data_, data.size_); return *this; }
-
-    /** Append new items copied from another list (modifier).
-     - Effectively calls unshare()
-     - Removes items sliced from end -- see unslice()
-     .
-     \param  data  Data to append
-     \return       This
-    */
-    //[tags: self, add, addrem_list, set_list, remove(), reserve() ]
     ListType& add(const ListBaseType& data)
         { modAppend(data.data_, data.size_); return *this; }
 
@@ -1964,7 +1876,6 @@ list.setempty() << 'a' << 'b';
      \param  data  Data to append
      \return       This
     */
-    //[tags: self, add, add_item, addrem_item, set_item, remove(), reserve() ]
     ListType& add(const Item& data)
         { modAppend(&data, 1); return *this; }
 
@@ -1973,31 +1884,14 @@ list.setempty() << 'a' << 'b';
      - Append operators can be chained\n
        Example:
        \code
-// Clear character list and append two characters
-list << vEmpty << 'a' << 'b';
+        // Clear character list and append two characters
+        list << vEMPTY << 'a' << 'b';
        \endcode
      .
      \param  data  Data to append
      \return       This
     */
-    //[tags: self, add_item!, set_item ]
     ListType& operator<<(const Item& data)
-        { return add(data); }
-
-    /** Append operator.
-     - Same as add(const ListType&)
-     - Append operators can be chained\n
-       Example:
-       \code
-// Clear list and append two other lists
-list << vEmpty << list2 << list3;
-       \endcode
-     .
-     \param  data  Data to append
-     \return       This
-    */
-    //[tags: self, add_list!, set_list ]
-    ListType& operator<<(const ListType& data)
         { return add(data); }
 
     /** Append operator.
@@ -2005,14 +1899,13 @@ list << vEmpty << list2 << list3;
      - Append operators can be chained\n
        Example:
        \code
-// Clear list and append two other lists
-list << vEmpty << list2 << list3;
+        // Clear list and append two other lists
+        list << vEMPTY << list2 << list3;
        \endcode
      .
      \param  data  Data to append
      \return       This
     */
-    //[tags: self, add_list!, set_list ]
     ListType& operator<<(const ListBaseType& data)
         { return add(data); }
 
@@ -2021,14 +1914,13 @@ list << vEmpty << list2 << list3;
      - Append operators can be chained\n
        Example:
        \code
-// Clear character list and append two characters
-list << vNull << 'a' << 'b';
+        // Clear character list and append two characters
+        list << vNULL << 'a' << 'b';
        \endcode
      .
-     \param  val  vNull
+     \param  val  vNULL
      \return      This
     */
-    //[tags: self, set_null, add_item! ]
     ListType& operator<<(const ValNull& val) {
         EVO_PARAM_UNUSED(val);
         clear(); data_ = NULL; return *this;
@@ -2038,14 +1930,13 @@ list << vNull << 'a' << 'b';
      - Append operators can be chained\n
        Example:
        \code
-// Clear character list and append two characters
-list << vEmpty << 'a' << 'b';
+        // Clear character list and append two characters
+        list << vEMPTY << 'a' << 'b';
        \endcode
      .
-     \param  val  vEmpty
+     \param  val  vEMPTY
      \return      This
     */
-    //[tags: self, set_empty, add_item! ]
     ListType& operator<<(const ValEmpty& val) {
         EVO_PARAM_UNUSED(val);
         clear(); data_ = EVO_PDEFAULT; return *this;
@@ -2060,7 +1951,6 @@ list << vEmpty << 'a' << 'b';
      \param  size  Size as item count to prepend
      \return       This
     */
-    //[tags: prepend_item, prepend, addrem_n, remove(), reserve() ]
     ListType& prependnew(Size size=1)
         { modPrepend(EVO_PDEFAULT, size); return *this; }
 
@@ -2072,7 +1962,6 @@ list << vEmpty << 'a' << 'b';
      \param  size  Size as item count to prepend
      \return       This
     */
-    //[tags: self, prepend, addrem_ptr, set_ptr, remove(), reserve() ]
     ListType& prepend(const Item* data, Size size)
         { modPrepend(data, size); return *this; }
 
@@ -2083,18 +1972,6 @@ list << vEmpty << 'a' << 'b';
      \param  data  Data to prepend
      \return       This
     */
-    //[tags: self, prepend, addrem_list, set_list, remove(), reserve() ]
-    ListType& prepend(const ListType& data)
-        { modPrepend(data.data_, data.size_); return *this; }
-
-    /** Prepend new items copied from another list (modifier).
-     - Effectively calls unshare()
-     - Removes items sliced from beginning -- see unslice()
-     .
-     \param  data  Data to prepend
-     \return       This
-    */
-    //[tags: self, prepend, addrem_list, set_list, remove(), reserve() ]
     ListType& prepend(const ListBaseType& data)
         { modPrepend(data.data_, data.size_); return *this; }
 
@@ -2104,7 +1981,6 @@ list << vEmpty << 'a' << 'b';
      \param  data  Data to prepend
      \return       This
     */
-    //[tags: self, prepend, prepend_item, addrem_item, set_item, remove(), reserve() ]
     ListType& prepend(const Item& data)
         { modPrepend(&data, 1); return *this; }
 
@@ -2115,7 +1991,6 @@ list << vEmpty << 'a' << 'b';
      \param  size   Size as item count to insert
      \return        Inserted index
     */
-    //[tags: insert_item, insert, addrem_n, remove(), reserve() ]
     Size insertnew(Key index, Size size=1)
         { return modInsert(index, EVO_PDEFAULT, size); }
 
@@ -2125,7 +2000,6 @@ list << vEmpty << 'a' << 'b';
      \param  size   Size as item count to insert
      \return        Inserted index
     */
-    //[tags: self, insert, addrem_ptr, set_ptr, remove(), reserve() ]
     Size insert(Key index, const Item* data, Size size)
         { return modInsert(index, data, size); }
 
@@ -2134,16 +2008,6 @@ list << vEmpty << 'a' << 'b';
      \param  data   Data to insert
      \return        Inserted index
     */
-    //[tags: self, insert, addrem_list, set_list, remove(), reserve() ]
-    Size insert(Key index, const ListType& data)
-        { return modInsert(index, data.data_, data.size_); }
-
-    /** Insert new items copied from another list (modifier).
-     \param  index  Insert index, END to append
-     \param  data   Data to insert
-     \return        Inserted index
-    */
-    //[tags: self, insert, addrem_list, set_list, remove(), reserve() ]
     Size insert(Key index, const ListBaseType& data)
         { return modInsert(index, data.data_, data.size_); }
 
@@ -2152,7 +2016,6 @@ list << vEmpty << 'a' << 'b';
      \param  data   Data to insert
      \return        Inserted index
     */
-    //[tags: self, insert, insert_item, addrem_item, set_item, remove(), reserve() ]
     Size insert(Key index, const Item& data)
         { return modInsert(index, &data, 1); }
 
@@ -2161,11 +2024,10 @@ list << vEmpty << 'a' << 'b';
     /** Remove items (modifier).
      \param  index  Remove index
      \param  size   Remove size, ALL for all items from index
-     \return        This
+     \return        Number of items removed
     */
-    //[tags: pop_item!, set!, slice(), trim! ]
-    ListType& remove(Key index, Size size=1)
-        { modRemove(index, size); return *this; }
+    Size remove(Key index, Size size=1)
+        { return modRemove(index, size); }
 
     // POP
 
@@ -2176,11 +2038,10 @@ list << vEmpty << 'a' << 'b';
      \param  index  Index to pop
      \return        Whether successful, false if empty or bad index
     */
-    //[tags: self, pop, remove(), add(const Item&) ]
     bool pop(T& item, Key index) {
         bool result;
         if (index < size_) {
-            ContainerOp<T>::copy(&item, data_+index, 1);
+            DataInit<T>::copy(&item, data_+index, 1);
             modRemove(index, 1);
             result = true;
         } else 
@@ -2195,12 +2056,11 @@ list << vEmpty << 'a' << 'b';
      \param  item  Stores popped item [out]
      \return       Whether successful, false if empty
     */
-    //[tags: self, pop, pop_item, remove(), add(const Item&) ]
     bool pop(T& item) {
         bool result;
         if (size_ > 0) {
             const Size index = size_ - 1;
-            ContainerOp<T>::copy(&item, data_+index, 1);
+            DataInit<T>::copy(&item, data_+index, 1);
             modRemove(index, 1);
             result = true;
         } else 
@@ -2214,7 +2074,6 @@ list << vEmpty << 'a' << 'b';
      .
      \return  Popped item pointer (const), NULL if empty
     */
-    //[tags: self, pop, remove(), add(const Item&) ]
     const Item* pop() {
         const Item* result;
         if (size_ > 0)
@@ -2231,11 +2090,10 @@ list << vEmpty << 'a' << 'b';
      \param  item  Stores popped item [out]
      \return       Whether successful, false if empty
     */
-    //[tags: self, pop, pop_item, remove(), add(const Item&) ]
     bool popq(T& item) {
         bool result;
         if (size_ > 0) {
-            ContainerOp<T>::copy(&item, data_, 1);
+            DataInit<T>::copy(&item, data_, 1);
             modRemove(0, 1);
             result = true;
         } else
@@ -2249,7 +2107,6 @@ list << vEmpty << 'a' << 'b';
      .
      \return  Popped item pointer (const), NULL if empty
     */
-    //[tags: self, pop, remove(), add(const Item&) ]
     const Item* popq() {
         const Item* result;
         if (size_ > 0) {
@@ -2271,7 +2128,6 @@ list << vEmpty << 'a' << 'b';
      \param  index  Start index, END to start at end and append
      \param  size   Size to fill as item count from index, ALL for all items from index, 0 to do nothing
     */
-    //[tags: replace, resize() ]
     ListType& fill(const Item& item, Key index=0, Size size=ALL) {
         if (index == END)
             index = size_;
@@ -2283,7 +2139,7 @@ list << vEmpty << 'a' << 'b';
                 advResize(newsize);
             else
                 unshare();
-            DataOp<T>::fill(data_+index, size, item);
+            DataFill<T>::fill(data_+index, size, item);
         }
         return *this;
     }
@@ -2297,7 +2153,6 @@ list << vEmpty << 'a' << 'b';
      \param  size   Replacement data size as item count
      \return        This
     */
-    //[tags: replace, set_ptr!, add_ptr!, remove(), resize() ]
     ListType& replace(Key index, Size rsize, const Item* data, Size size) {
         if (rsize == 0)
             modInsert(index, data, size);
@@ -2310,9 +2165,6 @@ list << vEmpty << 'a' << 'b';
         return *this;
     }
 
-    // TODO
-    //replace(Key index, Size size, const Item& data, Size copies=1)
-
     // MOVE / SWAP
 
     /** Move item to position (modifier).
@@ -2323,7 +2175,6 @@ list << vEmpty << 'a' << 'b';
      \param  dest   Destination index to move item to, END to move to end
      \param  index  Item index to move from
     */
-    //[tags: self, move, set_item!, add_item!, remove() ]
     void move(Key dest, Key index) {
         if (index < size_) {
             if (dest >= size_)
@@ -2351,7 +2202,6 @@ list << vEmpty << 'a' << 'b';
      \param  srcindex  Source index to move items from
      \param  size      Size as item count to move from source
     */
-    //[tags: self, move, set_list!, add_list!, remove() ]
     Size move(Key dest, ListType& src, Key srcindex=0, Size size=ALL) {
         const Size maxsize = (srcindex < src.size_ ? src.size_-srcindex : 0);
         if (size > maxsize)
@@ -2368,10 +2218,10 @@ list << vEmpty << 'a' << 'b';
                             assert( size_ > 0 );
                             buf_.ptr = (T*)(buf_.header + 1);
                             if (dest > 0)
-                                ContainerOp<T>::init(buf_.ptr, data_, dest);
+                                DataInit<T>::init(buf_.ptr, data_, dest);
                             const Size nextindex = dest + size;
                             if (nextindex < newused)
-                                ContainerOp<T>::init(buf_.ptr+nextindex, data_+dest, newused-nextindex);
+                                DataInit<T>::init(buf_.ptr+nextindex, data_+dest, newused-nextindex);
                             buf_.header->used = newused;
                             data_             = buf_.ptr;
                             size_             = newused;
@@ -2390,11 +2240,11 @@ list << vEmpty << 'a' << 'b';
                     Size offset;
                     if (buf_.header->used > 0) {
                         assert( data_ >= buf_.ptr && data_ <= buf_.ptr+buf_.header->used );
-                        offset = data_ - buf_.ptr;
+                        offset = (Size)(data_ - buf_.ptr);
 
                         const Size tailsize = buf_.header->used - size_ - offset;
                         if (tailsize > 0) {
-                            ContainerOp<T>::unInit(data_+size_, tailsize);
+                            DataInit<T>::uninit(data_+size_, tailsize);
                             buf_.header->used -= tailsize;
                         }
                     } else {
@@ -2403,7 +2253,7 @@ list << vEmpty << 'a' << 'b';
                     }
                     if (newused > buf_.header->size) {
                         // Move to new bigger buffer
-                        Size newbufsize = SizeOp::grow(buf_.header->size);
+                        Size newbufsize = Capacity::grow(buf_.header->size);
                         if (newbufsize <= newused)
                             newbufsize = newused + 1; // Leave extra space
                         Header* newheader;
@@ -2414,7 +2264,7 @@ list << vEmpty << 'a' << 'b';
                         if (tailsize > 0)
                             memcpy(newbuf+dest+size, data_+dest, sizeof(T)*tailsize);
                         if (offset > 0)
-                            ContainerOp<T>::unInit(buf_.ptr, offset);
+                            DataInit<T>::uninit(buf_.ptr, offset);
                         buf_.memfree();
                         buf_.header = newheader;
                         buf_.ptr    = newbuf;
@@ -2423,7 +2273,7 @@ list << vEmpty << 'a' << 'b';
                         if (size > offset) {
                             // Shift beginning and end to make room
                             if (offset > 0) {
-                                ContainerOp<T>::unInit(buf_.ptr, offset);
+                                DataInit<T>::uninit(buf_.ptr, offset);
                                 if (dest > 0)
                                     memmove(buf_.ptr, data_, sizeof(T)*dest);
                                 data_ = buf_.ptr;
@@ -2436,7 +2286,7 @@ list << vEmpty << 'a' << 'b';
                             // Shift beginning to make room
                             const Size newoffset = offset - size;
                             data_ = buf_.ptr + newoffset;
-                            ContainerOp<T>::unInit(buf_.ptr, offset-newoffset);
+                            DataInit<T>::uninit(buf_.ptr, offset-newoffset);
                             if (dest > 0)
                                 memmove(data_, buf_.ptr+offset, sizeof(T)*dest);
                         }
@@ -2451,10 +2301,10 @@ list << vEmpty << 'a' << 'b';
             T* newbuf = buf_.memalloc(newused, newheader);
             if (size_ > 0) {
                 if (dest > 0)
-                    ContainerOp<T>::init(newbuf, data_, dest);
+                    DataInit<T>::init(newbuf, data_, dest);
                 const Size nextindex = dest + size;
                 if (nextindex < newheader->used)
-                    ContainerOp<T>::init(newbuf+nextindex, data_+dest, newheader->used-nextindex);
+                    DataInit<T>::init(newbuf+nextindex, data_+dest, newheader->used-nextindex);
             }
             data_ = buf_.replace(newbuf, newheader);
             size_ = buf_.header->used;
@@ -2466,7 +2316,6 @@ list << vEmpty << 'a' << 'b';
         return 0;
 
     movedata:
-        // TODO: handle diff allocator?
         if (src.buf_.ptr != NULL && src.buf_.header->refs == 1) {
             // Move from src buffer, is unique
             memcpy(data_+dest, src.data_+srcindex, sizeof(T)*size);
@@ -2485,7 +2334,6 @@ list << vEmpty << 'a' << 'b';
      \param  index1  Index of first item to swap
      \param  index2  Index of second item to swap
     */
-    //[tags: self, move, set_item!, add_item!, remove() ]
     void swap(Key index1, Key index2) {
         if (index1 != index2 && index1 < size_ && index2 < size_) {
             unshare();
@@ -2498,7 +2346,6 @@ list << vEmpty << 'a' << 'b';
      .
      \param  list  %List to swap with
     */
-    //[tags: self, move ]
     void swap(ListType& list)
         { EVO_IMPL_CONTAINER_SWAP(this, &list, ThisType); }
 
@@ -2509,7 +2356,6 @@ list << vEmpty << 'a' << 'b';
      .
      \return  This
     */
-    //[tags: alg, move!, set_item!, remove() ]
     ListType& reverse() {
         if (size_ > 0) {
             unshare();
@@ -2527,11 +2373,6 @@ list << vEmpty << 'a' << 'b';
         return *this;
     }
 
-    // TODO
-    //rand()
-    //sort()
-    //sortD()
-
     // ADVANCED
 
     /** Advanced: Resize while preserving existing data, POD items not initialized (modifier).
@@ -2548,9 +2389,8 @@ list << vEmpty << 'a' << 'b';
      \param  size  New size as item count
      \return       This
     */
-    //[tags: resize(), capacity, set_ptr!, size(), dataM(), unshare() ]
     ListType& advResize(Size size) {
-        // Copied from resize(), only difference is init() and initTailFast()
+        // Copied from resize(), only difference is init() and init_tail_fast()
         if (size == 0) {
             clear();
             capacity(0);
@@ -2566,11 +2406,11 @@ list << vEmpty << 'a' << 'b';
                             // Grow previous buffer
                             buf_.memrealloc(size);
                         if (size <= size_) {
-                            ContainerOp<T>::init(buf_.ptr, data_, size); // TODO: initPod()
+                            DataInit<T>::init(buf_.ptr, data_, size);
                         } else {
                             if (size_ > 0)
-                                ContainerOp<T>::init(buf_.ptr, data_, size_);
-                            ContainerOp<T>::initTailFast(buf_.ptr, size_, size);
+                                DataInit<T>::init(buf_.ptr, data_, size_);
+                            DataInit<T>::init_tail_fast(buf_.ptr, size_, size);
                         }
                         data_ = buf_.ptr;
                         buf_.header->used = size_ = size;
@@ -2589,7 +2429,7 @@ list << vEmpty << 'a' << 'b';
                         buf_.ptr = buf_.memrealloc(size);
                     if (buf_.header->used < size) {
                         // Add items
-                        ContainerOp<T>::initTailFast(buf_.ptr, buf_.header->used, size);
+                        DataInit<T>::init_tail_fast(buf_.ptr, buf_.header->used, size);
                         buf_.header->used = size;
                     }
                     data_ = buf_.ptr;
@@ -2605,12 +2445,12 @@ list << vEmpty << 'a' << 'b';
             // New buffer
             if (size_ > 0) {
                 assert( data_ != NULL );
-                buf_.ptr = (T*)buf_.memalloc(SizeOp::init(size+1), size, buf_.header);
-                ContainerOp<T>::init(buf_.ptr, size, data_, size_);
+                buf_.ptr = (T*)buf_.memalloc(Capacity::init(size+1), size, buf_.header);
+                DataInit<T>::init(buf_.ptr, size, data_, size_);
                 data_ = buf_.ptr;
             } else {
-                data_ = buf_.ptr = (T*)buf_.memalloc(SizeOp::init(size+1), size, buf_.header);
-                ContainerOp<T>::init(data_, size);
+                data_ = buf_.ptr = (T*)buf_.memalloc(Capacity::init(size+1), size, buf_.header);
+                DataInit<T>::init(data_, size);
             }
             size_ = size;
             #if EVO_LIST_OPT_REFTERM
@@ -2645,7 +2485,6 @@ list << vEmpty << 'a' << 'b';
      \param  inplace  Whether to try in-place edit, false to always use new buffer
      \return          Whether editing in-place, false if a new empty buffer was created
     */
-    //[tags: self, advBuffer(), adv, info_size! ]
     bool advEdit(Edit& edit, Size minsize, bool inplace=true) {
         assert( minsize > 0 );
         edit.clear();
@@ -2684,7 +2523,7 @@ list << vEmpty << 'a' << 'b';
 
     newbuf:
         // Create new edit buffer
-        edit.ptr  = (T*)buf_.memalloc(SizeOp::init(minsize+1), minsize, (Header*&)edit.header);
+        edit.ptr  = (T*)buf_.memalloc(Capacity::init(minsize+1), minsize, (Header*&)edit.header);
         edit.size = 0;
         return false;
     }
@@ -2695,7 +2534,6 @@ list << vEmpty << 'a' << 'b';
      .
      \param  edit  Edit data set from advEdit()
     */
-    //[tags: self, advBuffer(), adv, info_size! ]
     void advEditDone(Edit& edit) {
         assert( edit.ptr != NULL );
         if (edit.header == NULL) {
@@ -2727,7 +2565,6 @@ list << vEmpty << 'a' << 'b';
      \param  size  Size to resize to
      \return       Buffer pointer
     */
-    //[tags: self, advResize(), advSize(), adv, info_size! ]
     T* advBuffer(Size size) {
         advResize(size);
         return buf_.ptr;
@@ -2743,11 +2580,10 @@ list << vEmpty << 'a' << 'b';
      .
      \return  Buffer pointer, NULL for none
     */
-    //[tags: self, advResize(), advSize(), adv, info_size! ]
     T* advBuffer()
         { return buf_.ptr; }
 
-    /** Advanced: Set new size after writing directly to buffer.
+    /** Advanced: %Set new size after writing directly to buffer.
      - Used after calling advBuffer() and writing to buffer
      - \b Caution: Using this on non POD list can create/leave uninitialized items and undefined results
      - \b Caution: Data must be unique (not shared) when writing or results are undefined
@@ -2760,6 +2596,36 @@ list << vEmpty << 'a' << 'b';
         size_ = buf_.header->used = size;
     }
 
+    /** Advanced: Get buffer pointer to write/append (modifier).
+     - Used for appending by writing directly to buffer -- this calls unslice() and resrve() first to make room
+     - Call advWriteDone() after writing to adjust actual size used, skip if nothing written
+     - \b Caution: Results are undefined if buffer is accessed after addsize
+     - \b Caution: For non-POD type results are undefined if don't initialize new items items correctly
+     .
+     \param  addsize  Max size to write/append, must be at least 1
+     \return          Pointer to buffer to write to (after existing data)
+    */
+    T* advWrite(Size addsize) {
+        assert( addsize > 0 );
+        unslice();
+        reserve(addsize);
+        return buf_.ptr + buf_.header->used;
+    }
+
+    /** Advanced: Update size added after writing directly to buffer.
+     - Used after calling advWrite() and writing to buffer
+       - No need to call this if nothing written
+     - \b Caution: Using this on non POD list can create uninitialized items and undefined results
+     - \b Caution: Data must be unique (not shared) when writing or results are undefined -- advWrite() covers this
+     - \b Caution: No bounds checking is used on addsize
+     .
+     \param  addsize  Actual size written
+    */
+    void advWriteDone(Size addsize) {
+        assert( buf_.header != NULL );
+        size_ = buf_.header->used += addsize;
+    }
+
     /** Advanced: Get item (mutable).
      - \b Caution: Data must be unique (not shared) or results are undefined
      - \b Caution: Results are undefined if index is out of bounds -- though index is checked with assert()
@@ -2767,7 +2633,6 @@ list << vEmpty << 'a' << 'b';
      \param  index  Item index
      \return        Given item
     */
-    //[tags: adv, info_item! ]
     T& advItem(Key index) {
         assert( index < size_ );
         return data_[index];
@@ -2775,48 +2640,44 @@ list << vEmpty << 'a' << 'b';
 
     /** Advanced: Append new items without initializing (constructing) them.
      - \b Caution: Data must be unique (not shared) or results are undefined
-     - \b Caution: The new items must be initialized with DataOp::init() or removed with advRemove() before items are accessed, modified, or list is destroyed
+     - \b Caution: The new items must be initialized with DataInit::init_safe() or removed with advRemove() before items are accessed, modified, or list is destroyed
      - \b Caution: Results are undefined if new items are left uninitialized
      .
      \param  size  Size to append
     */
-    //[tags: adv_addrem, adv, add! ]
     void advAdd(Size size)
         { modAppend(NULL, size); }
 
     /** Advanced: Prepend new items without initializing (constructing) them.
      - \b Caution: Data must be unique (not shared) or results are undefined
-     - \b Caution: The new items must be initialized with DataOp::init() or removed with advRemove() before items are accessed, modified, or list is destroyed
+     - \b Caution: The new items must be initialized with DataInit::init_safe() or removed with advRemove() before items are accessed, modified, or list is destroyed
      - \b Caution: Results are undefined if new items are left uninitialized
      .
      \param  size  Size to prepend
     */
-    //[tags: adv_addrem, adv, prepend! ]
     void advPrepend(Size size)
         { modPrepend(NULL, size); }
 
     /** Advanced: Insert new items without initializing (constructing) them.
      - \b Caution: Data must be unique (not shared) or results are undefined
-     - \b Caution: The new items must be initialized with DataOp::init() or removed with advRemove() before items are accessed, modified, or list is destroyed
+     - \b Caution: The new items must be initialized with DataInit::init_safe() or removed with advRemove() before items are accessed, modified, or list is destroyed
      - \b Caution: Results are undefined if new items are left uninitialized
      .
      \param  index  Insert index (END for end of list)
      \param  size   Insert data size
      \return        Actual insert index
     */
-    //[tags: adv_addrem, adv, insert! ]
     Key advInsert(Key index, Size size)
         { return modInsert(index, NULL, size); }
 
     /** Advanced: Remove given items without uninitializing (destructing) them.
-     - \b Caution: Use only to remove uninitialized items -- use DataOp::unInit() to uninitialize items that have been initialized
+     - \b Caution: Use only to remove uninitialized items -- use DataInit::uninit() to uninitialize items that have been initialized
      - \b Caution: Data must be unique (not shared) or results are undefined
-     - \b Caution: Uninitialized items must be initialized with DataOp::init() or removed with advRemove() before items are accessed, modified, or list is destroyed
+     - \b Caution: Uninitialized items must be initialized with DataInit::init_safe() or removed with advRemove() before items are accessed, modified, or list is destroyed
      .
      \param  index  Remove index
      \param  size   Remove size as item count, ALL for all from index
     */
-    //[tags: adv_addrem, adv, remove() ]
     void advRemove(Key index, Size size)
         { modRemove(index, size, false); }
 
@@ -2827,7 +2688,6 @@ list << vEmpty << 'a' << 'b';
      \param  index1  Index of first item to swap
      \param  index2  Index of second item to swap
     */
-    //[tags: adv, move! ]
     void advSwap(Key index1, Key index2) {
         assert( index1 < size_ && index2 < size_ );
         char buf[sizeof(T)];
@@ -2870,16 +2730,18 @@ list << vEmpty << 'a' << 'b';
     const Item* utBuffer() const
         { return buf_.ptr; }
     void utSetEmptyBuffer(bool setempty, size_t size=1) {
-        resize(size);
-        ContainerOp<T>::unInit(buf_.ptr, size);
+        assert( size < IntegerT<Size>::MAX );
+        resize((Size)size);
+        DataInit<T>::uninit(buf_.ptr, (Size)size);
         buf_.header->used = 0;
         size_ = 0;
         if (setempty)
             data_ = EVO_PEMPTY;
     }
     void utSetUnusedBuffer(bool setempty, size_t size=1) {
-        resize(size);
-        ContainerOp<T>::unInit(buf_.ptr, size);
+        assert( size < IntegerT<Size>::MAX );
+        resize((Size)size);
+        DataInit<T>::uninit(buf_.ptr, (Size)size);
         buf_.header->used = 0;
         buf_.ptr = NULL;
         size_    = 0;
@@ -2972,17 +2834,17 @@ list << vEmpty << 'a' << 'b';
 protected:
     /** List data header */
     struct Header {
-        Size used;                ///< Buffer size used/initialized as item count
-        Size size;                ///< Buffer size allocated as item count
-        Size refs;                ///< Buffer reference count
+        Size used;                  ///< Buffer size used/initialized as item count
+        Size size;                  ///< Buffer size allocated as item count
+        Size refs;                  ///< Buffer reference count
     };
 
     /** List buffer data helper. */
     struct Buf {
-        Header* header;            ///< Data header pointer, NULL if no buffer allocated
-        T*      ptr;            ///< Data pointer, NULL if buffer not used
+        Header* header;             ///< Data header pointer, NULL if no buffer allocated
+        T*      ptr;                ///< Data pointer, NULL if buffer not used
         #if EVO_ALLOCATORS
-            Allocator*  allocator;    ///< Allocator pointer (NULL for default or if not owner)
+            Allocator*  allocator;  ///< Allocator pointer (NULL for default or if not owner)
         #endif
 
         /** Constructor. */
@@ -3003,7 +2865,6 @@ protected:
             ptr    = NULL;
         }
 
-        // TODO: move header param to first
         /** Allocate new memory.
          - This doesn't modify the current buffer, use to setup replacement buffer
          .
@@ -3033,14 +2894,14 @@ protected:
         /** Allocate new memory.
          - Calls memalloc(Size,Size,Header*&)
          - This doesn't modify the current buffer, use to setup replacement buffer
-         - This adjusts memory allocated using SizeOp::init()
+         - This adjusts memory allocated using Capacity::init()
          .
          \param  size    New buffer size
          \param  header  Stores pointer to header data [out]
          \return         Pointer to new buffer
         */
         T* memalloc(Size size, Header*& header)
-            { return memalloc(SizeOp::init(size), size, header); }
+            { return memalloc(Capacity::init(size), size, header); }
 
         /** Reallocate buffer memory.
          - Assumes buffer is already allocated
@@ -3049,11 +2910,10 @@ protected:
          \return       Pointer to reallocated list buffer
         */
         T* memrealloc(Size size) {
-            assert( (ulong)this->header > sizeof(Header) );
+            assert( (size_t)this->header > sizeof(Header) );
             assert( this->ptr != NULL );
             assert( size > 0 );
             const Size bytes = sizeof(Header) + (size*sizeof(T));
-            // TODO: Support EVO_LIST_REALLOC
             #if EVO_ALLOCATORS
                 if (allocator == NULL)
                     this->header = (Header*)::realloc(this->header, bytes);
@@ -3072,7 +2932,7 @@ protected:
          - Assumes buffer is allocated
         */
         void memfree() {
-            assert( (ulong)header > sizeof(Header) );
+            assert( (size_t)header > sizeof(Header) );
             #if EVO_ALLOCATORS
                 if (this->allocator == NULL)
                     ::free(header);
@@ -3087,7 +2947,7 @@ protected:
         void free() {
             if (header != NULL && --header->refs == 0) {
                 if (header->used > 0)
-                    ContainerOp<T>::unInit((T*)(header+1), header->used);
+                    DataInit<T>::uninit((T*)(header+1), header->used);
                 memfree();
             }
         }
@@ -3108,12 +2968,12 @@ protected:
         }
     };
 
-    Buf   buf_;                ///< List buffer
+    Buf   buf_;                 ///< List buffer
     #if EVO_LIST_OPT_REFTERM
-    bool  terminated_;    ///< Whether list data has a terminator
+    bool  terminated_;          ///< Whether list data has a terminator
     #endif
 
-    /** Set as reference to another list.
+    /** %Set as reference to another list.
      \param  data  Data to reference
     */
     void ref(const ListType& data) {
@@ -3121,7 +2981,6 @@ protected:
             set();
         } else if (data.size_ == 0) {
             setempty();
-        // TODO: Use macro EVO_LIST_TEMP_MUST_COPY()?
         #if EVO_ALLOCATORS
         } else if (buf_.allocator != NULL && data.buf_.ptr != NULL) {
             copy(data);
@@ -3139,7 +2998,7 @@ protected:
                     // Leave buffer for later use
                     assert( buf_.header->refs == 1 );
                     if (buf_.header->used > 0)
-                        ContainerOp<T>::unInit(buf_.ptr, buf_.header->used);
+                        DataInit<T>::uninit(buf_.ptr, buf_.header->used);
                     #if EVO_LIST_OPT_LAZYBUF
                         buf_.header->used = 0;
                     #else
@@ -3157,7 +3016,6 @@ protected:
             #endif
         } else {
             // Shared
-            // TODO: diff allocators?
             assert( data.buf_.header != NULL );
             assert( data.buf_.ptr != NULL );
             buf_.free();
@@ -3172,7 +3030,7 @@ protected:
         }
     }
 
-    /** Set as sliced reference to another list.
+    /** %Set as sliced reference to another list.
      \param  data   Data to reference
      \param  index  Start index of data, END to set as empty
      \param  size   Size as item count, ALL for all from index
@@ -3205,7 +3063,7 @@ protected:
                         // Leave buffer for later use
                         assert( buf_.header->refs == 1 );
                         if (buf_.header->used > 0)
-                            ContainerOp<T>::unInit(buf_.ptr, buf_.header->used);
+                            DataInit<T>::uninit(buf_.ptr, buf_.header->used);
                         #if EVO_LIST_OPT_LAZYBUF
                             buf_.header->used = 0;
                         #else
@@ -3223,7 +3081,6 @@ protected:
                 #endif
             } else {
                 // Shared
-                // TODO: diff allocators?
                 assert( data.buf_.header != NULL );
                 buf_.free();
                 buf_.header = data.buf_.header;
@@ -3238,7 +3095,7 @@ protected:
         }
     }
 
-    /** Set as reference to given data.
+    /** %Set as reference to given data.
      \param  data  Data to reference
      \param  size  Data size
      \param  term  Whether referenced data is terminated
@@ -3261,7 +3118,7 @@ protected:
                     // Leave buffer for later use
                     assert( buf_.header->refs == 1 );
                     if (buf_.header->used > 0)
-                        ContainerOp<T>::unInit(buf_.ptr, buf_.header->used);
+                        DataInit<T>::uninit(buf_.ptr, buf_.header->used);
                     #if EVO_LIST_OPT_LAZYBUF
                         buf_.header->used = 0;
                     #else
@@ -3294,16 +3151,16 @@ private:
     void unsliceBuffer(Size size) {
         assert( buf_.header != NULL && buf_.ptr >= (T*)(buf_.header+1) );
         assert( data_ >= buf_.ptr && data_ <= buf_.ptr+buf_.header->used );
-        const Size offset = data_ - buf_.ptr;
+        const Size offset = (Size)(data_ - buf_.ptr);
 
         const Size tailsize = buf_.header->used - size - offset;
         if (tailsize > 0) {
-            ContainerOp<T>::unInit(data_+size, tailsize);
+            DataInit<T>::uninit(data_+size, tailsize);
             buf_.header->used -= tailsize;
         }
 
         if (offset > 0) {
-            ContainerOp<T>::unInit(buf_.ptr, offset);
+            DataInit<T>::uninit(buf_.ptr, offset);
             if (size > 0)
                 memmove(buf_.ptr, buf_.ptr+offset, size*sizeof(T));
             data_ = buf_.ptr;
@@ -3326,7 +3183,7 @@ private:
                             // Use previous buffer
                             buf_.ptr = (T*)(buf_.header + 1);
                             if (size_ > 0)
-                                ContainerOp<T>::init(buf_.ptr, data_, size_);
+                                DataInit<T>::init(buf_.ptr, data_, size_);
                             meminit(buf_.ptr+size_, data, size);
                             buf_.header->used = newused;
                             data_       = buf_.ptr;
@@ -3346,18 +3203,18 @@ private:
                     Size offset;
                     if (buf_.header->used > 0) {
                         assert( data_ >= buf_.ptr && data_ <= buf_.ptr+buf_.header->used );
-                        offset = data_ - buf_.ptr;
+                        offset = (Size)(data_ - buf_.ptr);
 
                         const Size tailsize = buf_.header->used - size_ - offset;
                         if (tailsize > 0) {
-                            ContainerOp<T>::unInit(data_+size_, tailsize);
+                            DataInit<T>::uninit(data_+size_, tailsize);
                             buf_.header->used -= tailsize;
                         }
                     } else
                         offset = 0;
                     if (newused > buf_.header->size) {
                         // Move to new bigger buffer
-                        Size newbufsize = SizeOp::grow(buf_.header->size);
+                        Size newbufsize = Capacity::grow(buf_.header->size);
                         if (newbufsize <= newused)
                             newbufsize = newused + 1; // Leave extra space
                         Header* newheader;
@@ -3365,14 +3222,14 @@ private:
                         if (size_ > 0)
                             memcpy(newbuf, data_, sizeof(T)*size_);
                         if (offset > 0)
-                            ContainerOp<T>::unInit(buf_.ptr, offset);
+                            DataInit<T>::uninit(buf_.ptr, offset);
                         buf_.memfree();
                         buf_.header = newheader;
                         buf_.ptr    = newbuf;
                         data_       = newbuf;
                     } else if (offset > 0 && size > buf_.header->size-buf_.header->used) {
                         // Shift to make room at end
-                        ContainerOp<T>::unInit(buf_.ptr, offset);
+                        DataInit<T>::uninit(buf_.ptr, offset);
                         memmove(buf_.ptr, data_, sizeof(T)*size_);
                         buf_.header->used = newused;
                         data_             = buf_.ptr;
@@ -3394,9 +3251,9 @@ private:
 
             // New buffer
             Header* newheader;
-            T* newbuf = buf_.memalloc(SizeOp::init(newused+1), newused, newheader);
+            T* newbuf = buf_.memalloc(Capacity::init(newused+1), newused, newheader);
             if (size_ > 0)
-                ContainerOp<T>::init(newbuf, data_, size_);
+                DataInit<T>::init(newbuf, data_, size_);
             meminit(newbuf+size_, data, size);
             newheader->used = newused;
             data_       = buf_.replace(newbuf, newheader);
@@ -3422,7 +3279,7 @@ private:
                             // Use previous buffer
                             buf_.ptr = (T*)(buf_.header + 1);
                             if (size_ > 0)
-                                ContainerOp<T>::init(buf_.ptr+size, data_, size_);
+                                DataInit<T>::init(buf_.ptr+size, data_, size_);
                             meminit(buf_.ptr, data, size);
                             buf_.header->used = newused;
                             data_ = buf_.ptr;
@@ -3442,11 +3299,11 @@ private:
                     Size offset;
                     if (buf_.header->used > 0) {
                         assert( data_ >= buf_.ptr && data_ <= buf_.ptr+buf_.header->used );
-                        offset = data_ - buf_.ptr;
+                        offset = (ulong)(data_ - buf_.ptr);
 
                         const Size tailsize = buf_.header->used - size_ - offset;
                         if (tailsize > 0) {
-                            ContainerOp<T>::unInit(data_+size_, tailsize);
+                            DataInit<T>::uninit(data_+size_, tailsize);
                             buf_.header->used -= tailsize;
                         }
                     } else
@@ -3455,7 +3312,7 @@ private:
                         // Not enough room at beginning, cleanup and make room
                         if (newused > buf_.header->size-size_) {
                             // Move to new bigger buffer
-                            Size newbufsize = SizeOp::grow(buf_.header->size);
+                            Size newbufsize = Capacity::grow(buf_.header->size);
                             if (newbufsize <= newused)
                                 newbufsize = newused + 1; // Leave extra space
                             Header* newheader;
@@ -3463,7 +3320,7 @@ private:
                             if (size_ > 0)
                                 memcpy(newbuf+size, data_, sizeof(T)*size_);
                             if (offset > 0)
-                                ContainerOp<T>::unInit(buf_.ptr, offset);
+                                DataInit<T>::uninit(buf_.ptr, offset);
                             buf_.memfree();
                             buf_.header = newheader;
                             buf_.ptr    = newbuf;
@@ -3471,7 +3328,7 @@ private:
                         } else {
                             // Shift to make room at beginning
                             if (offset > 0)
-                                ContainerOp<T>::unInit(buf_.ptr, offset);
+                                DataInit<T>::uninit(buf_.ptr, offset);
                             memmove(buf_.ptr+size, data_, sizeof(T)*size_);
                             buf_.header->used = newused;
                             data_             = buf_.ptr;
@@ -3479,7 +3336,7 @@ private:
                     } else {
                         // Enough room at beginning, cleanup
                         data_ = buf_.ptr + (offset - size);
-                        ContainerOp<T>::unInit(data_, size);
+                        DataInit<T>::uninit(data_, size);
                     }
                     size_ = newused;
 
@@ -3494,7 +3351,7 @@ private:
             T* newbuf = buf_.memalloc(newused, newheader);
             if (size_ > 0) {
                 assert( data_ != NULL );
-                ContainerOp<T>::init(newbuf+size, data_, size_);
+                DataInit<T>::init(newbuf+size, data_, size_);
             }
             meminit(newbuf, data, size);
             data_ = buf_.replace(newbuf, newheader);
@@ -3540,11 +3397,11 @@ private:
                         if (buf_.header->size >= newused) {
                             // Use previous buffer
                             buf_.ptr = (T*)(buf_.header + 1);
-                            ContainerOp<T>::init(buf_.ptr, data_, index);
+                            DataInit<T>::init(buf_.ptr, data_, index);
                             {
                                 const Size nextindex = index + size;
                                 assert( nextindex < newused );
-                                ContainerOp<T>::init(buf_.ptr+nextindex, data_+index, newused-nextindex);
+                                DataInit<T>::init(buf_.ptr+nextindex, data_+index, newused-nextindex);
                             }
                             meminit(buf_.ptr+index, data, size);
                             buf_.header->used = newused;
@@ -3563,17 +3420,17 @@ private:
                 if (buf_.header->refs == 1) {
                     // Existing buffer -- not empty
                     assert( data_ >= buf_.ptr && data_ <= buf_.ptr+buf_.header->used );
-                    Size offset = data_ - buf_.ptr;
+                    Size offset = (Size)(data_ - buf_.ptr);
                     {
                         const Size tailsize = buf_.header->used - size_ - offset;
                         if (tailsize > 0) {
-                            ContainerOp<T>::unInit(data_+size_, tailsize);
+                            DataInit<T>::uninit(data_+size_, tailsize);
                             buf_.header->used -= tailsize;
                         }
                     }
                     if (newused > buf_.header->size) {
                         // Move to new bigger buffer
-                        Size newbufsize = SizeOp::grow(buf_.header->size);
+                        Size newbufsize = Capacity::grow(buf_.header->size);
                         if (newbufsize <= newused)
                             newbufsize = newused + 1; // Leave extra space
                         Header* newheader;
@@ -3581,7 +3438,7 @@ private:
                         memcpy(newbuf, data_, sizeof(T)*index);
                         memcpy(newbuf+index+size, data_+index, sizeof(T)*(size_-index));
                         if (offset > 0)
-                            ContainerOp<T>::unInit(buf_.ptr, offset);
+                            DataInit<T>::uninit(buf_.ptr, offset);
                         buf_.memfree();
                         buf_.header = newheader;
                         buf_.ptr    = newbuf;
@@ -3590,7 +3447,7 @@ private:
                         if (size > offset) {
                             // Shift beginning and end to make room
                             if (offset > 0) {
-                                ContainerOp<T>::unInit(buf_.ptr, offset);
+                                DataInit<T>::uninit(buf_.ptr, offset);
                                 memmove(buf_.ptr, data_, sizeof(T)*index);
                                 data_ = buf_.ptr;
                             }
@@ -3600,7 +3457,7 @@ private:
                             // Shift beginning to make room
                             const Size newoffset = offset - size;
                             data_ = buf_.ptr + newoffset;
-                            ContainerOp<T>::unInit(buf_.ptr, offset-newoffset);
+                            DataInit<T>::uninit(buf_.ptr, offset-newoffset);
                             memmove(data_, buf_.ptr+offset, sizeof(T)*index);
                         }
                     }
@@ -3616,10 +3473,10 @@ private:
             Header* newheader;
             T* newbuf = buf_.memalloc(size_+size, newheader);
             {
-                ContainerOp<T>::init(newbuf, data_, index);
+                DataInit<T>::init(newbuf, data_, index);
                 const Size nextindex = index + size;
                 assert( nextindex < newheader->used );
-                ContainerOp<T>::init(newbuf+nextindex, data_+index, newheader->used-nextindex);
+                DataInit<T>::init(newbuf+nextindex, data_+index, newheader->used-nextindex);
             }
             meminit(newbuf+index, data, size);
             data_  = buf_.replace(newbuf, newheader);
@@ -3636,8 +3493,9 @@ private:
      \param  index   Remove start index
      \param  size    Size to remove, ALL for all remaining
      \param  uninit  Whether to uninitialize (call destructor on) items before removal
+     \return         Number of items removed
     */
-    void modRemove(Size index, Size size, bool uninit=true) {
+    Size modRemove(Size index, Size size, bool uninit=true) {
         if (index < size_) {
             {
                 const Size maxsize = size_ - index;
@@ -3646,6 +3504,7 @@ private:
             }
             if (size >= size_) {
                 // Remove all -- mostly copied from clear()
+                assert( size == size_ );
                 assert( data_ > EVO_PEMPTY );
                 if (buf_.ptr != NULL) {
                     assert( buf_.header != NULL );
@@ -3655,21 +3514,21 @@ private:
                         buf_.header = NULL;
                         buf_.ptr    = NULL;
                         data_       = EVO_PEMPTY;
-                    } else if (buf_.header->used > 0) { // TODO COV always true (EVO_LIST_OPT_LAZYBUF=0)
+                    } else if (buf_.header->used > 0) {
                         // Clear buffer, leave buffer for later use
                         assert( buf_.header->refs == 1 );
                         if (uninit) {
-                            ContainerOp<T>::unInit(buf_.ptr, buf_.header->used);
+                            DataInit<T>::uninit(buf_.ptr, buf_.header->used);
                         } else {
                             // Uninitialize only previously removed items
                             assert( data_ >= buf_.ptr && data_ <= buf_.ptr+buf_.header->used );
-                            const Size offset = data_ - buf_.ptr;
+                            const Size offset = (Size)(data_ - buf_.ptr);
                             if (offset > 0)
-                                ContainerOp<T>::unInit(buf_.ptr, offset);
+                                DataInit<T>::uninit(buf_.ptr, offset);
 
                             const Size tailsize = buf_.header->used - size_ - offset;
                             if (tailsize > 0) {
-                                ContainerOp<T>::unInit(data_+size_, tailsize);
+                                DataInit<T>::uninit(data_+size_, tailsize);
                                 buf_.header->used -= tailsize;
                             }
                         }
@@ -3698,17 +3557,17 @@ private:
                                 assert( buf_.header->used == 0 );
                                 buf_.ptr = (T*)(buf_.header + 1);
                                 if (index > 0)
-                                    ContainerOp<T>::init(buf_.ptr, data_, index);
+                                    DataInit<T>::init(buf_.ptr, data_, index);
                                 const Size nextindex = index + size;
                                 if (nextindex < size_)
-                                    ContainerOp<T>::init(buf_.ptr+index, data_+nextindex, size_-nextindex);
+                                    DataInit<T>::init(buf_.ptr+index, data_+nextindex, size_-nextindex);
                                 buf_.header->used = newsize;
                                 data_  = buf_.ptr;
                                 size_  = newsize;
                                 #if EVO_LIST_OPT_REFTERM
                                     terminated_ = false;
                                 #endif
-                                return;
+                                return size;
                             }
                         } else
                     #else
@@ -3718,24 +3577,24 @@ private:
                     if (buf_.header->refs == 1) {
                         // Existing buffer
                         assert( data_ >= buf_.ptr && data_ <= buf_.ptr+buf_.header->used );
-                        const Size offset = data_ - buf_.ptr;
+                        const Size offset = (Size)(data_ - buf_.ptr);
                         {
                             const Size tailsize = buf_.header->used - size_ - offset;
                             if (tailsize > 0) {
-                                ContainerOp<T>::unInit(data_+size_, tailsize);
+                                DataInit<T>::uninit(data_+size_, tailsize);
                                 buf_.header->used -= tailsize;
                             }
                         }
 
                         // Remove items
                         if (uninit)
-                            ContainerOp<T>::unInit(data_+index, size);
+                            DataInit<T>::uninit(data_+index, size);
                         const Size nextindex = index + size;
                         if (nextindex < size_)
                             memmove(data_+index, data_+nextindex, sizeof(T)*(size_-nextindex));
                         buf_.header->used -= size;
                         size_              = newsize;
-                        return;
+                        return size;
                     }
                 }
 
@@ -3746,10 +3605,10 @@ private:
                 T* newbuf = buf_.memalloc(newused+1, newused, newheader); // Leave extra space
                 {
                     if (index > 0)
-                        ContainerOp<T>::init(newbuf, data_, index);
+                        DataInit<T>::init(newbuf, data_, index);
                     const Size nextindex = index + size;
                     if (nextindex < size_)
-                        ContainerOp<T>::init(newbuf+index, data_+nextindex, size_-nextindex);
+                        DataInit<T>::init(newbuf+index, data_+nextindex, size_-nextindex);
                 }
                 data_ = buf_.replace(newbuf, newheader);
                 size_ = buf_.header->used;
@@ -3757,11 +3616,13 @@ private:
                     terminated_ = false;
                 #endif
             }
-        }
+        } else
+            size = 0;
         #if !EVO_LIST_OPT_LAZYBUF
             // Lazy buffer disabled
             assert( (buf_.header != NULL) == (buf_.ptr != NULL) );
         #endif
+        return size;
     }
 
     /** Replace data.
@@ -3788,12 +3649,12 @@ private:
                         assert( buf_.header->used == 0 );
                         buf_.ptr = (T*)(buf_.header + 1);
                         if (index > 0)
-                            ContainerOp<T>::init(buf_.ptr, data_, index);
-                        ContainerOp<T>::init(buf_.ptr+index, data, newsize);
+                            DataInit<T>::init(buf_.ptr, data_, index);
+                        DataInit<T>::init(buf_.ptr+index, data, newsize);
 
                         const Size nextindex = index + size;
                         if (nextindex < size_)
-                            ContainerOp<T>::init(buf_.ptr+index+newsize, data_+nextindex, size_-nextindex);
+                            DataInit<T>::init(buf_.ptr+index+newsize, data_+nextindex, size_-nextindex);
                         buf_.header->used = newdatasize;
                         data_ = buf_.ptr;
                         size_ = newdatasize;
@@ -3813,7 +3674,7 @@ private:
                 {
                     // Replace existing items
                     const Size copysize = (size < newsize ? size : newsize);
-                    ContainerOp<T>::copy(data_+index, data, copysize);
+                    DataInit<T>::copy(data_+index, data, copysize);
                     index     += copysize;
                     data      += copysize;
                     size      -= copysize;
@@ -3822,7 +3683,7 @@ private:
                 if (size > 0) {
                     // Remove extra items
                     T* dataptr = data_ + index;
-                    ContainerOp<T>::unInit(dataptr, size);
+                    DataInit<T>::uninit(dataptr, size);
                     const Size nextindex = index + size;
                     if (nextindex < size_)
                         memmove(dataptr, data_+nextindex, sizeof(T)*(size_-nextindex));
@@ -3832,32 +3693,31 @@ private:
                     // Insert new items
                     const Size newused = buf_.header->used + newsize;
                     if (newused > buf_.header->size) {
-                        const Size offset = (data_ - buf_.ptr);
-                        // TODO: may be room if beginning sliced
-                        buf_.ptr = buf_.memrealloc(SizeOp::grow(newused));
+                        const Size offset = (Size)(data_ - buf_.ptr);
+                        buf_.ptr = buf_.memrealloc(Capacity::grow(newused));
                         data_    = buf_.ptr + offset;
                     }
                     T* dataptr = data_ + index;
                     if (index < size_)
                         memmove(dataptr+newsize, dataptr, sizeof(T)*(size_-index));
-                    ContainerOp<T>::init(dataptr, data, newsize);
+                    DataInit<T>::init(dataptr, data, newsize);
                     buf_.header->used = newused;
                     size_            += newsize;
                 }
                 return;
             }
         }
-
+        
         // New buffer
         Header* newheader;
         T* newbuf = buf_.memalloc(size_-size+newsize, newheader);
         {
             if (index > 0)
-                ContainerOp<T>::init(newbuf, data_, index);
-            ContainerOp<T>::init(newbuf+index, data, newsize);
+                DataInit<T>::init(newbuf, data_, index);
+            DataInit<T>::init(newbuf+index, data, newsize);
             const Size fromindex = index + size;
             if (fromindex < size_)
-                ContainerOp<T>::init(newbuf+index+newsize, data_+fromindex, size_-fromindex);
+                DataInit<T>::init(newbuf+index+newsize, data_+fromindex, size_-fromindex);
         }
         data_ = buf_.replace(newbuf, newheader);
         size_ = buf_.header->used;
@@ -3873,13 +3733,16 @@ private:
     */
     static void meminit(T* ptr, const Item* data, Size size) {
         if (data == EVO_PDEFAULT)
-            ContainerOp<T>::init(ptr, size);
+            DataInit<T>::init(ptr, size);
         else if (data != NULL)
-            ContainerOp<T>::init(ptr, data, size);
+            DataInit<T>::init(ptr, data, size);
     }
 };
 
 ///////////////////////////////////////////////////////////////////////////////
 //@}
-} // Namespace: evo
+}
+#if defined(_MSC_VER)
+    #pragma warning(pop)
+#endif
 #endif

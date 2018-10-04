@@ -1,0 +1,5 @@
+<map id="ExceptionSocketOut" name="ExceptionSocketOut">
+<area shape="rect" id="node2" href="$classevo_1_1_exception_stream_out.html" title="Output stream exception for stream write errors, see Exception. " alt="" coords="5,155,160,181"/>
+<area shape="rect" id="node3" href="$classevo_1_1_exception_stream.html" title="Base stream exception for all stream errors, see Exception. " alt="" coords="17,80,149,107"/>
+<area shape="rect" id="node4" href="$classevo_1_1_exception.html" title="Evo base exception class. " alt="" coords="41,5,125,32"/>
+</map>

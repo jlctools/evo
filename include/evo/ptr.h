@@ -1,8 +1,6 @@
 // Evo C++ Library
-/* Copyright (c) 2016 Justin Crowell
- This Source Code Form is subject to the terms of the Mozilla Public
- License, v. 2.0. If a copy of the MPL was not distributed with this
- file, You can obtain one at http://mozilla.org/MPL/2.0/.
+/* Copyright 2018 Justin Crowell
+Distributed under the BSD 2-Clause License -- see included file LICENSE.txt for details.
 */
 ///////////////////////////////////////////////////////////////////////////////
 /** \file ptr.h Evo Smart Pointers. */
@@ -10,12 +8,9 @@
 #ifndef INCL_evo_ptr_h
 #define INCL_evo_ptr_h
 
-// Includes
 #include "type.h"
 
-// Namespace: evo
 namespace evo {
-
 /** \addtogroup EvoCore */
 //@{
 
@@ -26,20 +21,26 @@ namespace evo {
  - Overrides pointer operators so smart pointer can be used like a raw pointer
  - Copying a smart pointer makes a copy of the pointed object (raw pointer not shared) -- ok for containers
    - This requires T implement a proper copy-constructor
- - Call detach() to release ownership of pointer without freeing it
+ - Call detach() to release (transfer) ownership of pointer without freeing it
+   - Note that it's often better to share ownership with SharedPtr rather than manually transfer ownership around
+ - \b Caution: Not thread safe
  .
 
-SmartPtr is specialized for arrays so the pointer is freed with delete[].
-However an array SmartPtr cannot be copied (array size isn't known) so it isn't usable in containers, use List or Array instead.
+SmartPtr<T[]> is specialized for arrays so the pointer is freed with delete[].
+However an array SmartPtr<T[]> cannot be copied (array size isn't known) so that specialization isn't usable in containers, use List or Array instead.
 
- \tparam  T  Type to use pointer to (not the raw pointer type)
+See \ref ManagedPtr "Managed Pointers"
+
+\tparam  T  Type to use pointer to (not the raw pointer type)
 
 \par Example
 
 \code
 #include <evo/ptr.h>
 #include <evo/string.h>
+#include <evo/io.h>
 using namespace evo;
+static Console& c = con();
 
 int main() {
     // Create smart pointer, set a value
@@ -52,49 +53,19 @@ int main() {
         *ptr2 = "foo";   // dereference ptr2 and change value
     } // ptr2 automatically freed
 
-    // Print ptr value ("testing") -- use operator-> like normal pointer
-    printf("%s\n", ptr->cstr());
+    // Print ptr value as terminated string (just for example) -- use operator-> like normal pointer
+    c.out << ptr->cstr() << NL;
+
+    return 0;
 } // ptr automatically freed
 \endcode
 
-Output
-\verbatim
+Output:
+\code{.unparsed}
 testing
-\endverbatim
-
-\par Array Example
-
-\code
-#include <evo/ptr.h>
-using namespace evo;
-
-int main() {
-    // Create array smart pointer, set a value (example only, better to use String)
-    SmartPtr<char[]> ptr(new char[8]);
-    strcpy(ptr.ptr(), "testing");
-
-    *ptr = 'T';         // use dereference operator* like normal pointer
-    ptr[0] = 'T';       // use operator[] like normal array pointer
-
-    // Copying array smart pointer not supported (size unknown)
-    //SmartPtr<char[]> ptr2(ptr);   // Error
-    //ptr2 = ptr;                   // Error
-
-    // Print ptr value
-    printf("%s\n", ptr.ptr());
-} // ptr automatically freed
 \endcode
 
-Output
-\verbatim
-Testing
-\endverbatim
-
-\par Transferring Ownership
-
-SmartPtr takes ownership. Transfer ownership with detach().
-
-Note that it's often better to share ownership with SharedPtr rather than manually transfer ownership around.
+\par Example transferring ownership
 
 \code
 #include <evo/ptr.h>
@@ -116,13 +87,12 @@ int main() {
 \endcode
 */
 template<class T>
-class SmartPtr : public PtrBase<T>
-{
+class SmartPtr : public PtrBase<T> {
 protected:
     using PtrBase<T>::ptr_;
 
 public:
-    typedef SmartPtr<T> ThisType;    ///< This pointer type
+    typedef SmartPtr<T> This;       ///< This pointer type
 
     /** Constructor.
      \param  ptr  Pointer to set, NULL for none
@@ -136,7 +106,7 @@ public:
      .
      \param  src  Source pointer
     */
-    SmartPtr(const ThisType& src)
+    SmartPtr(const This& src)
         { ptr_ = new T(*src.ptr_); }
 
     /** Destructor. */
@@ -150,20 +120,26 @@ public:
      \param  src  Source pointer
      \return      This
     */
-    ThisType& operator=(const ThisType& src)
+    This& operator=(const This& src)
         { free(); ptr_ = new T(*src.ptr_); return *this; }
 
     /** Assignment operator for new pointer.
      \param  ptr  Pointer to set
      \return      This
     */
-    ThisType& operator=(T* ptr)
+    This& operator=(T* ptr)
         { free(); ptr_ = ptr; return *this; }
 
     /** Clear (free) pointer and set as null.
      \return  This
     */
-    ThisType& clear()
+    This& clear()
+        { free(); ptr_ = NULL; return *this; }
+    
+    /** %Set as null -- same as clear().
+     \return  This
+    */
+    This& set()
         { free(); ptr_ = NULL; return *this; }
 
     /** Detach and return pointer.
@@ -184,28 +160,82 @@ protected:
     }
 };
 
-// Specialize for array
+/** Smart pointer to array.
+ - Takes ownership of a given pointer and frees the pointer automatically by calling delete[]
+ - Overrides pointer operators so smart pointer can be used like a raw pointer
+ - An array smart pointer cannot be copied (array size isn't known) so it isn't usable in containers, use List or Array instead
+ - For single object smart pointer see: SmartPtr
+ - Call detach() to release (transfer) ownership of pointer without freeing it
+   - Note that it's often better to share ownership with \link SharedPtr<T[],TSize> SharedPtr<T[]>\endlink rather than manually transfer ownership around
+ - \b Caution: Not thread safe
+ .
+
+See \ref ManagedPtr "Managed Pointers"
+
+\tparam  T  Type to use pointer to with array suffix, ex: int[]
+
+\par Example
+
+\code
+#include <evo/ptr.h>
+using namespace evo;
+
+int main() {
+    // Create array smart pointer, set a value (example only, better to use String)
+    SmartPtr<int[]> ptr(new int[3]);
+
+    *ptr = 1;         // use dereference operator* like normal pointer
+    ptr[1] = 2;       // use operator[] like normal array pointer
+    ptr[2] = 3;
+
+    // Copying array smart pointer not supported
+    //SmartPtr<int[]> ptr2(ptr);    // Error
+    //ptr2 = ptr;                   // Error
+} // ptr automatically freed
+\endcode
+*/
 template<class T>
-class SmartPtr<T[]> : public PtrBase<T>
-{
+class SmartPtr<T[]> : public PtrBase<T> {
 protected:
     using PtrBase<T>::ptr_;
 
 public:
-    typedef SmartPtr<T[]> ThisType;
+    typedef SmartPtr<T[]> This;
 
+    /** Constructor.
+     \param  ptr  Pointer to set, NULL for none
+    */
     SmartPtr(T* ptr=NULL)
         { ptr_ = ptr; }
 
+    /** Destructor. */
     ~SmartPtr()
         { free(); }
 
-    ThisType& operator=(T* ptr)
+    /** Assignment operator for new pointer.
+     \param  ptr  Pointer to set
+     \return      This
+    */
+    This& operator=(T* ptr)
         { free(); ptr_ = ptr; return *this; }
 
-    ThisType& clear()
+    /** Clear (free) pointer and set as null.
+     \return  This
+    */
+    This& clear()
         { free(); ptr_ = NULL; return *this; }
 
+    /** %Set as null -- same as clear().
+     \return  This
+    */
+    This& set()
+        { free(); ptr_ = NULL; return *this; }
+
+    /** Detach and return pointer.
+     - This returns current pointer and sets to null, releasing ownership
+     .
+     \return  Pointer
+    */
     T* detach() {
         T* result = ptr_;
         ptr_ = NULL;
@@ -220,31 +250,38 @@ protected:
 
 private:
     // Disable copying
-    explicit SmartPtr(const ThisType&);
-    ThisType& operator=(const ThisType&);
+    explicit SmartPtr(const This&);
+    This& operator=(const This&);
 };
 
 ///////////////////////////////////////////////////////////////////////////////
 
 /** Shared smart pointer to single object.
- - Similar to SmartPtr except this uses reference-counted sharing between copies
- - A reference count is incremented for each copy, the last owner automatically frees the pointer
+ - Similar to SmartPtr except copying uses reference counting to make shared copies
+ - Takes ownership of a given pointer and frees the pointer automatically by calling delete when no longer used
+   - A reference count is incremented for each copy, and decremented when each copy is destroyed
+   - The last owner automatically frees the pointer
  - Overrides pointer operators so shared smart pointer can be used like a raw pointer
  - Copying a shared smart pointer makes a shared copy, incrementing the reference count -- ok for containers
    - Modifying a shared object affects all pointers referencing it
  - The following method requires T implement a proper copy-constructor: unshare()
+ - \b Caution: Not thread safe
  .
 
-SharedPtr is specialized for arrays so the pointer is freed with delete[]. However an array SharedPtr doesn't support unshare() (array size isn't known).
+\link SharedPtr<T[],TSize> SharedPtr<T[]>\endlink is specialized for arrays so the pointer is freed with delete[]. However an array \link SharedPtr<T[],TSize> SharedPtr<T[]>\endlink doesn't support unshare() (array size isn't known).
 
- \tparam  T  Type to use pointer to (not the raw pointer type)
+See \ref ManagedPtr "Managed Pointers"
+
+\tparam  T  Type to use pointer to (not the raw pointer type)
 
 \par Example
 
 \code
 #include <evo/ptr.h>
 #include <evo/string.h>
+#include <evo/io.h>
 using namespace evo;
+static Console& c = con();
 
 int main() {
     // Create shared pointer, set a value
@@ -257,73 +294,35 @@ int main() {
         *ptr2 = "foo";   // dereference ptr2 and change value (affects ptr as well)
     }
 
-    // Print ptr value ("foo") -- use operator-> like normal pointer
-    printf("%s\n", ptr->cstr());
+    // Print ptr value as terminated string (just for example) -- use operator-> like normal pointer
+    c.out << ptr->cstr() << NL;
 
     // May use Ptr to reference a shared pointer without sharing it (does not increment reference count)
     {
-        Ptr<String> ptr2(ptr);
-        *ptr2 = "bar";   // dereference ptr2 and change value again (affects ptr as well)
+        Ptr<String> ptr2(ptr);  // this can be dangerous if Ptr outlives SharedPtr
+        *ptr2 = "bar";          // dereference ptr2 and change value again (affects ptr as well)
     }
 
-    // Print ptr value ("bar") -- use operator-> like normal pointer
-    printf("%s\n", ptr->cstr());
+    // Print ptr value as terminated string (just for example) -- use operator-> like normal pointer
+    c.out << ptr->cstr() << NL;
+
+    return 0;
 } // ptr automatically freed
 \endcode
 
-Output
-\verbatim
+Output:
+\code{.unparsed}
 foo
 bar
-\endverbatim
-
-\par Array Example
-
-\code
-#include <evo/ptr.h>
-#include <evo/string.h>
-using namespace evo;
-
-int main() {
-    // Create shared pointer, set a value
-    SharedPtr<String[]> ptr(new String[1]);
-    ptr[0] = "testing";     // use dereference operator[] like normal pointer
-    *ptr   = "testing";     // use dereference operator* like normal pointer
-
-    // Copying shared pointer makes a shared copy
-    {
-        SharedPtr<String[]> ptr2(ptr);
-        ptr2[0] = "foo";    // dereference ptr2 and change value (affects ptr as well)
-    }
-
-    // Print ptr value ("foo") -- use operator-> like normal pointer
-    printf("%s\n", ptr->cstr());
-
-    // May use Ptr to reference a shared pointer without sharing it (does not increment reference count)
-    {
-        Ptr<String> ptr2(ptr);
-        ptr2[0] = "bar";   // dereference ptr2 and change value again (affects ptr as well)
-    }
-
-    // Print ptr value ("bar") -- use operator[] like normal pointer
-    printf("%s\n", ptr[0].cstr());
-} // ptr automatically freed
 \endcode
-
-Output
-\verbatim
-foo
-bar
-\endverbatim
 */
 template<class T,class TSize=SizeT>
-class SharedPtr : public PtrBase<T>
-{
+class SharedPtr : public PtrBase<T> {
 protected:
     using PtrBase<T>::ptr_;
 
 public:
-    typedef SharedPtr<T,TSize> ThisType;    ///< This pointer type
+    typedef SharedPtr<T,TSize> This;        ///< This pointer type
 
     /** Constructor to start with null pointer. */
     SharedPtr()
@@ -346,7 +345,7 @@ public:
      .
      \param  src  Source pointer
     */
-    SharedPtr(const ThisType& src) {
+    SharedPtr(const This& src) {
         if (src.ptr_ != NULL)
             { ptr_ = src.ptr_; refs_ = src.refs_; ++(*refs_); }
         else
@@ -364,7 +363,7 @@ public:
      \param  src  Source pointer
      \return      This
     */
-    ThisType& operator=(const ThisType& src) {
+    This& operator=(const This& src) {
         free();
         if (src.ptr_ != NULL)
             { ptr_ = src.ptr_; refs_ = src.refs_; ++(*refs_); }
@@ -380,7 +379,7 @@ public:
      \param  ptr  Pointer to set
      \return      This
     */
-    ThisType& operator=(T* ptr) {
+    This& operator=(T* ptr) {
         clear();
         if (ptr != NULL) {
             ptr_ = ptr;
@@ -396,7 +395,7 @@ public:
      .
      \return  This
     */
-    ThisType& clear() {
+    This& clear() {
         if (ptr_ != NULL) {
             if (--(*refs_) == 0)
                 delete ptr_; // leave refs_ allocated for later
@@ -407,12 +406,18 @@ public:
         return *this;
     }
 
+    /** %Set as null -- same as clear().
+     \return  This
+    */
+    This& set()
+        { return clear(); }
+
     /** Unshare pointer by setting as a new copy, if shared.
      - Disabled if array T[]
      .
      \return  This
     */
-    ThisType& unshare() {
+    This& unshare() {
         if (ptr_ != NULL && *refs_ > 1) {
             ptr_   = new T(*ptr_);
             --(*refs_);
@@ -440,19 +445,76 @@ protected:
     }
 };
 
-// Specialize for array
+/** Shared smart pointer to array.
+ - Similar to SmartPtr<T[]> except copying uses reference counting to make shared copies
+ - Takes ownership of a given pointer and frees the pointer automatically by calling delete when no longer used
+   - A reference count is incremented for each copy, and decremented when each copy is destroyed
+   - The last owner automatically frees the pointer
+ - Overrides pointer operators so shared smart pointer can be used like a raw pointer
+ - Copying a shared smart pointer makes a shared copy, incrementing the reference count -- ok for containers
+   - Modifying a shared object affects all pointers referencing it
+ - For single object shared smart pointer see: SharedPtr
+ - \b Caution: Not thread safe
+ .
+
+See \ref ManagedPtr "Managed Pointers"
+
+\tparam  T  Type to use pointer to with array suffix, ex: int[]
+
+\par Example
+
+\code
+#include <evo/ptr.h>
+#include <evo/string.h>
+#include <evo/io.h>
+using namespace evo;
+static Console& c = con();
+
+int main() {
+    // Create shared pointer, set a value
+    SharedPtr<String[]> ptr(new String[2]);
+    *ptr   = "testing";     // use dereference operator* like normal pointer
+    ptr[1] = "bar";         // use dereference operator[] like normal pointer
+
+    // Copying shared pointer makes a shared copy
+    {
+        SharedPtr<String[]> ptr2(ptr);
+        ptr2[0] = "foo";    // dereference ptr2 and change value (affects ptr as well)
+    }
+
+    // Print ptr first value as terminated string (just for example) -- use operator-> like normal pointer
+    c.out << ptr->cstr() << NL;
+
+    // Print ptr second value as terminated string (just for example) -- use operator[]() like normal pointer
+    c.out << ptr[1].cstr() << NL;
+
+    return 0;
+} // ptr automatically freed
+\endcode
+
+Output:
+\code{.unparsed}
+foo
+bar
+\endcode
+*/
 template<class T,class TSize>
-class SharedPtr<T[],TSize> : public PtrBase<T>
-{
+class SharedPtr<T[],TSize> : public PtrBase<T> {
 protected:
     using PtrBase<T>::ptr_;
 
 public:
-    typedef SharedPtr<T[],TSize> ThisType;
+    typedef SharedPtr<T[],TSize> This;
 
+    /** Constructor to start with null pointer. */
     SharedPtr()
         { ptr_ = NULL; refs_ = NULL; }
 
+    /** Constructor.
+     - This takes ownership of the pointer and will free it later -- starts reference count at 1
+     .
+     \param  ptr  Pointer to set, NULL for none
+    */
     SharedPtr(T* ptr) {
         if (ptr != NULL)
             { ptr_ = ptr; refs_ = new TSize; *refs_ = 1; }
@@ -460,17 +522,30 @@ public:
             { ptr_ = NULL; refs_ = NULL; }
     }
 
-    SharedPtr(const ThisType& src) {
+    /** Copy constructor.
+     - This makes a shared copy of source object, incrementing reference count
+     .
+     \param  src  Source pointer
+    */
+    SharedPtr(const This& src) {
         if (src.ptr_ != NULL)
             { ptr_ = src.ptr_; refs_ = src.refs_; ++(*refs_); }
         else
             { ptr_ = NULL; refs_ = NULL; }
     }
 
+    /** Destructor. */
     ~SharedPtr()
         { free(); }
 
-    ThisType& operator=(const ThisType& src) {
+    /** Copy/Assignment operator.
+     - This makes a copy of source object using T copy constructor
+     - The previous pointer is released (freed, if applicable)
+     .
+     \param  src  Source pointer
+     \return      This
+    */
+    This& operator=(const This& src) {
         free();
         if (src.ptr_ != NULL)
             { ptr_ = src.ptr_; refs_ = src.refs_; ++(*refs_); }
@@ -479,7 +554,14 @@ public:
         return *this;
     }
 
-    ThisType& operator=(T* ptr) {
+    /** Assignment operator for new pointer.
+     - This takes ownership of the pointer and will free it later -- starts reference count at 1
+     - The previous pointer is released (freed, if applicable)
+     .
+     \param  ptr  Pointer to set
+     \return      This
+    */
+    This& operator=(T* ptr) {
         clear();
         if (ptr != NULL) {
             ptr_ = ptr;
@@ -490,7 +572,12 @@ public:
         return *this;
     }
 
-    ThisType& clear() {
+    /** Release pointer and set as null.
+     - This will decrement the reference count, and free the pointer if not shared
+     .
+     \return  This
+    */
+    This& clear() {
         if (ptr_ != NULL) {
             if (--(*refs_) == 0) {
                 delete [] ptr_; // leave refs_ allocated for later
@@ -501,6 +588,15 @@ public:
         return *this;
     }
 
+    /** %Set as null -- same as clear().
+     \return  This
+    */
+    This& set()
+        { return clear(); }
+
+    /** Get whether pointer is shared (reference count > 1).
+     \return  Whether shared
+    */
     bool shared() const
         { return (ptr_ != NULL && *refs_ > 1); }
 
@@ -517,21 +613,25 @@ protected:
 
 private:
     // Disabled if array
-    ThisType& unshare();
+    This& unshare();
 };
 
 ///////////////////////////////////////////////////////////////////////////////
 
-/** Dumb pointer to single object or array.
+/** Dumb pointer to single object.
  - Useful for making it clear the pointer is not owned here, and is freed elsewhere
- - Does not take ownership of any pointer, does not automatically free anything
+   - Does not take ownership of any pointer, does not automatically free anything
+ - Also useful for distinguishing between a static immutable data pointer (ex: string literal) and a dumb managed pointer
+   - Evo containers always copy from a dumb pointer, but may reference a raw pointer (assuming static immutable data)
  - Overrides pointer operators so dumb pointer can be used like a raw pointer/array
  - Copying a dumb pointer makes a copy of the pointer itself, referencing the same object(s) -- only safe with containers if pointer outlives the container
+ - Ptr<T[]> is specialized for arrays for consistency with other managed pointers
+ - \b Caution: Not thread safe
  .
 
-Ptr is specialized for arrays for consistency with other managed pointers -- functionality is identical.
+See \ref ManagedPtr "Managed Pointers"
 
- \tparam  T  Type to use pointer to (not the raw pointer type)
+\tparam  T  Type to use pointer to (not the raw pointer type)
 
 \par Example
 
@@ -540,32 +640,30 @@ Ptr is specialized for arrays for consistency with other managed pointers -- fun
 using namespace evo;
 
 // It's clear here that this function does not take ownership of ptr
-void func(Ptr<char> ptr) {
-    if (ptr)
-        printf("%s\n", ptr.ptr());
+void func(Ptr<int> ptr) {
+    // Use dumb ptr
 }
 
 int main() {
-    // Array pointer with data (example only, better to use String)
-    SmartPtr<char[]> data(new char[5]);
-    strcpy(data.ptr(), "foo");
+    // Create and set a smart pointer
+    SmartPtr<int> ptr(new int);
+    *ptr = 1;
 
     // Call function that uses the pointer
-    func(data);
+    func(ptr);
 
     return 0;
 }
 \endcode
 */
 template<class T>
-class Ptr : public PtrBase<T>
-{
+class Ptr : public PtrBase<T> {
 protected:
     using PtrBase<T>::ptr_;
 
 public:
-    typedef Ptr<T> ThisType;        ///< This pointer type
-    typedef PtrBase<T> BaseType;    ///< Base type
+    typedef Ptr<T>     This;        ///< This pointer type
+    typedef PtrBase<T> Base;        ///< Base type
 
     /** Default constructor sets as NULL. */
     Ptr()
@@ -586,47 +684,53 @@ public:
     /** Copy constructor.
      \param  src  Source pointer
     */
-    Ptr(const ThisType& src)
+    Ptr(const This& src)
         { ptr_ = src.ptr_; }
 
     /** Copy constructor to reference pointer.
      \param  src  Source pointer
     */
-    Ptr(const BaseType& src)
+    Ptr(const Base& src)
         { ptr_ = src.ptr_; }
 
     /** Copy/Assignment operator.
      \param  src  Source pointer
      \return      This
     */
-    ThisType& operator=(const ThisType& src)
+    This& operator=(const This& src)
         { ptr_ = src.ptr_; return *this; }
 
     /** Assignment operator to reference pointer.
      \param  src  Source pointer
      \return      This
     */
-    ThisType& operator=(const BaseType& src)
+    This& operator=(const Base& src)
         { ptr_ = src.ptr_; return *this; }
 
     /** Assignment operator for raw pointer.
      \param  ptr  Pointer to set
      \return      This
     */
-    ThisType& operator=(T* ptr)
+    This& operator=(T* ptr)
         { ptr_ = ptr; return *this; }
 
     /** Assignment operator for raw pointer.
      \param  ptr  Pointer to set
      \return      This
     */
-    ThisType& operator=(const T* ptr)
+    This& operator=(const T* ptr)
         { ptr_ = (T*)ptr; return *this; }
 
     /** Clear pointer, setting as null.
      \return  This
     */
-    ThisType& clear()
+    This& clear()
+        { ptr_ = NULL; return *this; }
+
+    /** %Set as null -- same as clear().
+     \return  This
+    */
+    This& set()
         { ptr_ = NULL; return *this; }
 
     /** Detach and return pointer.
@@ -641,47 +745,128 @@ public:
     }
 };
 
-// Specialize for array (consistency with SmartPtr, SharedPtr) -- exact same functionality
+/** Dumb pointer to array.
+ - Useful for making it clear the pointer is not owned here, and is freed elsewhere
+   - Does not take ownership of any pointer, does not automatically free anything
+ - Also useful for distinguishing between a static immutable data pointer (ex: string literal) and a dumb managed pointer
+   - Evo containers always copy from a dumb pointer, but may reference a raw pointer (assuming static immutable data)
+ - Overrides pointer operators so dumb pointer can be used like a raw pointer/array
+ - Copying a dumb pointer makes a copy of the pointer itself, referencing the same object(s) -- only safe with containers if pointer outlives the container
+ - For single object dumb pointer see: Ptr
+ - \b Caution: Not thread safe
+ .
+
+See \ref ManagedPtr "Managed Pointers"
+
+\tparam  T  Type to use pointer to with array suffix, ex: int[]
+
+\par Example
+
+\code
+#include <evo/ptr.h>
+using namespace evo;
+
+// It's clear here that this function does not take ownership of ptr
+void func(Ptr<int[]> ptr) {
+    // Use dumb array ptr
+}
+
+int main() {
+    // Create a smart pointer, set to value
+    SmartPtr<int[]> ptr(new int[3]);
+    ptr[0] = 1;
+    ptr[1] = 2;
+    ptr[2] = 3;
+
+    // Call function that uses the pointer
+    func(ptr);
+
+    return 0;
+}
+\endcode
+*/
 template<class T>
-class Ptr<T[]> : public PtrBase<T>
-{
+class Ptr<T[]> : public PtrBase<T> {
 protected:
     using PtrBase<T>::ptr_;
 
 public:
-    typedef Ptr<T[]>   ThisType;
-    typedef PtrBase<T> BaseType;
+    typedef Ptr<T[]>   This;        ///< This pointer type
+    typedef PtrBase<T> Base;        ///< Base type
 
+    /** Default constructor sets as NULL. */
     Ptr()
         { ptr_ = NULL; }
 
+    /** Constructor.
+     \param  ptr  Pointer to set, NULL for none
+    */
     Ptr(T* ptr)
         { ptr_ = ptr; }
 
+    /** Constructor.
+     \param  ptr  Pointer to set, NULL for none
+    */
     Ptr(const T* ptr)
         { ptr_ = (T*)ptr; }
 
-    Ptr(const ThisType& src)
+    /** Copy constructor.
+     \param  src  Source pointer
+    */
+    Ptr(const This& src)
         { ptr_ = src.ptr_; }
 
-    Ptr(const BaseType& src)
+    /** Copy constructor to reference pointer.
+     \param  src  Source pointer
+    */
+    Ptr(const Base& src)
         { ptr_ = src.ptr_; }
 
-    ThisType& operator=(const ThisType& src)
+    /** Copy/Assignment operator.
+     \param  src  Source pointer
+     \return      This
+    */
+    This& operator=(const This& src)
         { ptr_ = src.ptr_; return *this; }
 
-    ThisType& operator=(const BaseType& src)
+    /** Assignment operator to reference pointer.
+     \param  src  Source pointer
+     \return      This
+    */
+    This& operator=(const Base& src)
         { ptr_ = src.ptr_; return *this; }
 
-    ThisType& operator=(T* ptr)
+    /** Assignment operator for raw pointer.
+     \param  ptr  Pointer to set
+     \return      This
+    */
+    This& operator=(T* ptr)
         { ptr_ = ptr; return *this; }
 
-    ThisType& operator=(const T* ptr)
+    /** Assignment operator for raw pointer.
+     \param  ptr  Pointer to set
+     \return      This
+    */
+    This& operator=(const T* ptr)
         { ptr_ = (T*)ptr; return *this; }
 
-    ThisType& clear()
+    /** Clear pointer, setting as null.
+     \return  This
+    */
+    This& clear()
         { ptr_ = NULL; return *this; }
 
+    /** %Set as null -- same as clear().
+     \return  This
+    */
+    This& set()
+        { ptr_ = NULL; return *this; }
+
+    /** Detach and return pointer.
+     - This returns current pointer and sets to null
+     .
+     \return  Pointer
+    */
     T* detach() {
         T* result = ptr_;
         ptr_ = NULL;
@@ -691,5 +876,5 @@ public:
 
 ///////////////////////////////////////////////////////////////////////////////
 //@}
-} // Namespace: evo
+}
 #endif

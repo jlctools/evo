@@ -1,8 +1,6 @@
 // Evo C++ Library
-/* Copyright (c) 2016 Justin Crowell
- This Source Code Form is subject to the terms of the Mozilla Public
- License, v. 2.0. If a copy of the MPL was not distributed with this
- file, You can obtain one at http://mozilla.org/MPL/2.0/.
+/* Copyright 2018 Justin Crowell
+Distributed under the BSD 2-Clause License -- see included file LICENSE.txt for details.
 */
 ///////////////////////////////////////////////////////////////////////////////
 /** \file map_alg.h Evo implementation detail: Internal map algorithms. */
@@ -10,12 +8,9 @@
 #ifndef INCL_evo_impl_map_alg_h
 #define INCL_evo_impl_map_alg_h
 
-// Includes
 #include "../strtok.h"
 
-// Namespace: evo
 namespace evo {
-
 /** \addtogroup EvoContainers */
 //@{
 
@@ -40,12 +35,12 @@ namespace impl
             typename TMap::Value& val = map.get(tok.value().convert<typename TMap::Key>(), &created);
             if (tok.delim().null() || *tok.delim() == delim) {
                 if (!created)
-                    DataOp<typename TMap::Value>::init(val);
+                    DataInit<typename TMap::Value>::init(val);
             } else {
                 if (tok.next(delim))
                     val = tok.value().convert<typename TMap::Value>();
                 else if (!created)
-                    DataOp<typename TMap::Value>::init(val);
+                    DataInit<typename TMap::Value>::init(val);
             }
         }
     }
@@ -54,5 +49,5 @@ namespace impl
 
 ///////////////////////////////////////////////////////////////////////////////
 //@}
-} // Namespace: evo
+}
 #endif

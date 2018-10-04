@@ -1,8 +1,6 @@
 // Evo C++ Library
-/* Copyright (c) 2016 Justin Crowell
- This Source Code Form is subject to the terms of the Mozilla Public
- License, v. 2.0. If a copy of the MPL was not distributed with this
- file, You can obtain one at http://mozilla.org/MPL/2.0/.
+/* Copyright 2018 Justin Crowell
+Distributed under the BSD 2-Clause License -- see included file LICENSE.txt for details.
 */
 ///////////////////////////////////////////////////////////////////////////////
 /** \file rawbuffer.h Evo RawBuffer classes. */
@@ -10,15 +8,19 @@
 #ifndef INCL_evo_impl_rawbuffer_h
 #define INCL_evo_impl_rawbuffer_h
 
-// Includes
 #include "sys.h"
 #include "../type.h"
 
-// Namespace: evo
-namespace evo {
+// Disable certain MSVC warnings for this file
+#if defined(_MSC_VER)
+    #pragma warning(push)
+    #pragma warning(disable:4458)
+#endif
 
+namespace evo {
 /** \addtogroup EvoCore */
 //@{
+
 ///////////////////////////////////////////////////////////////////////////////
 
 /** Simple raw memory buffer.
@@ -31,13 +33,17 @@ namespace evo {
 */
 struct RawBuffer {
     char* data;         ///< Buffer data pointer, NULL if empty (size=0)
-    ulong size;         ///< Buffer size (capacity) in bytes -- do not modify, use resize()
+    ulong size;         ///< Buffer size (capacity) in bytes -- do not modify, use: resize(), minsize(), reset(), ref()
     ulong used;         ///< Buffer size in use in bytes
     bool  owned;        ///< Whether this owns the buffer and must free it
 
     /** Constructor. */
     RawBuffer() : data(NULL), size(0), used(0), owned(false)
         { }
+
+    /** Constructor. */
+    RawBuffer(ulong size) : data(NULL), size(0), used(0), owned(false)
+        { resize(size); }
 
     /** Destructor. */
     ~RawBuffer() {
@@ -51,6 +57,16 @@ struct RawBuffer {
     ulong avail() const {
         assert( used <= size );
         return size - used;
+    }
+
+    /** Get size up to size available.
+     \param  checksize  Size to check against size available
+     \return            Size available at end (size - used) or `checksize`, whichever is smaller
+    */
+    ulong avail(ulong checksize) const {
+        assert(used <= size);
+        const ulong size_avail = size - used;
+        return (checksize > size_avail ? size_avail : checksize);
     }
 
     /** Reset to empty state without a buffer.
@@ -181,6 +197,7 @@ struct RawBuffer {
      .
      \param  index  Insert index
      \param  size   Remove size in bytes
+     \return        This
     */
     RawBuffer& remove(ulong index, ulong size=1) {
         if (index < used && size > 0) {
@@ -289,5 +306,8 @@ private:
 
 ///////////////////////////////////////////////////////////////////////////////
 //@}
-} // Namespace: evo
+}
+#if defined(_MSC_VER)
+    #pragma warning(pop)
+#endif
 #endif

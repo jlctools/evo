@@ -1,37 +1,185 @@
 // Evo C++ Library
-/* Copyright (c) 2016 Justin Crowell
- This Source Code Form is subject to the terms of the Mozilla Public
- License, v. 2.0. If a copy of the MPL was not distributed with this
- file, You can obtain one at http://mozilla.org/MPL/2.0/.
+/* Copyright 2018 Justin Crowell
+Distributed under the BSD 2-Clause License -- see included file LICENSE.txt for details.
 */
 ///////////////////////////////////////////////////////////////////////////////
-/** \file sys.h Evo implementation detail: System portability handling. */
+/** \file sys.h Evo implementation detail for system portability -- this is included by most Evo headers, include this via: include <evo/type.h>. */
 #pragma once
 #ifndef INCL_evo_impl_sys_h
 #define INCL_evo_impl_sys_h
 
-// Includes - System Specific
-#if defined(__linux) || defined(__CYGWIN__)
-    #define _FILE_OFFSET_BITS 64
+// Compiler detection -- most version integers are calculated as (except where noted): (major * 100) + minor
+#if defined(__INTEL_COMPILER)
+    // Intel C++ -- version 900 for 9.0, 1700 for 17.0, etc
+    #define EVO_COMPILER "Intel"
+    #define EVO_INTEL_VER __INTEL_COMPILER
+    #define EVO_COMPILER_VER EVO_INTEL_VER
+#elif defined(_MSC_VER)
+    // MS Visual C++ version as Visual Studio version -- 1530 for Visual Studio 15.3 (2017), 1400 for 14.0 (2015), etc
+    #define EVO_COMPILER "MSVC"
+    #if _MSC_VER >= 1910
+        #define EVO_MSVC_YEAR 2017
+        #define EVO_MSVC_TOOLSET 141
+        #if _MSC_VER >= 1914
+            #define EVO_MSVS_VER 1507
+        #elif _MSC_VER >= 1913
+            #define EVO_MSVS_VER 1506
+        #elif _MSC_VER >= 1912
+            #define EVO_MSVS_VER 1505
+        #else _MSC_VER >= 1911
+            #define EVO_MSVS_VER 1500
+        #endif
+    #elif _MSC_VER >= 1900
+        #define EVO_MSVC_YEAR 2015
+        #define EVO_MSVC_TOOLSET 140
+        #define EVO_MSVS_VER 1400
+    #elif _MSC_VER >= 1800
+        #define EVO_MSVC_YEAR 2013
+        #define EVO_MSVC_TOOLSET 120
+        #define EVO_MSVS_VER 1200
+    #elif _MSC_VER >= 1700
+        #define EVO_MSVC_YEAR 2012
+        #define EVO_MSVC_TOOLSET 110
+        #define EVO_MSVS_VER 1100
+    #elif _MSC_VER >= 1600
+        #define EVO_MSVC_YEAR 2010
+        #define EVO_MSVC_TOOLSET 100
+        #define EVO_MSVS_VER 1000
+    #elif _MSC_VER >= 1500
+        #define EVO_MSVC_YEAR 2008
+        #define EVO_MSVC_TOOLSET 90
+        #define EVO_MSVS_VER 900
+    #elif _MSC_VER >= 1400
+        #define EVO_MSVC_YEAR 2005
+        #define EVO_MSVC_TOOLSET 80
+        #define EVO_MSVS_VER 800
+    #elif _MSC_VER >= 1310
+        #define EVO_MSVC_YEAR 2003
+        #define EVO_MSVC_TOOLSET 71
+        #define EVO_MSVS_VER 701
+    #elif _MSC_VER >= 1300
+        #define EVO_MSVC_YEAR 2002
+        #define EVO_MSVC_TOOLSET 70
+        #define EVO_MSVS_VER 700
+    #else
+        #error "This MSVC compiler is too old (before 2002) and not supported by Evo"
+    #endif
+    #define EVO_COMPILER_VER EVO_MSVS_VER
+#elif defined(__clang__)
+    #if defined(__APPLE__) || defined(__apple_build_version__)
+        #define EVO_COMPILER "Apple clang"
+        #define EVO_APPLE_CLANG_VER ((__clang_major__ * 100) + __clang_minor__)
+        #define EVO_CLANG_VER    EVO_APPLE_CLANG_VER        // Apple forked clang versions after 3.1, common EVO_CLANG_VER is useful on versions before then
+        #define EVO_COMPILER_VER EVO_APPLE_CLANG_VER
+        #if EVO_CLANG_VER < 500
+            #define EVO_OLDCC
+        #endif
+    #else
+        #define EVO_COMPILER "clang"
+        #define EVO_LLVM_CLANG_VER ((__clang_major__ * 100) + __clang_minor__)
+        #define EVO_CLANG_VER    EVO_LLVM_CLANG_VER
+        #define EVO_COMPILER_VER EVO_LLVM_CLANG_VER
+        #if EVO_CLANG_VER < 303
+            #define EVO_OLDCC
+        #endif
+    #endif
+#elif defined(__GNUC__)
+    #define EVO_COMPILER "gcc"
+    #define EVO_GCC_VER ((__GNUC__ * 100) + __GNUC_MINOR__)
+    #define EVO_COMPILER_VER EVO_GCC_VER
+    #if EVO_GCC_VER < 408
+        #define EVO_OLDCC
+        #if EVO_GCC_VER < 406
+            #define EVO_OLDCC2
+        #endif
+    #endif
+#elif defined(__CODEGEARC__) && __CODEGEARC__ >= 0x0630     // Not supported before C++ Builder XE
+    // C++ Builder -- calculated version (100 for 10, 101 for 10.1, etc) for latest recognized version, XE number for older compiler (1 for XE, 2 for XE2, etc)
+    #define EVO_COMPILER "C++ Builder"
+    #if __CODEGEARC__ >= 0x0710     // 10.0 - 10.2
+        #define EVO_CBUILDER_VER (100 + (((__CODEGEARC__ & 0x0FF0) - 0x0710) / 0x0010))
+    #else                           // XE 1-8
+        #define EVO_CBUILDER_VER (((__CODEGEARC__ & 0x0FF0) - 0x0620) / 0x0010)
+    #endif
+    #define EVO_COMPILER_VER EVO_CBUILDER_VER
+#elif defined(__BORLANDC__)
+    #error "This Borland compiler is too old (before C++ Builder XE) and not supported by Evo"
+#else
+    /** C++ compiler name.
+     - See \link EVO_COMPILER_VER\endlink for compiler names and versions
+    */
+    #define EVO_COMPILER "Unknown"
 
-    #include <unistd.h>
-    #include <malloc.h>
-    #if defined(__linux)
-        #include <stdint.h>
+    /** C++ compiler version integer.
+     - Most version integers are calculated as: (major * 100) + minor
+     - Some compilers will have additional macros with more info
+     - Note: Not all compilers listed here are fully supported
+     .
+    Compiler versions:
+    | Compiler Name | Version | Additional Macros |
+    | ------------- | ------- | ----------------- |
+    | GCC           | 504 for GCC 5.4 | \link EVO_GCC_VER\endlink |
+    | Clang         | 308 for Clang 3.8 | \link EVO_LLVM_CLANG_VER\endlink / \link EVO_CLANG_VER\endlink |
+    | Apple Clang   | 901 for Apple Clang 9.1 -- Apple forked clang versions after 3.1 | \link EVO_APPLE_CLANG_VER\endlink / \link EVO_CLANG_VER\endlink |
+    | MSVC          | Visual Studio version: 1507 for 2017 15.7, 1400 for 2015 14.0 | \link EVO_MSVC_YEAR\endlink / \link EVO_MSVC_TOOLSET\endlink |
+    | Intel         | 1700 for Intel C++ 17.00 | |
+    | C++ Builder   | 101 for C++ Builder 10.1, older: 1-8 for C++ Builder XE - XE8 | |
+    */
+    #define EVO_COMPILER_VER 0
+
+    #if DOXYGEN
+        /** GCC compiler version as integer. */
+        #define EVO_GCC_VER 504
+
+        /** Clang compiler version as integer (LLVM or Apple).
+         - Note: Apple forked clang versions after clang 3.1
+        */
+        #define EVO_CLANG_VER 301
+
+        /** LLVM clang compiler version as integer. */
+        #define EVO_LLVM_CLANG_VER 308
+
+        /** Apple clang compiler version as integer. */
+        #define EVO_APPLE_CLANG_VER 901
+
+        /** MSVC compiler year (4 digits). */
+        #define EVO_MSVC_YEAR 2017
+
+        /** MSVC toolset version as integer (3 digits, 2 digits before MSVC 2010). */
+        #define EVO_MSVC_TOOLSET 141
     #endif
-    #if defined(__CYGWIN__)
-        #include <sys/time.h>
+#endif
+
+// System includes
+#if defined(_WIN32)
+    #define _WINSOCKAPI_            // exclude winsock from windows.h
+    #ifndef WIN32_LEAN_AND_MEAN
+        #define WIN32_LEAN_AND_MEAN // minimize windows.h include
     #endif
-#elif defined(_WIN32)
+    #define NOMINMAX                // disable windows min/max macros
+
     #include <windows.h>
     #include <malloc.h>
 #elif defined(__APPLE__) && defined(__MACH__)
+    #include <unistd.h>
     #include <sys/time.h>
+#elif defined(__linux) || defined(__unix__) || defined(__CYGWIN__)
+    #define _FILE_OFFSET_BITS 64
+
+    #include <unistd.h>
+    #include <time.h>
+    #include <sys/time.h>
+    #if defined(__linux)
+        #include <malloc.h>
+        #include <stdint.h>
+    #else
+        #include <stdlib.h>
+    #endif
 #else
     #error "This system is not supported by Evo"
 #endif
 
-// Includes - System
+/** \cond impl */
 #include <stdlib.h>
 #include <stdio.h>
 #include <limits>
@@ -41,6 +189,7 @@
 #include <string.h>
 #include <assert.h>
 #include <errno.h>
+/** \endcond */
 
 // Evo Config
 #include "../evo_config.h"
@@ -51,32 +200,101 @@
     #define EVO_STD_STRING_ENABLED 1
 #endif
 
+// C++ Version
+#if __cplusplus >= 201103L || (defined(EVO_MSVC_YEAR) && EVO_MSVC_YEAR >= 2017) || defined(DOXYGEN)
+    /** Defined when compiler C++11 supported is enabled. */
+    #define EVO_CPP11
+#endif
+#if __cplusplus >= 201402L || (defined(_MSVC_LANG) && _MSVC_LANG >= 201402L) || defined(DOXYGEN)
+    /** Defined when compiler C++14 supported is enabled. */
+    #define EVO_CPP14
+#endif
+#if __cplusplus >= 201703L || (defined(_MSVC_LANG) && _MSVC_LANG >= 201703L) || defined(DOXYGEN)
+    /** Defined when compiler C++17 supported is enabled. */
+    #define EVO_CPP17
+#endif
+
+#if defined(EVO_CPP11) || defined(DOXYGEN)
+    /** Compile `EXPR` only if C++11 support is detected, otherwise this is a no-op.
+     - This is useful to make code using C++11 features portable with and without C++11 support
+     - Examples:\n\code
+        #include <evo/type.h>
+
+        // Function default template param only supported in C++11
+        template<class T EVO_ONCPP11(=ulong)> void foo(T num) {
+        };
+
+        class Bar {
+        public:
+            Bar() { }
+        private:
+            // Disable copy constructor
+            Bar(const Bar&) EVO_ONCPP11(= delete);
+        };
+       \endcode
+    */
+    #define EVO_ONCPP11(EXPR) EXPR
+#else
+    #define EVO_ONCPP11(EXPR)
+#endif
+
+// Exception support
+#if defined(__cpp_exceptions) || defined(__EXCEPTIONS) || defined(_CPPUNWIND)
+    #define EVO_EXCEPTIONS_ENABLED 1
+#endif
+
+// 64 bit environment
+#if defined(__LP64__) || defined(_LP64) || defined(_WIN64) || defined(DOXYGEN)
+    /** Defined when current architecture is 64-bit, if not then EVO_32 is defined for 32-bit instead. */
+    #define EVO_64 1
+    /** Number of bits for current architecture. */
+    #define EVO_ARCH_BITS 64
+#else
+    #define EVO_32 1
+    #define EVO_ARCH_BITS 32
+#endif
+
+/** Whether char is signed -- usually true, but unsigned on some systems. */
+#if defined(EVO_MSVC_YEAR) || defined(DOXYGEN)
+    #define EVO_CHAR_SIGNED 1
+#elif (((char)-1) < 0)
+    #define EVO_CHAR_SIGNED 1
+#else
+    #define EVO_CHAR_SIGNED 0
+#endif
+
+///////////////////////////////////////////////////////////////////////////////
+
+// Whether to use glibc memmem()
+#if !defined(EVO_NO_MEMMEM) && defined(__linux) && defined(__GNU_LIBRARY__) && defined(__GLIBC__) && defined(__GLIBC_MINOR__) && __GNU_LIBRARY__ >= 6 && __GLIBC__ >= 2
+    // Requires at least glibc 2.12 -- see: https://bugzilla.redhat.com/show_bug.cgi?id=641128
+    #if __GLIBC__ > 2 || __GLIBC_MINOR__ >= 12
+        #define EVO_GLIBC_MEMMEM
+    #endif
+#endif
+
+// Whether to use glibc memrchr()
+#if !defined(EVO_NO_MEMRCHR) && defined(__linux) && defined(__GNU_LIBRARY__) && defined(__GLIBC__) && defined(__GLIBC_MINOR__) && __GNU_LIBRARY__ >= 6 && __GLIBC__ >= 2
+    // Requires at least glibc 2.2
+    #if __GLIBC__ > 2 || __GLIBC_MINOR__ >= 2
+        #define EVO_GLIBC_MEMRCHR
+    #endif
+#endif
+
 /** \addtogroup EvoCore */
 //@{
 ///////////////////////////////////////////////////////////////////////////////
 /** \cond impl */
 
-// C++ Version
-#if __cplusplus >= 201103L
-    #define EVO_CPP11
-#endif
-
-// 64 bit environment
-#if defined(__LP64__) || defined(_LP64) || defined(_WIN64)
-    #define EVO_64 1
-#else
-    #define EVO_32 1
-#endif
-
 // Primitive aliases
-typedef unsigned char uchar;
-typedef unsigned short ushort;
-typedef unsigned long long int ulongl;
-typedef long long int longl;
-typedef long double ldouble;
-#if defined(__APPLE__)
-    typedef unsigned int uint;
-    typedef unsigned long ulong;
+typedef unsigned char          uchar;   ///< Alias for unsigned char
+typedef unsigned short         ushort;  ///< Alias for unsigned short
+typedef unsigned long long int ulongl;  ///< Alias for unsigned long long int
+typedef long long int          longl;   ///< Alias for long long int
+typedef long double            ldouble; ///< Alias for long double
+#if defined(__unix__) || defined(__APPLE__) || defined(DOXYGEN)
+    typedef unsigned int  uint;         ///< Alias for unsigned int
+    typedef unsigned long ulong;        ///< Alias for unsigned long
 #endif
 
 #if defined(_WIN32)
@@ -91,15 +309,18 @@ typedef long double ldouble;
     typedef unsigned __int32 uint32;
     typedef unsigned __int64 uint64;
 #else
-    typedef int8_t  int8;
-    typedef int16_t int16;
-    typedef int32_t int32;
-    typedef int64_t int64;
-    typedef uint8_t  uint8;
-    typedef uint16_t uint16;
-    typedef uint32_t uint32;
-    typedef uint64_t uint64;
+    typedef int8_t   int8;      ///< 8-bit signed integer
+    typedef int16_t  int16;     ///< 16-bit signed integer
+    typedef int32_t  int32;     ///< 32-bit signed integer
+    typedef int64_t  int64;     ///< 64-bit signed integer
+    typedef uint8_t  uint8;     ///< 8-bit unsigned integer
+    typedef uint16_t uint16;    ///< 16-bit unsigned integer
+    typedef uint32_t uint32;    ///< 32-bit unsigned integer
+    typedef uint64_t uint64;    ///< 64-bit unsigned integer
 #endif
+
+typedef uint16 wchar16;     ///< Wide UTF-16 character
+typedef uint32 wchar32;     ///< Wide UTF-32 character
 
 // Some macros under Windows cause problems
 #if defined(_WIN32)
@@ -213,6 +434,106 @@ namespace evo {
 
 ///////////////////////////////////////////////////////////////////////////////
 
+#if defined(_WIN32)
+/** \cond impl */
+namespace impl {
+    // High preceision sleep in 100 nsec units
+    inline bool nano100sleep(ulongl nsec100) {
+        bool result;
+        HANDLE timer = ::CreateWaitableTimer(NULL, TRUE, NULL);
+        if (timer == NULL) {
+            result = false;
+        } else {
+            const DWORD NSEC100_PER_MSEC = 10000;
+            LARGE_INTEGER tm;
+            if (nsec100 > (ulongl)std::numeric_limits<LONGLONG>::max())
+                tm.QuadPart = std::numeric_limits<LONGLONG>::min();
+            else
+                tm.QuadPart = -(LONGLONG)nsec100;
+            result = (::SetWaitableTimer(timer, &tm, 0, NULL, NULL, FALSE) != 0 && ::WaitForSingleObject(timer, INFINITE) != WAIT_FAILED);
+            ::CloseHandle(timer);
+        }
+        return result;
+    }
+}
+/** \endcond */
+#endif
+
+/** Sleep for number of milliseconds.
+ - \b Caution: Do not sleep in an async callback as it will block other callbacks
+ .
+ \param  msec  Milliseconds to sleep, must be > 0
+ \return       Whether successful, false if sleep failed (shouldn't happen)
+*/
+inline bool sleepms(ulong msec) {
+    assert( msec > 0 );
+#if defined(_WIN32)
+    ::Sleep(msec);
+#else
+    const ulong MSEC_PER_SEC = 1000;
+    const long NSEC_PER_MSEC = 1000000;
+    timespec tm;
+    tm.tv_sec  = (msec / MSEC_PER_SEC);
+    tm.tv_nsec = (long)(msec - (MSEC_PER_SEC * tm.tv_sec)) * NSEC_PER_MSEC;
+    while (nanosleep(&tm, &tm) == -1)
+        if (errno != EINTR)
+            return false;
+#endif
+    return true;
+}
+
+/** Sleep for number of microseconds.
+ - On UNIX/Linux systems this will ignore signals
+ - \b Caution: Do not sleep in an async callback as it will block other callbacks
+ .
+ \param  usec  Microseconds to sleep, must be > 0
+ \return       Whether successful, false if sleep failed (shouldn't happen)
+*/
+inline bool sleepus(ulongl usec) {
+    assert( usec > 0 );
+#if defined(_WIN32)
+    const ulongl NSEC100_PER_USEC = 10;
+    return impl::nano100sleep(usec * NSEC100_PER_USEC);
+#else
+    const ulongl USEC_PER_SECOND = 1000000;
+    const long NSEC_PER_USEC = 1000;
+    timespec tm;
+    tm.tv_sec  = (usec / USEC_PER_SECOND);
+    tm.tv_nsec = (long)(usec - (USEC_PER_SECOND * tm.tv_sec)) * NSEC_PER_USEC;
+    while (nanosleep(&tm, &tm) == -1)
+        if (errno != EINTR)
+            return false;
+    return true;
+#endif
+}
+
+/** Sleep for number of nanoseconds.
+ - On UNIX/Linux systems this will ignore signals
+ - On Windows the lowest precision is in 100-nanosecond units so this will sleep at least 100 nanoseconds
+ - \b Caution: Do not sleep in an async callback as it will block other callbacks
+ .
+ \param  nsec  Nanoseconds to sleep, must be > 0
+ \return       Whether successful, false if sleep failed (shouldn't happen)
+*/
+inline bool sleepns(ulongl nsec) {
+    assert( nsec > 0 );
+#if defined(_WIN32)
+    const ulongl NSEC_PER_NSEC100 = 100;
+    return impl::nano100sleep(nsec < NSEC_PER_NSEC100 ? 1 : nsec / NSEC_PER_NSEC100);
+#else
+    const ulongl NSEC_PER_SECOND = 1000000000ULL;
+    timespec tm;
+    tm.tv_sec  = (nsec / NSEC_PER_SECOND);
+    tm.tv_nsec = (long)(nsec - (NSEC_PER_SECOND * tm.tv_sec));
+    while (nanosleep(&tm, &tm) == -1)
+        if (errno != EINTR)
+            return false;
+    return true;
+#endif
+}
+
+///////////////////////////////////////////////////////////////////////////////
+
 /** Default Evo container size type.
  - Always unsigned
  - This may be overridden in any Evo container template
@@ -226,29 +547,53 @@ typedef EVO_STR_SIZE_TYPE StrSizeT;
 
 ///////////////////////////////////////////////////////////////////////////////
 
+/** Signals an output stream to flush pending data. */
+enum Flush { fFLUSH=0 };
+
+///////////////////////////////////////////////////////////////////////////////
+
 /** Newline type.
- - This gives the current system newline type: NL
- - NL also is used with Stream operator<<() to write a newline and flush console output
+ - Use \link evo::NL NL\endlink for default newline type, or \link evo::NL_SYS NL_SYS\endlink for explicit system newline
+ - Newline values are supported by Stream and String operator<<()
  .
 */
-enum Newline {
-    // Expected to be first:
-    nLF=0,            ///< Line Feed "\n" (Unix/Linux, Mac OS X)
-    nCR,            ///< Carriage Return "\r" (Mac OS)
-    nCRLF,            ///< Carriage Return + Line Feed "\r\n" (Windows, DOS, Internet)
-    // Expected to be last:
-    nLFCR            ///< Line Feed + Carriage Return "\n\r" (RISC OS)
+enum Newline {  // The order here is important and must align with functions below
+    nLF=0,          ///< Line Feed "\n" (Linux/Unix/MacOS)
+    nCR,            ///< Carriage Return "\r" (Classic MacOS)
+    nCRLF,          ///< Carriage Return + Line Feed "\r\n" (Windows, DOS, Internet)
+    nLFCR           ///< Line Feed + Carriage Return "\n\r" (RISC OS)
 };
 
+/** Current system newline type.
+ - When used with Stream operator<<() this will usually trigger a flush as well
+*/
 #if defined(_WIN32)
     // Windows
-    /** Current system newline type. */
-    static const Newline NL = nCRLF;
+    static const Newline NL_SYS = nCRLF;
 #else
-    // Linux/Posix
-    /** Current system newline type. */
-    static const Newline NL = nLF;
+    // Linux/Unix
+    static const Newline NL_SYS = nLF;
 #endif
+
+/** Default newline type, implicitly converts to \ref NL_SYS (system default newline).
+ - This is used to define the \ref NL (default newline) constant, which implicitly converts to \ref NL_SYS (system default newline) with functions taking a \ref Newline type
+ - This is useful for having a class differentiate between \ref NL (default newline defined by class) and explicit \ref Newline values like \ref NL_SYS (system default) or \ref nLF
+   - Stream does this, ex: an instance of File or Socket can define it's own default newline type used when \ref NL is passed as \ref Newline
+   - Passing \ref NL_SYS explicitly uses the system default newline type rather than the class default, or passing \ref nLF explicitly uses that newline value
+*/
+struct NewlineDefault {
+    /** Implicit conversion to system newline value.
+     \return  System newline value (\ref NL_SYS)
+    */
+    operator Newline() const
+        { return NL_SYS; }
+};
+
+/** Default newline type.
+ - By default this is the same as the system newline (\ref NL_SYS), though Stream instances may override with their own default
+ - When used with Stream operator<<() this will usually trigger a flush as well
+*/
+static const NewlineDefault& NL = NewlineDefault();
 
 /** Get newline string for given type.
  \param  newline  Newline type (default is newline for current platform)
@@ -308,7 +653,7 @@ struct ListBase {
     }
 };
 
-// If enabled, implicitly convert "const std::string&" and "const std::string*" to StringBase
+// If enabled, implicitly convert "const std::string&" and "const std::string*" to StringBase (ListBase<char>)
 /** \cond impl */
 #if EVO_STD_STRING_ENABLED
 template<class TSize>
@@ -363,106 +708,143 @@ struct ListBase<char,TSize> {
 
 ///////////////////////////////////////////////////////////////////////////////
 
-/** Null value type */
+/** Null type. */
+struct Null { };
+
+/** Special null value type, pass as vNULL. */
 enum ValNull {
-    vNull=0         ///< Null value
+    vNULL=0         ///< Special null value passed with type ValNull
 };
 
-/** Empty value type */
+/** Special empty value type, pass as vEMPTY. */
 enum ValEmpty {
-    vEmpty=0        ///< Empty value
+    vEMPTY=0        ///< Special empty value passed with type ValEmpty
 };
 
-/** Value type to specify reverse algorithm. */
+/** Special value type to reverse algorithm, pass as vREVERSE. */
 enum ValAlgReverse {
-    vReverse=0      ///< Value to reverse algorithm
+    vREVERSE=0      ///< Special value to reverse an algorithm passed with type ValAlgReverse
 };
 
 ///////////////////////////////////////////////////////////////////////////////
 
-/** General error code. Used with or without exceptions. */
+/** General Evo error code stored in exceptions, or used directly when exceptions are disabled. */
 enum Error {
     // Non-errors first
     ENone = 0,          ///< No error
     EEnd,               ///< Reached end of resource (not an error)
-    EMoreInput,         ///< Operation needs more input data
-    EMoreOutput,        ///< Operation has more output data
-    // Errors
+    EMoreOutput,        ///< More pending output to flush (not an error)
+    ENonBlock,          ///< Operation would block (non-blocking I/O)
+    // General errors
     EUnknown,           ///< Unknown or unspecified error
-    EInval,             ///< Invalid operation or data error
+    ENotImpl,           ///< Function not supported/implemented
+    EInvalOp,           ///< Invalid or unsupported operation
+    EInval,             ///< Invalid argument or data
     EFail,              ///< Operation failed
+    ELoss,              ///< Operation aborted to prevent data loss (used in special cases)
+    ERetry,             ///< Temporary failure occurred, try again
+    // More specific errors
     EOutOfBounds,       ///< Out of bounds error
     EClosed,            ///< %Stream or resource is closed
     ETimeout,           ///< Operation timed out
-    ESignal,            ///< System call interrupted by signal (Linux/Posix), auto-resume disabled
+    ESignal,            ///< System call interrupted by signal (Linux/Unix), auto-resume disabled
     EPtr,               ///< Invalid pointer used
     ESpace,             ///< Not enough space/memory available
     EAccess,            ///< Permission denied
     EExist,             ///< Resource already exists
     ENotFound,          ///< Resource not found
+    ENotDir,            ///< Path component is not a directory
     ESize,              ///< Size limit exceeded
-    ELoss,              ///< Operation aborted to avoid data loss (used in special cases)
+    ELimit,             ///< System resource limit reached
+    ELength,            ///< %String length limit exceeded
     // I/O Errors
     ERead,              ///< General stream or resource read error
     EWrite,             ///< General stream or resource write error
+    //EFilter,            ///< I/O filter used incorrectly or missing a buffer ???
     EInput              ///< Truncated or incomplete input (error version of EEnd)
-    // EInput expected to be last in errormsg()
+    // EInput expected to be last in errorname() and errormsg()
 };
 
-/** Get general error message for error code. */
+/** Get general error message for error code.
+ \param  error  %Error code -- see Error
+ \return        Message for error code (null terminated, always an immutable string literal)
+*/
 inline const char* errormsg(Error error) {
     const char* msgs[] = {
         // Non-errors first
-        "No error",                         // ENone
-        "End of resource",
-        "Operation requires more input data",
-        "Operation has more output data",
-        // Errors
-        "Unknown error",                    // EUnknown
-        "Invalid operation/data",
-        "Operation failed",
-        "Data out of bounds",
-        "Resource is closed",
-        "Operation timed out",              // ETimeout
-        "Signal interrupt",
-        "Invalid pointer",
-        "Not enough space/memory available",
-        "Permission denied",
-        "Resource already exists",          // EExist
-        "Resource not found",
-        "Size limit exceeded",
-        "Failed to prevent data loss",
+        "No error (ENone)",
+        "End of resource (EEnd)",
+        "More pending output to flush (EMoreOutput)",
+        "Operation would block (non-blocking I/O) (ENonBlock)",
+        // General errors
+        "Unknown error (EUnknown)",
+        "Function not supported/implemented (ENotImpl)",
+        "Invalid or unsupported operation (EInvalOp)",
+        "Invalid argument or data (EInval)",
+        "Operation failed (EFail)",
+        "Aborted to prevent data loss (ELoss)",
+        "Temporary failure, try again (ERetry)",
+        // More specific errors
+        "Data out of bounds (EOutOfBounds)",
+        "Resource is closed (EClosed)",
+        "Operation timed out (ETimeout)",
+        "Interrupted by signal (ESignal)",
+        "Invalid pointer (EPtr)",
+        "Not enough space/memory available (ESpace)",
+        "Permission denied (EAccess)",
+        "Resource already exists (EExist)",
+        "Resource not found (ENotFound)",
+        "Path component is not a directory (ENotDir)",
+        "Size or resource limit exceeded (ESize)",
+        "System resource limit reached (ELimit)", 
+        "String too long (ELength)",
         // I/O Errors
-        "General read error",               // ERead
-        "General write error",
-        "Truncated or incomplete input"
+        "General read error (ERead)",
+        "General write error (EWrite)",
+        //"I/O filter used incorrectly or missing a buffer (EFilter)",
+        "Truncated or incomplete input (EInput)"
     };
-    if (error < 0 || error > EWrite)
+    if (error < 0 || error > EInput)
         return "Bad error code";
     return msgs[(int)error];
 }
 
+/** Write error message with errno to output stream/string.
+ - Must call right after the error, otherwise errno may be overwritten
+ .
+ \param  out  Stream or String to write output to
+ \param  err  Error code to format message for
+*/
+template<class TOut>
+inline TOut& errormsg_out(TOut& out, Error err) {
+    out << errormsg(err) << ListBase<char>(" (errno:", 8) << errno << ')';
+    return out;
+}
+
 ///////////////////////////////////////////////////////////////////////////////
 
-/** Evo base exception.
- - Use EVO_THROW() or EVO_THROW_E() macro to throw exception
+/** Evo base exception class.
+ - Use EVO_THROW() or EVO_THROW_ERR() macro to throw an Evo exception
+ - See EVO_CREATE_EXCEPTION() for creating a custom Evo exception type
 */
 class Exception {
 public:
-    /** Constructor.
-     \param  file   Exception file name
-     \param  line   Exception line number
+    /** Constructor with file/line info.
+     - Use EVO_THROW() or EVO_THROW_ERR() macro to throw exception and automatically populate the file/line info
+     .
+     \param  file   Exception file name (use __FILE__ macro)
+     \param  line   Exception line number (use __LINE__ macro)
      \param  msg    Exception message
      \param  error  Error code, EUnknown if unknown
     */
-    Exception(const char* file, ulong line, const char* msg, Error error=EUnknown) : file_(file), line_(line), msg_(NULL), error_(error)
-        { setmsg("Exception", msg, strlen(msg)); }
+    Exception(const char* file, ulong line, const char* msg, Error error=EUnknown) : file_(file), line_(line), msg_(NULL), error_(error), errormsg_func_(evo::errormsg)
+        { init("Exception", msg, strlen(msg)); }
 
     /** Copy constructor.
      \param  e  Exception to copy
     */
-    Exception(const Exception& e) : file_(e.file_), line_(e.line_), msg_(NULL), error_(e.error_)
-        { setmsg(e.msg_, strlen(e.msg_)); }
+    Exception(const Exception& e) : file_(e.file_), line_(e.line_), msg_(NULL), error_(e.error_), errormsg_func_(e.errormsg_func_)
+        { init(e.msg_, strlen(e.msg_)); }
 
     /** Destructor */
     ~Exception()
@@ -484,7 +866,7 @@ public:
      \return  Message
     */
     const char* msg() const
-        { return (msg_ == NULL) ? "" : msg_; }
+        { return (msg_ == NULL) ? "Unexpected Exception" : msg_; }
 
     /** Get error code.
      \return  Error code, 0 if unknown
@@ -492,26 +874,44 @@ public:
     Error error() const
         { return error_; }
 
+    /** Write error message with errno to output stream/string.
+     - Must call right after the error, otherwise errno may be overwritten
+     .
+     \tparam  TOut  Output stream or string type
+
+     \param  out  Stream or String to write output to
+     \return      This
+    */
+    template<class TOut>
+    TOut& errormsg_out(TOut& out) {
+        out << errormsg_func_(error_) << ListBase<char>(" (errno:", 8) << errno << ')';
+        return out;
+    }
+
 protected:
+    typedef const char* (*ErrorMsgFunc)(Error);     ///< Pointer type to function returning error message from error code
+
     /** Constructor with exception type. Use EVO_THROW() or EVO_THROW_E() macro to throw exception.
      \param  file   Exception file name
      \param  line   Exception line number
      \param  type   Exception type as string, used as msg prefix
      \param  msg    Exception message
      \param  error  Error code, EUnknown if unknown
+     \param  errmsg_func  TODO
     */
-    Exception(const char* file, ulong line, const char* type, const char* msg, Error error) : file_(file), line_(line), msg_(NULL), error_(error)
-        { setmsg(type, msg, strlen(msg)); }
+    Exception(const char* file, ulong line, const char* type, const char* msg, Error error, ErrorMsgFunc errmsg_func) : file_(file), line_(line), msg_(NULL), error_(error), errormsg_func_(errmsg_func)
+        { init(type, msg, strlen(msg)); }
 
 private:
-    const char* file_;        ///< File name
-    ulong       line_;        ///< Line number
-    char*       msg_;        ///< Message
-    Error       error_;        ///< Error code, EUnknown if unknown
+    const char*  file_;             ///< File name
+    ulong        line_;             ///< Line number
+    char*        msg_;              ///< Message
+    Error        error_;            ///< Error code, EUnknown if unknown
+    ErrorMsgFunc errormsg_func_;    ///< %Error message function to use
 
-    void setmsg(const char* type, const char* msg, ulong len) {
-        ulong type_len  = strlen(type);
-        ulong total_len = type_len + 2 + len;
+    void init(const char* type, const char* msg, size_t len) {
+        size_t type_len  = strlen(type);
+        size_t total_len = type_len + 2 + len;
         if (total_len > 0) {
             msg_ = (char*)malloc(total_len+1);
             memcpy(msg_, type, type_len);
@@ -521,7 +921,7 @@ private:
         }
     }
 
-    void setmsg(const char* msg, ulong len) {
+    void init(const char* msg, size_t len) {
         if (len > 0) {
             msg_ = (char*)malloc(len+1);
             memcpy(msg_, msg, len);
@@ -532,124 +932,199 @@ private:
 
 ///////////////////////////////////////////////////////////////////////////////
 
-/** Create an Evo exception implementation.
- - See also EVO_CREATE_EXCEPTION()
- - This is used to create an exception so doxygen will document it\n
-   Example:\code
-class ExceptionFoo : public Exception
-    { EVO_CREATE_EXCEPTION_IMPL(ExceptionFoo,Exception) };
-   \endcode
+/** Create an Evo exception implementation with custom errormsg() function.
+ - This works the same as EVO_CREATE_EXCEPTION_IMPL() but has an additional parameter to specify the errormsg() function to use
  .
- \param  NAME  Name of new exception type
- \param  BASE  Base exception type -- Exception or derived from it
+ \param  NAME         Name of new exception type
+ \param  BASE         Base exception type -- \link evo::Exception Exception\endlink or derived from it
+ \param  ERRMSG_FUNC  %Error message function to use to format \link evo::Error Error\endlink code
+
+\par Example
+
+\code
+#include <evo/type.h>
+
+class ExceptionFoo : public Exception {
+    EVO_CREATE_EXCEPTION_IMPL(ExceptionFoo, Exception)
+};
+\endcode
 */
-#define EVO_CREATE_EXCEPTION_IMPL(NAME,BASE) \
+#define EVO_CREATE_EXCEPTION_IMPL_2(NAME, BASE, ERRMSG_FUNC) \
     public: \
-        NAME(const char* file, ulong line, const char* msg, Error error=EUnknown) : BASE(file, line, #NAME, msg, error) { } \
+        NAME(const char* file, ulong line, const char* msg, Error error=EUnknown) : BASE(file, line, #NAME, msg, error, ERRMSG_FUNC) { } \
         NAME(const NAME& e) : BASE(e) { } \
     protected: \
-        NAME(const char* file, ulong line, const char* type, const char* msg, Error error) : BASE(file, line, type, msg, error) { }
+        NAME(const char* file, ulong line, const char* type, const char* msg, Error error, ErrorMsgFunc errormsg_func) : BASE(file, line, type, msg, error, errormsg_func) { }
 
-/** Create an Evo exception using base exception.
- - Doxygen will not track this type, see EVO_CREATE_EXCEPTION_IMPL()
+/** Create an Evo exception implementation.
+ - This "pastes" the implementation for an Evo exception class
+ - Use this to be explicit about creating the exception class, and so tools like doxygen see (and document) the class
+ - This uses the default errormsg() function to format \link evo::Error Error\endlink codes, use EVO_CREATE_EXCEPTION_IMPL_2() to override this
+ - Alternatively, use EVO_CREATE_EXCEPTION() to create an Evo exception
  .
  \param  NAME  Name of new exception type
- \param  BASE  Base exception type -- Exception or derived from it
+ \param  BASE  Base exception type -- \link evo::Exception Exception\endlink or derived from it
+
+\par Example
+
+\code
+#include <evo/type.h>
+
+class ExceptionFoo : public Exception {
+    EVO_CREATE_EXCEPTION_IMPL(ExceptionFoo, Exception)
+};
+\endcode
 */
-#define EVO_CREATE_EXCEPTION(NAME,BASE) \
+#define EVO_CREATE_EXCEPTION_IMPL(NAME, BASE) EVO_CREATE_EXCEPTION_IMPL_2(NAME, BASE, evo::errormsg)
+
+/** Create an Evo exception from a base exception.
+ - This defines the exception class and the implementation
+ - Note that tools like doxygen may not notice classes defined via macro, see EVO_CREATE_EXCEPTION_IMPL() for an alternative
+ .
+ \param  NAME  Name of new exception type
+ \param  BASE  Base exception type -- \link evo::Exception Exception\endlink or derived from it
+
+\par Example
+
+\code
+#include <evo/type.h>
+
+EVO_CREATE_EXCEPTION(ExceptionFoo, Exception);
+\endcode
+*/
+#define EVO_CREATE_EXCEPTION(NAME, BASE) \
     class NAME : public BASE \
-        { EVO_CREATE_EXCEPTION_IMPL(NAME,BASE) }
+        { EVO_CREATE_EXCEPTION_IMPL(NAME, BASE) }
 
-// Basics
+// I/O
 
-// TODO: needed?
-/** Invalid operation or data exception. Same interface as Exception. */
-struct ExceptionInval : public Exception
-    { EVO_CREATE_EXCEPTION_IMPL(ExceptionInval,Exception) };
-
-// TODO: needed?
-/** Out of bounds value or index exception. Same interface as Exception. */
-struct ExceptionOutOfBounds : public Exception
-    { EVO_CREATE_EXCEPTION_IMPL(ExceptionOutOfBounds,Exception) };
-
-// TODO: needed?
-/** Allocation exception. */
-struct ExceptionAlloc : public Exception
-    { EVO_CREATE_EXCEPTION_IMPL(ExceptionAlloc,Exception) };
-
-// IO
-
-/** Base stream exception. Same interface as Exception. */
+/** Base stream exception for all stream errors, see Exception. */
 class ExceptionStream : public Exception
-    { EVO_CREATE_EXCEPTION_IMPL(ExceptionStream,Exception) };
+    { EVO_CREATE_EXCEPTION_IMPL(ExceptionStream, Exception) };
 
-/** %Stream open exception. Same interface as Exception. */
+/** %Stream open exception for errors opening a stream, see Exception. */
 class ExceptionStreamOpen : public ExceptionStream
-    { EVO_CREATE_EXCEPTION_IMPL(ExceptionStreamOpen,ExceptionStream) };
+    { EVO_CREATE_EXCEPTION_IMPL(ExceptionStreamOpen, ExceptionStream) };
 
-/** Input stream exception. Same interface as Exception. */
+/** Input stream exception for stream read errors, see Exception. */
 class ExceptionStreamIn : public ExceptionStream
-    { EVO_CREATE_EXCEPTION_IMPL(ExceptionStreamIn,ExceptionStream) };
+    { EVO_CREATE_EXCEPTION_IMPL(ExceptionStreamIn, ExceptionStream) };
 
-/** Output stream exception. Same interface as Exception. */
+/** Output stream exception for stream write errors, see Exception. */
 class ExceptionStreamOut : public ExceptionStream
-    { EVO_CREATE_EXCEPTION_IMPL(ExceptionStreamOut,ExceptionStream) };
+    { EVO_CREATE_EXCEPTION_IMPL(ExceptionStreamOut, ExceptionStream) };
+
+
+/** File open exception for errors opening a file, see Exception. */
+class ExceptionFileOpen : public ExceptionStreamOpen
+    { EVO_CREATE_EXCEPTION_IMPL(ExceptionFileOpen, ExceptionStreamOpen) };
+
+/** File input stream exception for file read errors, see Exception. */
+class ExceptionFileIn : public ExceptionStreamIn
+    { EVO_CREATE_EXCEPTION_IMPL(ExceptionFileIn, ExceptionStreamIn) };
+
+/** File output stream exception for file write errors, see Exception. */
+class ExceptionFileOut : public ExceptionStreamOut
+    { EVO_CREATE_EXCEPTION_IMPL(ExceptionFileOut, ExceptionStreamOut) };
 
 ///////////////////////////////////////////////////////////////////////////////
 
 /** Throw an Evo exception.
- - See also: EVO_THROW_EX(), EVO_THROW_ERR()
+ - This passes the current source filename and line number to the exception
+ - Alternatively, use EVO_THROW_ERR() to throw with an error code
  .
- \param  TYPE  %Exception type (Exception or derived from it).
- \param  MSG   %Exception message string (const char*).
-*/
-#define EVO_THROW(TYPE,MSG) throw TYPE(__FILE__, __LINE__, MSG)
+ \param  TYPE  %Exception type (Exception or derived from it)
+ \param  MSG   %Exception message string (const char*)
 
-/** Throw an Evo base exception.
- - See also: EVO_THROW(), EVO_THROW_ERR()
- .
- \param  MSG  %Exception message string (const char*).
-*/
-#define EVO_THROW_EX(MSG) throw evo::Exception(__FILE__, __LINE__, MSG)
+\par Example
 
-/** Throw an Evo exception with error code.
- - See also: EVO_THROW(), EVO_THROW_EX()
- .
- \param  TYPE   %Exception type (Exception or derived from it).
- \param  MSG    %Exception message string (const char*).
- \param  ERROR  %Error code
-*/
-#define EVO_THROW_ERR(TYPE,MSG,ERROR) throw TYPE(__FILE__, __LINE__, MSG, ERROR)
+\code
+#include <evo/type.h>
+#include <evo/io.h>
 
-/** Throw an Evo exception with error code if COND is true.
- \param  TYPE   %Exception type (Exception or derived from it).
- \param  MSG    %Exception message string (const char*).
- \param  ERROR  %Error code
- \param  COND   Error condition to check
-*/
-#define EVO_THROW_ERR_CHECK(TYPE,MSG,ERROR,COND) { if (COND) throw TYPE(__FILE__, __LINE__, MSG, ERROR); }
-
-///////////////////////////////////////////////////////////////////////////////
-
-// TODO
-/** Output formatter base class.
- - Implement to support custom output via operator<<() on String and StreamOut objects
-*/
-class OutFmtBase {
-    virtual ~OutFmtBase()
-        { }
-
-//    virtual ulong write(char* buf, ulong size)
-//        { return 0; }
+class ExceptionCustom : public Exception {
+    EVO_CREATE_EXCEPTION_IMPL(ExceptionCustom, Exception)
 };
 
+int main() {
+    try {
+        EVO_THROW(ExceptionCustom, "Error message");
+    } EVO_CATCH()
+    return 0;
+}
+\endcode
+*/
+#define EVO_THROW(TYPE, MSG) throw TYPE(__FILE__, __LINE__, MSG)
+
+/** Throw an Evo exception with error code.
+ - This passes the current source filename and line number to the exception
+ - Alternatively, use EVO_THROW_ERR_CHECK() to throw on an error condition
+ .
+ \param  TYPE   %Exception type (Exception or derived from it)
+ \param  MSG    %Exception message string (const char*)
+ \param  ERROR  %Error code -- see Error
+
+\par Example
+
+\code
+#include <evo/type.h>
+#include <evo/io.h>
+
+class ExceptionCustom : public Exception {
+    EVO_CREATE_EXCEPTION_IMPL(ExceptionCustom, Exception)
+};
+
+int main() {
+    try {
+        EVO_THROW_ERR(ExceptionCustom, "Error message", EUnknown);
+    } EVO_CATCH()
+    return 0;
+}
+\endcode
+*/
+#define EVO_THROW_ERR(TYPE, MSG, ERROR) throw TYPE(__FILE__, __LINE__, MSG, ERROR)
+
+/** Throw an Evo exception with error code if COND is true.
+ - This passes the current source filename and line number to the exception
+ - This only throws if COND evaluates to true
+ .
+ \param  TYPE   %Exception type (Exception or derived from it)
+ \param  MSG    %Exception message string (const char*)
+ \param  ERROR  %Error code -- see Error
+ \param  COND   %Error condition to check
+
+\par Example
+
+\code
+#include <evo/type.h>
+#include <evo/io.h>
+using namespace evo;
+
+class ExceptionCustom : public Exception {
+    EVO_CREATE_EXCEPTION_IMPL(ExceptionCustom, Exception)
+};
+
+// Function that returns an error code
+Error foo() {
+    // ...
+    return ENone;
+}
+
+int main() {
+    try {
+        Error err = foo();
+        EVO_THROW_ERR_CHECK(ExceptionCustom, "Error message", EUnknown, (err != ENone));
+    } EVO_CATCH()
+    return 0;
+}
+\endcode
+*/
+#define EVO_THROW_ERR_CHECK(TYPE, MSG, ERROR, COND) { if (COND) throw TYPE(__FILE__, __LINE__, MSG, ERROR); }
+
 ///////////////////////////////////////////////////////////////////////////////
 
-#if defined(_WIN32)
-    // Windows
-    // TODO
-#else
-    // Linux/Posix
+#if !defined(_WIN32)
+    // Linux/Unix
     struct SysLinux {
         static void set_timeval_ms(struct timeval& tm, ulong ms) {
             const ulong MSEC_PER_SEC  = 1000;
@@ -657,20 +1132,28 @@ class OutFmtBase {
             tm.tv_sec  = ms / MSEC_PER_SEC;
             tm.tv_usec = (ms - (tm.tv_sec * MSEC_PER_SEC)) * USEC_PER_MSEC;
         }
+
+        static void set_timespec_ms(struct timespec& tm, ulong ms) {
+            const ulong NSEC_PER_SEC  = 1000000000;
+            const ulong NSEC_PER_MSEC = 1000000;
+            tm.tv_sec  = ms / NSEC_PER_SEC;
+            tm.tv_nsec = (ms - (tm.tv_sec * NSEC_PER_SEC)) * NSEC_PER_MSEC;
+        }
     };
 #endif
 
 ///////////////////////////////////////////////////////////////////////////////
 
 /** Swap contents of given objects.
- - The object memory is swapped directly, so this works with almost any object type
+ - The object memory is swapped directly, so this works with any relocatable object type
  .
  \tparam  T  Object type, inferred from parameters
+
  \param  a  First object to swap
  \param  b  Second object to swap
 */
 template<class T>
-void swap(T& a, T& b) {
+inline void swap(T& a, T& b) {
     char tmp[sizeof(T)];
     memcpy(tmp, &a,  sizeof(T));
     memcpy(&a,  &b,  sizeof(T));
@@ -678,6 +1161,6 @@ void swap(T& a, T& b) {
 }
 
 ///////////////////////////////////////////////////////////////////////////////
-} // Namespace: evo
+}
 //@}
 #endif

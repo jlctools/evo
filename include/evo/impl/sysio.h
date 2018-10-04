@@ -1,18 +1,13 @@
 // Evo C++ Library
-/* Copyright (c) 2016 Justin Crowell
- This Source Code Form is subject to the terms of the Mozilla Public
- License, v. 2.0. If a copy of the MPL was not distributed with this
- file, You can obtain one at http://mozilla.org/MPL/2.0/.
+/* Copyright 2018 Justin Crowell
+Distributed under the BSD 2-Clause License -- see included file LICENSE.txt for details.
 */
 ///////////////////////////////////////////////////////////////////////////////
-/** \file sysio.h Evo system I/O implementation. */
+/** \file sysio.h Evo system I/O implementation */
 #pragma once
 #ifndef INCL_evo_impl_sysio_h
 #define INCL_evo_impl_sysio_h
 
-// TODO rename iodevice.h?
-
-// Includes
 #include "rawbuffer.h"
 #include "../string.h"
 #include <sys/types.h>
@@ -23,46 +18,230 @@
     // Windows
     #include <io.h>
 #else
-    // Linux/Posix
+    // Linux/Unix
     #include <dirent.h>
+    #if !defined(EVO_USE_READDIR_R)
+        #if (defined(__GNUC__) && __GNUC__ >= 6) || (defined(__clang_major__) && __clang_major__ >= 4)
+            #define EVO_USE_READDIR_R 0     // Use thread-safe readdir()
+        #else
+            #define EVO_USE_READDIR_R 1     // Use thread-safe variation readdir_r() up until deprecated by glibc 2.24+
+        #endif
+    #endif
 #endif
 
-// Namespace: evo
-namespace evo {
+// Disable certain MSVC warnings for this file
+#if defined(_MSC_VER)
+    #pragma warning(push)
+    #pragma warning(disable:4100)
+#endif
 
-/** \addtogroup EvoCoreIO */
+namespace evo {
+/** \addtogroup EvoIO */
 //@{
+
 ///////////////////////////////////////////////////////////////////////////////
 
-/** %Open mode for files and streams. */
+#if !defined(_WIN32)
+    // Linux/Unix
+    struct SysLinuxIo {
+        static bool read_wait(Error& err, int handle, ulong timeout_ms, bool autoresume) {
+            assert(handle >= 0);
+            assert(timeout_ms > 0);
+
+            fd_set read_set;
+            FD_ZERO(&read_set);
+            FD_SET(handle, &read_set);
+
+            struct timeval timeout;
+            SysLinux::set_timeval_ms(timeout, timeout_ms);
+            for (;;) {
+                int waitresult = ::select(handle+1, &read_set, NULL, NULL, &timeout);
+                if (waitresult < 0) {
+                    switch (errno) {
+                        case EINTR:
+                            if (autoresume) {
+                                #if !defined(__linux__) // Linux select() updates timeout, others need to set it again
+                                    SysLinux::set_timeval_ms(timeout, timeout_ms);
+                                #endif
+                                continue;
+                            }
+                            err = ESignal;
+                            break;
+                        case EBADF: err = EClosed;  break;
+                        default:    err = EUnknown; break;
+                    }
+                    return false;
+                } else if (waitresult == 0) {
+                    err = ETimeout;
+                    return false;
+                }
+                break;
+            }
+            return true;
+        }
+
+        static ulong read(Error& err, int handle, void* buf, ulong size, ulong timeout_ms, bool autoresume) {
+            if (handle == -1) {
+                errno = EBADF;
+                err   = EClosed;
+                return 0;
+            }
+            if (size > SSIZE_MAX)
+                size = SSIZE_MAX;
+            ssize_t result;
+            for (;;) {
+                if (timeout_ms > 0 && !SysLinuxIo::read_wait(err, handle, timeout_ms, autoresume))
+                    return 0;
+                result = ::read(handle, buf, size);
+                if (result < 0) {
+                    switch (errno) {
+                        case EINTR:
+                            if (autoresume)
+                                continue;
+                            err = ESignal; break;
+                        case ENOSPC:      err = ESpace;  break;
+                        case EFBIG:       err = ESize;   break;
+                        case EFAULT:      err = EPtr;    break;
+                        case EBADF:       err = EClosed; break;
+                    #if EAGAIN != EWOULDBLOCK
+                        case EAGAIN:      // fallthrough
+                    #endif
+                        case EWOULDBLOCK: err = ENonBlock; break;
+                        default:          err = ERead;     break;
+                    }
+                    return 0;
+                }
+                break;
+            }
+            err = ENone;
+            return result;
+        }
+
+        static bool write_wait(Error& err, int handle, ulong timeout_ms, bool autoresume) {
+            fd_set write_set;
+            FD_ZERO(&write_set);
+            FD_SET(handle, &write_set);
+
+            struct timeval timeout;
+            SysLinux::set_timeval_ms(timeout, timeout_ms);
+            for (;;) {
+                int waitresult = ::select(handle+1, NULL, &write_set, NULL, &timeout);
+                if (waitresult < 0) {
+                    switch (errno) {
+                        case EINTR:
+                            if (autoresume) {
+                                #if !defined(__linux__) // Linux select() updates timeout, others need to set it again
+                                    SysLinux::set_timeval_ms(timeout, timeout_ms);
+                                #endif
+                                continue;
+                            }
+                            err = ESignal;
+                            break;
+                        case EBADF: err = EClosed;  break;
+                        default:    err = EUnknown; break;
+                    }
+                    return false;
+                } else if (waitresult == 0) {
+                    err = ETimeout;
+                    return false;
+                }
+                break;
+            }
+            return true;
+        }
+
+        static ulong write(Error& err, int handle, const void* buf, ulong size, ulong timeout_ms, bool autoresume) {
+            if (handle == -1) {
+                errno = EBADF;
+                err   = EClosed;
+                return 0;
+            }
+            if (size > SSIZE_MAX)
+                size = SSIZE_MAX;
+            ssize_t result;
+            for (;;) {
+                if (timeout_ms > 0 && !SysLinuxIo::write_wait(err, handle, timeout_ms, autoresume))
+                    return 0;
+                result = ::write(handle, buf, size);
+                if (result == 0) {
+                    err = EFail;
+                    return 0;
+                } else if (result < 0) {
+                    switch (errno) {
+                        case EINTR:
+                            if (autoresume)
+                                continue;
+                            err = ESignal; break;
+                        case ENOSPC:      err = ESpace;  break;
+                        case EFBIG:       err = ESize;   break;
+                        case EFAULT:      err = EPtr;    break;
+                        case EBADF:       err = EClosed; break;
+                    #if EAGAIN != EWOULDBLOCK
+                        case EAGAIN:      // fallthrough
+                    #endif
+                        case EWOULDBLOCK: err = ENonBlock; break;
+                        default:          err = EWrite;  break;
+                    }
+                    return 0;
+                }
+                break;
+            }
+            err = ENone;
+            return result;
+        }
+    };
+#endif
+
+///////////////////////////////////////////////////////////////////////////////
+
+/** %Open mode for files and streams.
+ - See File::open()
+*/
 enum Open {
-    oRead          = O_RDONLY,                                    ///< Read only
-    oReadWrite     = O_RDWR,                                    ///< Read and write
-    oReadWriteNew  = O_RDWR | O_CREAT | O_TRUNC,                ///< Read and write, create/replace
-    oReadAppend    = O_RDWR | O_APPEND,                            ///< Read and write/append
-    oReadAppendNew = O_RDWR | O_APPEND | O_CREAT | O_TRUNC,        ///< Read and write/append, create/replace
-    oWrite         = O_WRONLY,                                    ///< Write only
-    oWriteNew      = O_WRONLY | O_CREAT | O_TRUNC,                ///< Write only, create/replace
-    oAppend        = O_WRONLY | O_APPEND,                        ///< Write/append only
-    oAppendNew     = O_WRONLY | O_APPEND | O_CREAT | O_TRUNC    ///< Write/append only, create/replace
+    oREAD            = O_RDONLY,                                ///< Read only
+    oREAD_WRITE      = O_RDWR,                                  ///< Read and write
+    oREAD_WRITE_NEW  = O_RDWR | O_CREAT | O_TRUNC,              ///< Read and write, create/replace
+    oREAD_APPEND     = O_RDWR | O_APPEND,                       ///< Read and write/append
+    oREAD_APPEND_NEW = O_RDWR | O_APPEND | O_CREAT | O_TRUNC,   ///< Read and write/append, create/replace
+    oWRITE           = O_WRONLY,                                ///< Write only
+    oWRITE_NEW       = O_WRONLY | O_CREAT | O_TRUNC,            ///< Write only, create/replace
+    oAPPEND          = O_WRONLY | O_APPEND,                     ///< Write/append only
+    oAPPEND_NEW      = O_WRONLY | O_APPEND | O_CREAT | O_TRUNC  ///< Write/append only, create/replace
 };
 
 /** %Seek starting position. */
 enum Seek {
     sBegin   = SEEK_SET,        ///< Seek from beginning
     sCurrent = SEEK_CUR,        ///< Seek from current position
-    sEnd     = SEEK_END            ///< Seek to end
+    sEnd     = SEEK_END         ///< Seek to end
 };
+
+/** Check whether open mode is readable.
+ \param  open  Open mode
+ \return       Whether mode is readable
+*/
+inline bool open_readable(Open open)
+    { return (open & O_RDWR || !(open & (O_WRONLY | O_APPEND))); }  // O_RDONLY is 0 so check for absence of write flags
+
+/** Check whether open mode is writable.
+ \param  open  Open mode
+ \return       Whether mode is writable
+*/
+inline bool open_writable(Open open)
+    { return (open & (O_RDWR | O_WRONLY | O_APPEND)); }
 
 ///////////////////////////////////////////////////////////////////////////////
 
-/** System I/O device for streams.
+/** I/O device base class for streams.
  - This interface is used to define an I/O device concept for stream I/O
+   - This doesn't need virtual methods because the derived class is used as a template parameter to a Stream class
  - Do not throw exceptions here, use Error code
 */
-class SysIoDevice  // TODO: Rename IoDevice?
-{
+class IoDevice {
 public:
+    typedef ExceptionStreamIn  ExceptionInT;    ///< Input exception type for device (may be overridden by derived)
+    typedef ExceptionStreamOut ExceptionOutT;   ///< Output exception type for device (may be overridden by derived)
+
     /** Close stream. */
     void close()
         { }
@@ -77,7 +256,7 @@ public:
      \param  timeout_ms  Read timeout in milliseconds, 0 for none (don't timeout)
      \return             Size actually read in bytes, 0 on end-of-file or error
     */
-    ulong read(Error& err, char* buf, ulong size, ulong timeout_ms=0)
+    ulong read(Error& err, void* buf, ulong size, ulong timeout_ms=0)
         { err = ENone; return 0; }
 
     /** Write output data to device.
@@ -90,7 +269,7 @@ public:
      \param  timeout_ms  Write timeout in milliseconds, 0 for none (don't timeout)
      \return             Size actually written in bytes, 0 on error (check err)
     */
-    ulong write(Error& err, const char* buf, ulong size, ulong timeout_ms=0)
+    ulong write(Error& err, const void* buf, ulong size, ulong timeout_ms=0)
         { err = EInval; return 0; }
 };
 
@@ -99,8 +278,7 @@ public:
 /** System directory reader (used internally).
  - Implementation is OS specific and handle is public
 */
-struct SysDir
-{
+struct SysDir {
 #if defined(_WIN32)
     // Windows
     typedef intptr_t Handle;
@@ -192,11 +370,15 @@ struct SysDir
     }
 
 #else
-    // Linux/Posix
+    // Linux/Unix
     typedef DIR* Handle;
 
-    SysDir()
-        { buffer = NULL; handle = NULL; }
+    SysDir() {
+    #if EVO_USE_READDIR_R
+        buffer = NULL;
+    #endif
+        handle = NULL;
+    }
 
     ~SysDir()
         { close(); }
@@ -214,17 +396,21 @@ struct SysDir
             }
         } else {
             err = ENone;
+        #if EVO_USE_READDIR_R
             // See readdir_r() manpage for size calculation
             buffer = (char*)::malloc(offsetof(struct dirent, d_name) + pathconf(path, _PC_NAME_MAX) + 1);
+        #endif
         }
         return err;
     }
 
     void close() {
+    #if EVO_USE_READDIR_R
         if (buffer != NULL) {
             ::free(buffer);
             buffer = NULL;
         }
+    #endif
         if (handle) {
             ::closedir(handle);
             handle = NULL;
@@ -236,19 +422,29 @@ struct SysDir
 
     bool read(SubString& entry) {
         if (handle) {
+        #if EVO_USE_READDIR_R
             assert( buffer != NULL );
             struct dirent* result = NULL;
             if (::readdir_r(handle, (struct dirent*)buffer, &result) == 0 && result != NULL) {
                 entry = result->d_name;
                 return true;
             }
+        #else
+            struct dirent* result = ::readdir(handle);
+            if (result != NULL) {
+                entry = result->d_name;
+                return true;
+            }
+        #endif
         }
         entry.set();
         return false;
     }
 
 private:
+#if EVO_USE_READDIR_R
     char* buffer;
+#endif
 
 public:
 #endif
@@ -258,21 +454,25 @@ public:
 
 ///////////////////////////////////////////////////////////////////////////////
 
-/** System file reader/writer (used internally).
+/** File I/O device (used internally).
  - This is an internal low-level interface with public members, use File instead
  - Members are public for quick access and simple low-level interface
  - This does not do any read/write buffering
  - Implementation is OS specific
 */
-struct SysFile : public SysIoDevice
-{
+struct IoFile : public IoDevice {
+    static const bool STREAM_SEEKABLE = true;   ///< File streams are seekable with Stream
+
+    typedef ExceptionFileIn  ExceptionInT;      ///< Input exception type for file stream
+    typedef ExceptionFileOut ExceptionOutT;     ///< Output exception type for file stream
+
     typedef int Handle;        ///< System file handle
 
     /** Invalid handle value. */
     static const Handle INVALID = -1;
 
     /** Destructor. Calls close(). */
-    ~SysFile()
+    ~IoFile()
         { close(); }
 
     /** Get whether file is open.
@@ -295,7 +495,7 @@ struct SysFile : public SysIoDevice
     static const int USER_RD  = _S_IREAD;
     static const int USER_RW  = _S_IREAD | _S_IWRITE;
 
-    SysFile()
+    IoFile()
         { handle = INVALID; }
 
     Error open(const char* path, Open mode, int perm=DEFPERM) {
@@ -313,6 +513,26 @@ struct SysFile : public SysIoDevice
                 default:           err = EFail;        break;
             }
             handle = INVALID;
+        }
+        return err;
+    }
+
+    Error open_dup(Handle other, Handle target=INVALID) {
+        close();
+        if (target == INVALID) {
+            const int result = ::_dup(other);
+            if (result >= 0) {
+                handle = result;
+                return ENone;
+            }
+        } else if (::_dup2(other, target) == 0) {
+            handle = target;
+            return ENone;
+        }
+        Error err;
+        switch (errno) {
+            case EBADF: err = EClosed; break;
+            default:    err = EFail;   break;
         }
         return err;
     }
@@ -352,7 +572,7 @@ struct SysFile : public SysIoDevice
         return (ulongl)result;
     }
 
-    ulong read(Error& err, char* buf, ulong size, ulong timeout_ms=0) {
+    ulong read(Error& err, void* buf, ulong size, ulong timeout_ms=0) {
         if (handle == INVALID) {
             err = EClosed;
             return 0;
@@ -361,7 +581,6 @@ struct SysFile : public SysIoDevice
             size = std::numeric_limits<uint>::max();
         int result;
         for (;;) {
-            // TODO: fix timeout
             result = ::_read(handle, buf, size);
             if (result < 0) {
                 switch (errno) {
@@ -379,7 +598,7 @@ struct SysFile : public SysIoDevice
         return (ulong)result;
     }
 
-    ulong write(Error& err, const char* buf, ulong size, ulong timeout_ms=0) {
+    ulong write(Error& err, const void* buf, ulong size, ulong timeout_ms=0) {
         if (handle == INVALID) {
             err = EClosed;
             return 0;
@@ -388,7 +607,6 @@ struct SysFile : public SysIoDevice
             size = std::numeric_limits<uint>::max();
         int result;
         for (;;) {
-            // TODO: fix timeout
             result = ::_write(handle, buf, size);
             if (result == 0) {
                 err = EFail;
@@ -409,7 +627,7 @@ struct SysFile : public SysIoDevice
     }
 
 #else
-    // Linux/Posix
+    // Linux/Unix
 
     /** Default permissions (used when creating new file). */
     static const int DEFPERM  = S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP | S_IROTH;
@@ -421,13 +639,13 @@ struct SysFile : public SysIoDevice
     static const int USER_RW = S_IRUSR | S_IWUSR;
 
     /** Constructor. */
-    SysFile()
+    IoFile()
         { handle = INVALID; autoresume = true; }
 
     /** Open file for access.
      \param  path  File path to use
      \param  mode  Access mode to use
-     \param  perm  Permissions for new files [Linux/Posix]
+     \param  perm  Permissions for new files [Linux/Unix]
      \return       ENone on success, error code on other error
     */
     Error open(const char* path, Open mode, int perm=DEFPERM) {
@@ -458,7 +676,31 @@ struct SysFile : public SysIoDevice
         return err;
     }
 
-    // TODO: support fsync
+    /** Open duplicate handle from source handle.
+     \param  src     Source handle to duplicate
+     \param  target  Target handle to open under (closed first, if open), INVALID to ignore and open a new handle
+     \return         ENone on success, error code on other error
+    */
+    Error open_dup(Handle src, Handle target=INVALID) {
+        close();
+        if (target == INVALID) {
+            const int result = ::dup(src);
+            if (result >= 0) {
+                handle = result;
+                return ENone;
+            }
+        } else if (::dup2(src, target) == 0) {
+            handle = target;
+            return ENone;
+        }
+        Error err;
+        switch (errno) {
+            case EBADF: err = EClosed; break;
+            default:    err = EFail;   break;
+        }
+        return err;
+    }
+
     // Documented by parent
     void close() {
         if (handle != INVALID) {
@@ -510,111 +752,13 @@ struct SysFile : public SysIoDevice
     }
 
     // Documented by parent
-    ulong read(Error& err, char* buf, ulong size, ulong timeout_ms=0) {
-        if (handle == INVALID) {
-            err = EClosed;
-            return 0;
-        }
-        if (size > SSIZE_MAX)
-            size = SSIZE_MAX;
-        ssize_t result;
-        for (;;) {
-            if (timeout_ms > 0) {
-                fd_set read_set;
-                FD_ZERO(&read_set);
-                FD_SET(handle, &read_set);
-                struct timeval timeout;
-                SysLinux::set_timeval_ms(timeout, timeout_ms);
-                int waitresult = ::select(handle+1, &read_set, NULL, NULL, &timeout);
-                if (waitresult < 0) {
-                    switch (errno) {
-                        case EINTR:
-                            if (autoresume)
-                                continue;
-                            err = ESignal; break;
-                        case EBADF: err = EClosed;  break;
-                        default:    err = EUnknown; break;
-                    }
-                    return 0;
-                } else if (waitresult == 0)
-                    { err = ETimeout; return 0; }
-            }
-            result = ::read(handle, buf, size);
-            if (result < 0) {
-                switch (errno) {
-                    case EINTR:
-                        if (autoresume)
-                            continue;
-                        err = ESignal; break;
-                    case ENOSPC: err = ESpace;  break;
-                    case EFBIG:  err = ESize;   break;
-                    case EFAULT: err = EPtr;    break;
-                    case EBADF:  err = EClosed; break;
-                    default:     err = ERead;   break;
-                }
-                return 0;
-            }
-            break;
-        }
-        err = ENone;
-        return result;
-    }
+    ulong read(Error& err, void* buf, ulong size, ulong timeout_ms=0)
+        { return SysLinuxIo::read(err, handle, buf, size, timeout_ms, autoresume); }
 
     // Documented by parent
-    ulong write(Error& err, const char* buf, ulong size, ulong timeout_ms=0) {
-        if (handle == INVALID) {
-            err = EClosed;
-            return 0;
-        }
-        if (size > SSIZE_MAX)
-            size = SSIZE_MAX;
-        ssize_t result;
-        for (;;) {
-            if (timeout_ms > 0) {
-                fd_set write_set;
-                FD_ZERO(&write_set);
-                FD_SET(handle, &write_set);
-                struct timeval timeout;
-                SysLinux::set_timeval_ms(timeout, timeout_ms);
-                int waitresult = ::select(handle+1, NULL, &write_set, NULL, &timeout);
-                if (waitresult < 0) {
-                    switch (errno) {
-                        case EINTR:
-                            if (autoresume)
-                                continue;
-                            err = ESignal; break;
-                        case EBADF: err = EClosed;  break;
-                        default:    err = EUnknown; break;
-                    }
-                    return 0;
-                } else if (waitresult == 0)
-                    { err = ETimeout; return 0; }
-            }
-            result = ::write(handle, buf, size);
-            if (result == 0) {
-                err = EFail;
-                return 0;
-            } else if (result < 0) {
-                switch (errno) {
-                    case EINTR:
-                        if (autoresume)
-                            continue;
-                        err = ESignal; break;
-                    case ENOSPC: err = ESpace;  break;
-                    case EFBIG:  err = ESize;   break;
-                    case EFAULT: err = EPtr;    break;
-                    case EBADF:  err = EClosed; break;
-                    default:     err = EWrite;  break;
-                }
-                return 0;
-            }
-            break;
-        }
-        err = ENone;
-        return result;
-    }
+    ulong write(Error& err, const void* buf, ulong size, ulong timeout_ms=0)
+        { return SysLinuxIo::write(err, handle, buf, size, timeout_ms, autoresume); }
 
-    // TODO doc
     static Error mkdir(const char* path, int perm=0) {
         if (perm == 0)
             perm = DEFPERM;
@@ -686,7 +830,7 @@ struct SysFile : public SysIoDevice
         return err;
     }
 
-    bool   autoresume;    ///< Whether to auto-resume I/O operation after signal received [Linux/Posix]
+    bool   autoresume;    ///< Whether to auto-resume I/O operation after signal received [Linux/Unix]
 #endif
 
     Handle handle;        ///< System handle/descriptor
@@ -694,48 +838,56 @@ struct SysFile : public SysIoDevice
 
 ///////////////////////////////////////////////////////////////////////////////
 
-/** Buffered reader for SysIoDevice (used internally).
- - This is an internal low-level interface, see: File, Pipe
- - Use readbuf.resize() to resize or disable buffer
+/** Buffered reader for IoDevice (used internally).
+ - This is an internal low-level interface, see: File, Pipe, Console, Socket
+ - Filtering is enabled by setting 'filters' -- note that the pointer should be owned (freed) by the IoDevice
+ - Use readbuf.resize() to resize or disable buffer -- note that filters require buffering
  - Members are public for quick access and simple low-level interface
 */
-struct SysReader  // TODO: rename SysIoReader?
-{
+struct IoReader {
     static const ulong DEFSIZE = 8192;      ///< Default buffer size (8KB, power of 2 and multiple of common filesystem block size 4KB)
 
     RawBuffer  readbuf;         ///< Primary read buffer -- filtering may involve additional buffers
     RawBuffer* curbuf;          ///< Pointer to current buffer, either primary buffer or from last filter applied
     ulong      curbuf_offset;   ///< Bytes read from curbuf, i.e. buffer start offset
 
-    ulong timeout_ms;       ///< Read timeout in milliseconds, 0 for none (don't timeout)
-    const char* newline;    ///< Newlines to use (don't change once reads start)
-    uint  newlinesize;      ///< Size of newlines to use, i.e. strlen(newline)
-    char  rd_partnl;        ///< Used by readtext() in special case, holds end of converted newline that didn't fit in buf or 0
-    char  rl_partnl;        ///< Used by readline() on partial newlines, holds next expected char for newline pair or 0
+    ulong       timeout_ms;     ///< Read timeout in milliseconds, 0 for none (don't timeout)
+    const char* newline;        ///< Newline string to convert to when reading text -- do not modify
+    uint        newlinesize;    ///< Size of newlines string to use, i.e. strlen(newline) -- do not modify
+    char        rd_partnl;      ///< Used by readtext() in special case, holds end of converted newline that didn't fit in buf or 0
+    char        rl_partnl;      ///< Used by readline() on partial newlines, holds next expected char for newline pair or 0
 
     /** Constructor to set new buffer size.
-     \param  newsize   New buffer size, 0 for default
-     \param  newlines  Newlines to use (defaults to newlines for current platform)
+     \param  newsize  New buffer size, 0 for default
+     \param  nl       Newline value for text reading to convert newlines to (defaults to NL_SYS), doesn't affect reading by line
     */
-    SysReader(ulong newsize=0, Newline newlines=NL) {
+    IoReader(ulong newsize=0, Newline nl=NL_SYS) {
         if (newsize > 0)
             readbuf.resize(newsize);
         curbuf        = &readbuf;
         curbuf_offset = 0;
-        timeout_ms    = 0;
-        newline       = getnewline(newlines);
-        newlinesize   = getnewlinesize(newlines);
-        rd_partnl     = 0;
-        rl_partnl     = 0;
+        timeout_ms  = 0;
+        newline     = getnewline(nl);
+        newlinesize = getnewlinesize(nl);
+        rd_partnl   = 0;
+        rl_partnl   = 0;
     }
 
-    // TODO
+    /** Initialize and open for input (reading).
+     - This creates the read buffer, if needed
+    */
     void open() {
+        readbuf.used = curbuf_offset = 0;
         if (readbuf.size == 0)
-            readbuf.resize(SysReader::DEFSIZE);
+            readbuf.resize(IoReader::DEFSIZE);
+        //if (filters != NULL)
+        //    filters->onread_open(readbuf);
     }
 
+    /** Close input. */
     void close() {
+        //if (filters != NULL)
+        //    filters->onread_close();
     }
 
     /** Reset and fill buffer by reading from file.
@@ -744,7 +896,7 @@ struct SysReader  // TODO: rename SysIoReader?
      - Data may still be in buffer after end-of-file is reached
      - The minsize parameter is useful when input is trickling in (slow network or user typing)
      .
-     \tparam  T  SysIoDevice to read from
+     \tparam  T  IoDevice to read from
 
      \param  in       File to read from
      \param  minsize  Minimum size to fill (capped to buffer size if greater), 0 for whole buffer
@@ -776,7 +928,7 @@ struct SysReader  // TODO: rename SysIoReader?
      - May return less than requested
      - This does a binary read -- no conversion on newlines
      .
-     \tparam  T  SysIoDevice to read from
+     \tparam  T  IoDevice to read from
 
      \param  err      Stores ENone on success, error code on error [out]
      \param  in       File to read from
@@ -785,22 +937,10 @@ struct SysReader  // TODO: rename SysIoReader?
      \return          Bytes read, 0 if end-of-file or error (check err)
     */
     template<class T>
-    ulong readbin(Error& err, T& in, char* buf, ulong bufsize) {
+    ulong readbin(Error& err, T& in, void* buf, ulong bufsize) {
         assert( bufsize > 0 );
         assert( curbuf->used <= curbuf->size );
         assert( curbuf_offset <= curbuf->used );
-        // TODO
-        /*if (rl_partnl != 0) {
-            // Ignore end of partial newline from readline()
-            if (data[pos] == rl_partnl) {
-                rl_partnl = 0;
-                ++pos;
-                ++buf;
-                if (--bufsize == 0)
-                    { err = ENone; return 1; }
-            } else
-                rl_partnl = 0;
-        }*/
 
         ulong readtotal = 0, usedleft = curbuf->used - curbuf_offset;
         if (bufsize <= usedleft) {
@@ -812,9 +952,9 @@ struct SysReader  // TODO: rename SysIoReader?
             // Read from buffer first
             if (usedleft > 0) {
                 memcpy(buf, curbuf->data+curbuf_offset, usedleft);
-                buf      += usedleft;
-                bufsize  -= usedleft;
-                readtotal = usedleft;
+                (char*&)buf += usedleft;
+                bufsize     -= usedleft;
+                readtotal   = usedleft;
             }
 
             // Read data larger than buffer directly
@@ -823,24 +963,27 @@ struct SysReader  // TODO: rename SysIoReader?
                 readsize = in.read(err, buf, bufsize);
                 if (err != ENone)
                     return 0;
-                buf       += readsize;
-                bufsize   -= readsize;
-                readtotal += readsize;
+                (char*&)buf += readsize;
+                bufsize     -= readsize;
+                readtotal   += readsize;
             }
 
-            // Fill buffer for next read
-            readsize = in.read(err, curbuf->data, curbuf->size);
-            if (err != ENone)
-                return 0;
-            curbuf->used = readsize;
+            // Read more if needed
+            if (bufsize > 0) {
+                // Fill buffer for next read
+                readsize = in.read(err, curbuf->data, curbuf->size);
+                if (err != ENone)
+                    return 0;
+                curbuf->used = readsize;
 
-            // Read more from buffer if needed
-            if (bufsize > 0 && curbuf->used > 0) {
-                curbuf_offset = (bufsize > curbuf->used ? curbuf->used : bufsize);
-                memcpy(buf, curbuf->data, curbuf_offset);
-                readtotal += curbuf_offset;
-            } else
-                curbuf_offset = 0;
+                // Read more from buffer if needed
+                if (curbuf->used > 0) {
+                    curbuf_offset = (bufsize > curbuf->used ? curbuf->used : bufsize);
+                    memcpy(buf, curbuf->data, curbuf_offset);
+                    readtotal += curbuf_offset;
+                } else
+                    curbuf_offset = 0;
+            }
         }
         err = ENone;
         return readtotal;
@@ -849,7 +992,7 @@ struct SysReader  // TODO: rename SysIoReader?
     /** Read from file using buffer.
      - May return less than requested
      - This does a text read, converting newlines per newline member
-     - This recognizes '\n', '\r', or either combination of the two as a newline
+     - This recognizes '\\n', '\\r', or either combination of the two as a newline
      - Note: This will try to avoid stopping in the middle of a newline pair by reading 1 less byte, if possible
        - If forced to break up a newline pair due to bufsize=1 (not recommended), the remaining newline byte is saved until the next call to readtext()
        - However, calling readline() after readtext() in this special case will cause readline() to return an ELoss error
@@ -860,7 +1003,7 @@ struct SysReader  // TODO: rename SysIoReader?
        - This is only a problem if you mix readtext() (with bufsize=1) and readline() calls under these conditions
        .
      .
-     \tparam  T  SysIoDevice to read from
+     \tparam  T  IoDevice to read from
 
      \param  err      Stores ENone on success, error code on error [out]
      \param  in       File to read from
@@ -891,7 +1034,7 @@ struct SysReader  // TODO: rename SysIoReader?
                     return 0;
                 if (curbuf->used == 0) {
                     err = (bytesread > 0 ? ENone : EEnd);
-                    return bytesread;
+                    return (ulong)bytesread;
                 }
             }
             if (rl_partnl != 0) {
@@ -939,9 +1082,9 @@ struct SysReader  // TODO: rename SysIoReader?
 
                 // Copy to newline
                 if (p > start) {
-                    memcpy(buf+bytesread, start, (len=p-start));
+                    memcpy(buf+bytesread, start, (len=(ulong)(p-start)));
                     bytesread += len;
-                    curbuf_offset += len;
+                    curbuf_offset += (ulong)len;
                 }
                 if (read_nl_size == 0 || bytesread+newlinesize > bufsize) {
                     if (bufsize == 1) {
@@ -962,9 +1105,9 @@ struct SysReader  // TODO: rename SysIoReader?
 
             // Copy remaining until end
             if (p > start) {
-                memcpy(buf+bytesread, start, (len=p-start));
+                memcpy(buf+bytesread, start, (len=(ulong)(p-start)));
                 bytesread += len;
-                curbuf_offset += len;
+                curbuf_offset += (ulong)len;
             }
 
             // Stop here if desired size read
@@ -975,15 +1118,14 @@ struct SysReader  // TODO: rename SysIoReader?
     done:
         err = ENone;
         assert( bytesread > 0 );
-        return bytesread;
+        return (ulong)bytesread;
     }
 
-    // TODO: optimization: str can references buffer?
     /** Read a line from file using buffer.
      - This will read and return the next line from file as a string, not including the newline
-     - This recognizes '\n', '\r', or either combination of the two as a newline
+     - This recognizes '\\n', '\\r', or either combination of the two as a newline
      .
-     \tparam  T  SysIoDevice to read from
+     \tparam  T  IoDevice to read from
 
      \param  str     String to store line (cleared first) [out]
      \param  in      File to read from
@@ -995,12 +1137,12 @@ struct SysReader  // TODO: rename SysIoReader?
         assert( curbuf->used <= curbuf->size );
         assert( curbuf_offset <= curbuf->used );
         if (rd_partnl != 0)
-            { str.set(); return ELoss; }
+            { str.clear(); return ELoss; }
 
         Error err;
         ulong len = 0;
         char  checknext;
-        str.set();
+        str.clear();
         for (;;) {
             if (curbuf_offset >= curbuf->used) {
                 // Fill buffer
@@ -1033,7 +1175,7 @@ struct SysReader  // TODO: rename SysIoReader?
                     continue;
 
                 // Found newline
-                len = p - start;
+                len = (ulong)(p - start);
                 if (maxlen > 0 && str.size()+len > maxlen)
                     return EOutOfBounds;
                 str.add(start, len);
@@ -1049,7 +1191,7 @@ struct SysReader  // TODO: rename SysIoReader?
             }
 
             // Newline not found
-            len = end - start;
+            len = (ulong)(end - start);
             if (maxlen > 0 && str.size()+len > maxlen)
                 break;
             str.add(start, len);
@@ -1061,42 +1203,57 @@ struct SysReader  // TODO: rename SysIoReader?
 
 ///////////////////////////////////////////////////////////////////////////////
 
-/** Buffered writer for SysIoDevice (used internally).
- - This is an internal low-level interface, see: File, Pipe
- - Use writebuf.resize() to resize or disable buffer
+/** Buffered writer for IoDevice (used internally).
+ - This is an internal low-level interface, see: File, Pipe, Console, Socket
+ - Filtering is enabled by setting 'filters' -- note that the pointer should be owned (freed) by the IoDevice
+ - Use writebuf.resize() to resize or disable buffer -- note that filters require buffering
  - Members are public for quick access and simple low-level interface
 */
-struct SysWriter : public RawBuffer // TODO
-{
+struct IoWriter : public RawBuffer {
     static const ulong DEFSIZE = 16384;    ///< Default buffer size (16KB, power of 2 and multiple of common filesystem block size 4KB)
 
-    ulong timeout_ms;       ///< Write timeout in milliseconds, 0 for none (don't timeout)
-    const char* newline;    ///< Newlines to use (don't change once writes start)
-    uint  newlinesize;        ///< Size of newlines to use, i.e. strlen(newline)
-    bool  flushlines;        ///< Whether to flush after each line (aka line buffering) -- only applies to text writes, i.e. writetext()
-    char  partnl;            ///< Used internally for handling partial newlines between writetext() calls
+    ulong       timeout_ms;     ///< Write timeout in milliseconds, 0 for none (no timeout)
+    const char* newline;        ///< Default newline string for formatting -- do not modify
+    uint        newlinesize;    ///< Size of default newline string to use, i.e. strlen(newline) -- do not modify
+    bool        flushlines;     ///< Whether to flush after each line (aka line buffering) -- only applies to text writes, i.e. writetext()
+    char        partnl;         ///< Used internally for handling partial newlines between writetext() calls
 
-    /** Constructor to set new buffer size.
-     \param  newsize   New buffer size
-     \param  newlines  Newlines to use (defaults to newlines for current platform)
+    /** Constructor to set new buffer size and newline value.
+     \param  newsize  New buffer size
+     \param  nl       Default newline value for formatting (defaults to NL_SYS)
     */
-    SysWriter(ulong newsize=0, Newline newlines=NL) {
+    IoWriter(ulong newsize=0, Newline nl=NL_SYS) {
         if (newsize > 0)
             resize(newsize);
         timeout_ms  = 0;
-        newline     = getnewline(newlines);
-        newlinesize = getnewlinesize(newlines);
+        newline     = getnewline(nl);
+        newlinesize = getnewlinesize(nl);
         partnl      = 0;
         flushlines  = false;
     }
 
-    // TODO: support fsync
-    /** Flush buffer by writing to file.
+    /** Initialize and open for output (writing).
+    - This creates the write buffer, if needed
+    .
+    \param  flushlines_val  Whether to flush on each newline
+    */
+    void open(bool flushlines_val=false) {
+        used = 0;
+        if (size == 0)
+            resize(IoWriter::DEFSIZE);
+        flushlines = flushlines_val;
+    }
+
+    /** Close output. */
+    void close()
+        { }
+
+    /** Flush buffer by writing to device.
      - This will clear out buffered data
      .
-     \tparam  T  SysIoDevice to flush and write to
+     \tparam  T  IoDevice to flush and write to
 
-     \param  out  File to write to
+     \param  out  Device to write to
      \return      ENone on success, error code on error
     */
     template<class T>
@@ -1115,20 +1272,20 @@ struct SysWriter : public RawBuffer // TODO
         return ENone;
     }
 
-    /** Write data to file using buffer.
+    /** Write data to device using buffer.
      - This will flush the buffer when full
      - Note: If writetext() was previously called then set partnl=0 before calling writetext() again
      .
-     \tparam  T  SysIoDevice to write to
+     \tparam  T  IoDevice to write to
 
      \param  err      Stores ENone on success, error code on error [out]
-     \param  out      File to write to
+     \param  out      Device to write to
      \param  buf      Data buffer to write from
      \param  bufsize  Data size to write in bytes
      \return          Size actually written, 0 on error, see err
     */
     template<class T>
-    ulong writebin(Error& err, T& out, const char* buf, ulong bufsize) {
+    ulong writebin(Error& err, T& out, const void* buf, ulong bufsize) {
         assert( used <= size );
         if (bufsize > 0) {
             ulong writesize = size - used;
@@ -1142,9 +1299,9 @@ struct SysWriter : public RawBuffer // TODO
                 if (size > 0) {
                     if (writesize > 0) {
                         memcpy(data+used, buf, writesize);
-                        used    += writesize;
-                        buf     += writesize;
-                        bufleft -= writesize;
+                        used        += writesize;
+                        (char*&)buf += writesize;
+                        bufleft     -= writesize;
                     }
                     if ( (err=flush(out)) != ENone )
                         return 0;
@@ -1157,8 +1314,8 @@ struct SysWriter : public RawBuffer // TODO
                         if (err != ENone)
                             return 0;
                         assert( writesize > 0 );
-                        buf     += writesize;
-                        bufleft -= writesize;
+                        (char*&)buf += writesize;
+                        bufleft     -= writesize;
                     } while (bufleft > 0);
                 } else if (bufleft > 0) {
                     // Copy to buffer, partial fill
@@ -1172,21 +1329,21 @@ struct SysWriter : public RawBuffer // TODO
         return bufsize;
     }
 
-    /** Write repeated data to file using buffer.
+    /** Write repeated data to device using buffer.
      - This will flush the buffer when full
      - Note: If writetext() was previously called then set partnl=0 before calling writetext() again
      .
-     \tparam  T  SysIoDevice to write to
+     \tparam  T  IoDevice to write to
 
      \param  err      Stores ENone on success, error code on error [out]
-     \param  out      File to write to
+     \param  out      Device to write to
      \param  buf      Data buffer to write repeatedly from
      \param  bufsize  Data size to write in bytes
      \param  count    Data repeat count (2 = 2*bufsize)
      \return          Size actually written, 0 on error, see err
     */
     template<class T>
-    ulong writebin2(Error& err, T& out, const char* buf, ulong bufsize, ulong count) {
+    ulong writebin2(Error& err, T& out, const void* buf, ulong bufsize, ulong count) {
         assert( used <= size );
         const ulong countsize = count * bufsize;
         if (count > 0 && bufsize > 0) {
@@ -1218,7 +1375,7 @@ struct SysWriter : public RawBuffer // TODO
                 ulong writesize, writeleft; const char* p;
                 do {
                     // Write next repetition
-                    for (writeleft=bufsize, p=buf;; p+=writesize) {
+                    for (writeleft=bufsize, p=(const char*)buf;; p+=writesize) {
                         writesize = out.write(err, p, writeleft);
                         if (err != ENone)
                             return 0;
@@ -1235,14 +1392,14 @@ struct SysWriter : public RawBuffer // TODO
         return countsize;
     }
 
-    /** Write repeated character to file using buffer.
+    /** Write repeated character to device using buffer.
      - This will flush the buffer when full
      - Note: If writetext() was previously called then set partnl=0 before calling writetext() again
      .
-     \tparam  T  SysIoDevice to write to
+     \tparam  T  IoDevice to write to
 
      \param  err    Stores ENone on success, error code on error [out]
-     \param  out    File to write to
+     \param  out    Device to write to
      \param  ch     Character to write
      \param  count  Character repeat count to write
      \return        Size actually written, 0 on error, see err
@@ -1289,16 +1446,16 @@ struct SysWriter : public RawBuffer // TODO
         return count;
     }
 
-    /** Write data to file using buffer.
+    /** Write data to device using buffer.
      - This will flush the buffer when full
      - This does a text write, converting newlines per newline member
      - Newline conversion may change the number of bytes written internally
      - If readtext() was used on buf (newline conversion already done) then use write() instead for best performance
      .
-     \tparam  T  SysIoDevice to write to
+     \tparam  T  IoDevice to write to
 
      \param  err      Stores ENone on success, error code on error [out]
-     \param  out      File to write to
+     \param  out      Device to write to
      \param  buf      Data buffer to write from
      \param  bufsize  Data size to write in bytes
      \return          Size actually written, 0 on error, see err
@@ -1332,18 +1489,18 @@ struct SysWriter : public RawBuffer // TODO
                 } else if (p[1] == checknext) {
                     if (newline[1] == checknext) {
                         p += 2; // no need to convert 2-char newline
-                        flushlines_size = used + (p-start);
+                        flushlines_size = used + (ulong)(p - start);
                         continue;
                     }
                     cur_newline_size = 2;
                 } else if (*p == *newline && newline[1] == '\0') {
                     ++p; // no need to convert 1-char newline
-                    flushlines_size = used + (p-start);
+                    flushlines_size = used + (ulong)(p - start);
                     continue;
                 } else
                     cur_newline_size = 1;
 
-                len = p-start;
+                len = (ulong)(p - start);
                 if ( ( p > start && !writebin(err, out, start, len) ) ||
                      !writebin(err, out, newline, newlinesize)
                    )
@@ -1354,7 +1511,7 @@ struct SysWriter : public RawBuffer // TODO
             }
 
             if (start < end) {
-                len = end - start;
+                len = (ulong)(end - start);
                 if (!writebin(err, out, start, len))
                     return 0;
                 writesize += len;
@@ -1380,17 +1537,145 @@ struct SysWriter : public RawBuffer // TODO
         return writesize;
     }
 
-    /** Write data to file using buffer.
+    /** Write repeated character data to device using buffer, formatted with field alignment.
+     \tparam  T  IoDevice to write to
+
+     \param  out    Device to write to
+     \param  ch     Character to write
+     \param  count  Character repeat count to use
+     \param  field  Field attributes to use
+     \return        ENone on success, ELength if string and/or field-width are too long for buffer, error code on other error [out]
+    */
+    template<class TOut>
+    Error writefmtchar(TOut& out, char ch, ulong count, const FmtSetField& field) {
+        assert( used <= size );
+        Error err;
+        if (field.width >= 0 && (uint)field.width > count) {
+            if (size < (uint)field.width)
+                return ELength;
+            if (size-used < (uint)field.width && (err=flush(out)) != ENone)
+                return err;
+
+            const uint padding = (uint)field.width - count;
+            char* p = data + used;
+            switch (field.align) {
+                case faCURRENT: // fallthrough
+                case fLEFT:
+                    memset(p, (int)(uchar)ch, count);
+                    if (padding > 0)
+                        memset(p + count, (int)(uchar)field.fill, padding);
+                    break;
+                case fCENTER: {
+                    const uint padleft = (padding / 2);
+                    if (padleft > 0) {
+                        memset(p, (int)(uchar)field.fill, padleft);
+                        p += padleft;
+                    }
+                    memset(p, (int)(uchar)ch, count);
+                    const uint padright = (padding - padleft);
+                    if (padright > 0) {
+                        p += count;
+                        memset(p, (int)(uchar)field.fill, padright);
+                    }
+                    break;
+                }
+                case fRIGHT:
+                    if (padding > 0) {
+                        memset(p, (int)(uchar)field.fill, padding);
+                        p += padding;
+                    }
+                    memset(p, (int)(uchar)ch, count);
+                    break;
+            };
+            used += (uint)field.width;
+        } else if (count > 0) {
+            if (size < count)
+                return ELength;
+            if (size-used < count && (err=flush(out)) != ENone)
+                return err;
+            memset(data + used, (int)(uchar)ch, count);
+            used += count;
+        }
+        return ENone;
+    }
+
+    /** Write string data to device using buffer, formatted with field alignment.
      - This will flush the buffer when full
      - This does a text write, converting newlines per newline member
      - Newline conversion may change the number of bytes written internally
+     - If readtext() was used on buf (newline conversion already done) then use write() instead for best performance
+     .
+     \tparam  T  IoDevice to write to
+
+     \param  out      Device to write to
+     \param  str      %String data buffer to write from
+     \param  strsize  %String data size to write in bytes
+     \param  field    Field attributes to use
+     \return          ENone on success, ELength if string and/or field-width are too long for buffer, error code on other error [out]
+    */
+    template<class TOut>
+    Error writefmtstr(TOut& out, const char* str, ulong strsize, const FmtSetField& field) {
+        assert( used <= size );
+        if (size < strsize)
+            return ELength;
+        Error err;
+        if (size-used < strsize && (err=flush(out)) != ENone)
+            return err;
+
+        if (field.width >= 0 && (ulong)field.width > strsize) {
+            const uint padding = field.width - strsize;
+            char* p = data + used;
+            used += strsize + padding;
+
+            switch (field.align) {
+                case faCURRENT: // fallthrough
+                case fLEFT:
+                    memcpy(p, str, strsize);
+                    if (padding > 0)
+                        memset(p + strsize, (int)(uchar)field.fill, padding);
+                    break;
+                case fCENTER: {
+                    const uint padleft = (padding / 2);
+                    if (padleft > 0) {
+                        memset(p, (int)(uchar)field.fill, padleft);
+                        p += padleft;
+                    }
+                    memcpy(p, str, strsize);
+                    const uint padright = (padding - padleft);
+                    if (padright > 0) {
+                        p += strsize;
+                        memset(p, (int)(uchar)field.fill, padright);
+                    }
+                    break;
+                }
+                case fRIGHT:
+                    if (padding > 0) {
+                        memset(p, (int)(uchar)field.fill, padding);
+                        p += padding;
+                    }
+                    memcpy(p, str, strsize);
+                    break;
+            };
+        } else if (strsize > 0) {
+            memcpy(data + used, str, strsize);
+            used += strsize;
+        }
+        return ENone;
+    }
+
+    /** Write data to device using buffer.
+     - This will flush the buffer when full
+     - This does a text write, converting newlines per newline member
+     - Newline conversion may change the number of bytes written internally
+       - Note that writing newline text characters 1 char at a time or by string will give the same end result either way -- the edge cases are covered
+       .
      - This handles newline/newline-pair conversion consistently with calling writetext() with same data
      - If readtext() was used on buf (newline conversion already done) then use write() instead for best performance
      .
-     \tparam  T  SysIoDevice to write to
+     \tparam  T  IoDevice to write to
 
      \param  err    Stores ENone on success, error code on error [out]
-     \param  out    File to write to
+     \param  out    Device to write to
      \param  ch     Data buffer to write from
      \param  count  Data size to write in bytes
      \return        Size actually written (could be 0 in certain newline-pair cases with count=1), 0 on error, see err
@@ -1427,20 +1712,20 @@ struct SysWriter : public RawBuffer // TODO
         return count;
     }
 
-    /** Write formatted signed number to file using buffer.
+    /** Write formatted signed number to device using buffer.
      - This formats directly to buffer and requires the buffer is large enough
      - If needed this will flush buffer to make room
      .
-     \tparam  TOut  SysIoDevice to write to
+     \tparam  TOut  IoDevice to write to
      \tparam  TNum  Signed number type
 
-     \param  out   File to write to
+     \param  out   Device to write to
      \param  num   Number to format and write
      \param  base  Base to use for formatting
      \return       ENone on success, error code on error
     */
     template<class TOut,class TNum>
-    Error writetext_num(TOut& out, TNum num, int base=10) {
+    Error writenum(TOut& out, TNum num, int base=fDEC) {
         assert( used <= size );
         const uint len = IntegerT<TNum>::digits(num,base);
         if (size < len)
@@ -1453,20 +1738,20 @@ struct SysWriter : public RawBuffer // TODO
         return ENone;
     }
 
-    /** Write formatted unsigned number to file using buffer.
+    /** Write formatted unsigned number to device using buffer.
      - This formats directly to buffer and requires the buffer is large enough
      - If needed this will flush buffer to make room
      .
-     \tparam  TOut  SysIoDevice to write to
+     \tparam  TOut  IoDevice to write to
      \tparam  TNum  Unsigned number type
 
-     \param  out   File to write to
+     \param  out   Device to write to
      \param  num   Number to format and write
      \param  base  Base to use for formatting
      \return       ENone on success, error code on error
     */
     template<class TOut,class TNum>
-    Error writetext_numu(TOut& out, TNum num, int base=10) {
+    Error writenumu(TOut& out, TNum num, int base=fDEC) {
         assert( used <= size );
         const uint len = IntegerT<TNum>::digits(num,base);
         if (size < len)
@@ -1479,25 +1764,25 @@ struct SysWriter : public RawBuffer // TODO
         return ENone;
     }
 
-    /** Write formatted floating-point number to file using buffer.
+    /** Write formatted floating-point number to device using buffer.
      - This formats directly to buffer and requires the buffer is large enough
      - If needed this will flush buffer to make room
      .
-     \tparam  TOut  SysIoDevice to write to
+     \tparam  TOut  IoDevice to write to
      \tparam  TNum  Floating-point number number type
 
-     \param  out        File to write to
+     \param  out        Device to write to
      \param  num        Number to format and write
-     \param  precision  Formatting precision (number of fractional digits), 0 for none, PREC_AUTO for automatic
+     \param  precision  Formatting precision (number of fractional digits), 0 for none, fPREC_AUTO for automatic
      \return            ENone on success, error code on error
     */
     template<class TOut,class TNum>
-    Error writetext_numf(TOut& out, TNum num, int precision=PREC_AUTO) {
+    Error writenumf(TOut& out, TNum num, int precision=fPREC_AUTO) {
         assert( used <= size );
         int exp = 0;  uint maxlen;  Error err;
         if (precision < 0) {
             num    = FloatT<TNum>::fexp10(exp, num);
-            maxlen = (uint)FloatT<TNum>::maxdigits_auto;
+            maxlen = (uint)FloatT<TNum>::MAXDIGITS_AUTO;
             if (size < maxlen)
                 return EInval;
             if (size-used < maxlen && (err=flush(out)) != ENone)
@@ -1514,9 +1799,240 @@ struct SysWriter : public RawBuffer // TODO
         }
         return ENone;
     }
+
+    /** Write formatted signed number to device using buffer, using field attributes.
+     - This formats directly to buffer and requires the buffer is large enough
+     - If needed this will flush buffer to make room
+     .
+     \tparam  TOut  IoDevice to write to
+     \tparam  TNum  Signed number type
+
+     \param  out    Device to write to
+     \param  num    Number to format and write
+     \param  fmt    Integer formatting attributes to use
+     \param  field  Field formatting attributes to use, NULL for none
+     \return        ENone on success, error code on error
+    */
+    template<class TOut,class TNum>
+    Error writefmtnum(TOut& out, TNum num, const FmtSetInt& fmt, const FmtSetField* field=NULL) {
+        if (fmt.base <= 0 || fmt.base == fDEC) {
+            assert( used <= size );
+            const int digits        = IntegerT<TNum>::digits(num, fDEC);
+            const int width         = (fmt.pad_width > digits ? fmt.pad_width : digits);
+            const int align_padding = (field != NULL && field->width > width ? field->width - width : 0);
+            const uint len          = width + align_padding;
+
+            if (size < len)
+                return EInval;
+            Error err;
+            if (size-used < len && (err=flush(out)) != ENone)
+                return err;
+
+            fmt.impl_num_write(data + used, num, digits, width, align_padding, field);
+            used += len;
+        } else
+            return writefmtnumu(out, (typename ToUnsigned<TNum>::Type)num, fmt, field);
+        return ENone;
+    }
+
+    /** Write formatted unsigned number to device using buffer, using field attributes.
+     - This formats directly to buffer and requires the buffer is large enough
+     - If needed this will flush buffer to make room
+     .
+     \tparam  TOut  IoDevice to write to
+     \tparam  TNum  Signed number type
+
+     \param  out    Device to write to
+     \param  num    Number to format and write
+     \param  fmt    Integer formatting attributes to use
+     \param  field  Field formatting attributes to use, NULL for none
+     \return        ENone on success, error code on error
+    */
+    template<class TOut,class TNum>
+    Error writefmtnumu(TOut& out, TNum num, const FmtSetInt& fmt, const FmtSetField* field=NULL) {
+        assert( used <= size );
+        const int base = (fmt.base > 0 ? fmt.base : fDEC);
+
+        char prefix_ch  = 0;
+        uint prefix_len = 0;
+        fmt.impl_prefix_info(prefix_ch, prefix_len);
+
+        const int digits        = IntegerT<TNum>::digits(num, base);
+        const int width         = (fmt.pad_width > digits ? fmt.pad_width : digits);
+        const int full_width    = width + prefix_len;
+        const int align_padding = (field != NULL && field->width > full_width ? field->width - full_width : 0);
+        const uint len          = full_width + align_padding;
+
+        if (size < len)
+            return EInval;
+        Error err;
+        if (size-used < len && (err=flush(out)) != ENone)
+            return err;
+
+        char* p = data + used;
+        used += len;
+
+        int align_padleft, align_padright;
+        FmtSetField::setup_align(align_padleft, align_padright, align_padding, field);
+
+        if (align_padleft > 0) {
+            memset(p, (int)(uchar)field->fill, align_padleft);
+            p += align_padleft;
+        }
+
+        FmtSetInt::impl_prefix_write(p, prefix_ch, prefix_len);
+
+        if (digits < width) {
+            const uint padlen = width - digits;
+            const int ch = (fmt.pad_ch == 0 ? '0' : (int)(uchar)fmt.pad_ch);
+            memset(p, ch, padlen);
+            p += padlen;
+        }
+        p += digits;
+        impl::fnumu(p, num, base);
+
+        if (align_padright > 0)
+            memset(p, (int)(uchar)field->fill, align_padright);
+
+        return ENone;
+    }
+
+    /** Write formatted floating point number to device using buffer, using field attributes.
+     - This formats directly to buffer and requires the buffer is large enough
+     - If needed this will flush buffer to make room
+     .
+     \tparam  TOut  IoDevice to write to
+     \tparam  TNum  Signed number type
+
+     \param  out    Device to write to
+     \param  num    Number to format and write
+     \param  fmt    Floating point formatting attributes to use
+     \param  field  Field formatting attributes to use, NULL for none
+     \return        ENone on success, error code on error
+    */
+    template<class TOut,class TNum>
+    Error writefmtnumf(TOut& out, TNum num, const FmtSetFloat& fmt, const FmtSetField* field=NULL) {
+        const int align_width = (field != NULL ? field->width : 0);
+        int exp = 0, maxlen;
+        fmt.impl_info(num, exp, maxlen, align_width);   // sets maxlen
+
+        if (size < (uint)maxlen)
+            return EInval;
+        Error err;
+        if (size-used < (uint)maxlen && (err=flush(out)) != ENone)
+            return err;
+
+        used += fmt.impl_write(data + used, num, exp, align_width, field);
+        return ENone;
+    }
+
+    /** Write formatted buffer dump in hex.
+     - Output may span multiple lines, and always ends with a newline (unless dump data is empty)
+     - This flushes the buffer as needed to make room
+     .
+     \tparam  TOut  IoDevice to write to
+
+     \param  out          Device to write to
+     \param  fmt          Format data, including buffer to dump
+     \param  newline      Newline string to use
+     \param  newlinesize  Newline string size
+     \return              ENone on success, error code on error
+    */
+    template<class TOut>
+    Error writefmtdump(TOut& out, const FmtDump& fmt, const char* newline, uint newlinesize) {
+        const char* DIGITS     = (fmt.upper ? "0123456789ABCDEF" : "0123456789abcdef");
+        const ulong LINE_SIZE  = (fmt.maxline > 0 ? fmt.maxline : fmt.size);
+        const ulong FLUSH_SIZE = size - 3;  // Flush if not enough room for at least 3 bytes (2-digit hex and space, or newline)
+
+        Error err;
+        const uchar* ptr     = (uchar*)fmt.buf;
+        const uchar* ptr_end = ptr + fmt.size;
+        const uchar* ptr_nl;
+
+        FmtSetInt offset_fmt(fHEX, 0);
+        ulong offset = 0;
+        if (fmt.maxline > 0 && !fmt.compact)
+            offset_fmt.pad_width = Int::digits(fmt.size, fHEX);
+
+        // Loop for each line
+        for (const uchar* ptr2; ptr < ptr_end; ) {
+            // Show offset
+            if (fmt.maxline > 0 && !fmt.compact) {
+                if ((err = writefmtnumu(out, offset, offset_fmt)) != ENone)
+                    return err;
+                offset += fmt.maxline;
+
+                if (used >= FLUSH_SIZE && (err=flush(out)) != ENone)
+                    return err;
+                data[used++] = ':';
+                data[used++] = ' ';
+                data[used++] = ' ';
+            }
+
+            // Figure newline position
+            ptr_nl = ptr + LINE_SIZE;
+            if (ptr_nl > ptr_end)
+                ptr_nl = ptr_end;
+
+            // Hex dump line
+            ptr2 = ptr;
+            for (; ptr < ptr_nl; ++ptr) {
+                if (used >= FLUSH_SIZE && (err=flush(out)) != ENone)
+                    return err;
+                data[used++] = DIGITS[(*ptr >> 4) & 0x0F];
+                data[used++] = DIGITS[*ptr & 0x0F];
+                data[used++] = ' ';
+            }
+
+            if (fmt.compact) {
+                assert( used > 0 );
+                --used; // trim extra space from last byte
+            } else {
+                if (ptr_nl >= ptr_end && fmt.maxline > 0 && ptr2 != (uchar*)fmt.buf) {
+                    // Pad last line, add separator
+                    const ulong remainder = fmt.size % fmt.maxline;
+                    ulong avail, wrlen, count = (remainder > 0 ? ((fmt.maxline - remainder) * 3) + 1 : 1);
+                    while (count > 0) {
+                        if (used >= FLUSH_SIZE && (err=flush(out)) != ENone)
+                            return err;
+                        avail = size - used;
+                        wrlen = (count > avail ? avail : count);
+                        memset(data + used, ' ', wrlen);
+                        count -= wrlen;
+                        used  += wrlen;
+                    }
+                } else {
+                    // Separator
+                    if (used >= FLUSH_SIZE && (err=flush(out)) != ENone)
+                        return err;
+                    data[used++] = ' ';
+                }
+
+                // ASCII dump
+                for (; ptr2 < ptr_nl; ++ptr2) {
+                    if (used >= FLUSH_SIZE && (err=flush(out)) != ENone)
+                        return err;
+                    if (*ptr2 < ' ' || *ptr2 > '~')
+                        data[used++] = '.';
+                    else
+                        data[used++] = (char)*ptr2;
+                }
+            }
+
+            // Newlie
+            if (used >= FLUSH_SIZE && (err=flush(out)) != ENone)
+                return err;
+            memcpy(data + used, newline, newlinesize);
+            used += newlinesize;
+        }
+        return ENone;
+    }
 };
 
 ///////////////////////////////////////////////////////////////////////////////
-} // Namespace: evo
 //@}
+}
+#if defined(_MSC_VER)
+    #pragma warning(pop)
+#endif
 #endif

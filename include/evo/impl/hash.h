@@ -1,8 +1,6 @@
 // Evo C++ Library
-/* Copyright (c) 2016 Justin Crowell
- This Source Code Form is subject to the terms of the Mozilla Public
- License, v. 2.0. If a copy of the MPL was not distributed with this
- file, You can obtain one at http://mozilla.org/MPL/2.0/.
+/* Copyright 2018 Justin Crowell
+Distributed under the BSD 2-Clause License -- see included file LICENSE.txt for details.
 */
 ///////////////////////////////////////////////////////////////////////////////
 /** \file hash.h Evo implementation detail: Hashing support. */
@@ -11,15 +9,6 @@
 #define INCL_evo_impl_hash_h
 
 #include "sys.h"
-
-///////////////////////////////////////////////////////////////////////////////
-
-// TODO
-class QuickHash {
-    template<class T>
-    static ulong hash_pod(T message, ulong seed)
-        { return ((ulong)message) ^ seed; }
-};
 
 ///////////////////////////////////////////////////////////////////////////////
 // The following was mostly copied from SpookyHash V2 by Bob Jenkins (public domain) -- Aug 5 2012
@@ -49,9 +38,9 @@ public:
         union { 
             const uint8 *p8; 
             uint64 *p64; 
-            ulong  i; 
+            size_t i; 
         } u;
-        ulong remainder;
+        size_t remainder;
     
         h0=h3=h6=h9  = *hash1;
         h1=h4=h7=h10 = *hash2;
@@ -87,7 +76,7 @@ public:
     }
 
     // Hash64: hash a single message in one call, return 64-bit output
-    static inline uint64 Hash64(
+    static uint64 Hash64(
         const void *message,  // message to hash
         ulong length,        // length of message in bytes
         uint64 seed)          // seed
@@ -98,7 +87,7 @@ public:
     }
 
     // Hash32: hash a single message in one call, produce 32-bit output
-    static inline uint32 Hash32(
+    static uint32 Hash32(
         const void *message,  // message to hash
         ulong length,        // length of message in bytes
         uint32 seed)          // seed
@@ -109,14 +98,14 @@ public:
     }
 
     // Hash for ulong value
-    static inline ulong Hash(const void* message, ulong length, ulong seed) {
+    static ulong Hash(const void* message, ulong length, ulong seed) {
         #ifdef EVO_32
             return (ulong)Hash32(message, length, seed);
         #elif EVO_64
             return (ulong)Hash64(message, length, seed);
         #endif
     }
-    static inline ulong hash(const void* message, ulong length, ulong seed) {
+    static ulong hash(const void* message, ulong length, ulong seed) {
         #ifdef EVO_32
             return (ulong)Hash32(message, length, seed);
         #elif EVO_64
@@ -124,7 +113,7 @@ public:
         #endif
     }
     template<class T>
-    static inline ulong hash_pod(T message, ulong seed) {
+    static ulong hash_pod(T message, ulong seed) {
         #ifdef EVO_32
             return (ulong)Hash32(&message, sizeof(T), seed);
         #elif EVO_64
@@ -287,7 +276,7 @@ public:
     }
 
     // left rotate a 64-bit value by k bytes
-    static inline uint64 Rot64(uint64 x, int k)
+    static uint64 Rot64(uint64 x, int k)
         { return (x << k) | (x >> (64 - k)); }
 
     // This is used if the input is 96 bytes long or longer.
@@ -300,7 +289,7 @@ public:
     //   And the base value is random
     //   When run forward or backwards one Mix
     // I tried 3 pairs of each; they all differed by at least 212 bits.
-    static inline void Mix(const uint64 *data, 
+    static void Mix(const uint64 *data,
         uint64 &s0, uint64 &s1, uint64 &s2, uint64 &s3,
         uint64 &s4, uint64 &s5, uint64 &s6, uint64 &s7,
         uint64 &s8, uint64 &s9, uint64 &s10,uint64 &s11)
@@ -333,7 +322,7 @@ public:
     // This does not rely on the last Mix() call having already mixed some.
     // Two iterations was almost good enough for a 64-bit result, but a
     // 128-bit result is reported, so End() does three iterations.
-    static inline void EndPartial(
+    static void EndPartial(
         uint64 &h0, uint64 &h1, uint64 &h2, uint64 &h3,
         uint64 &h4, uint64 &h5, uint64 &h6, uint64 &h7, 
         uint64 &h8, uint64 &h9, uint64 &h10,uint64 &h11)
@@ -352,7 +341,7 @@ public:
         h10+= h0;    h1 ^= h10;   h0 = Rot64(h0,54);
     }
 
-    static inline void End(const uint64 *data, 
+    static void End(const uint64 *data,
         uint64 &h0, uint64 &h1, uint64 &h2, uint64 &h3,
         uint64 &h4, uint64 &h5, uint64 &h6, uint64 &h7, 
         uint64 &h8, uint64 &h9, uint64 &h10,uint64 &h11)
@@ -378,7 +367,7 @@ public:
     // for all 1-bit and 2-bit diffs
     // with diffs defined by either xor or subtraction
     // with a base of all zeros plus a counter, or plus another bit, or random
-    static inline void ShortMix(uint64 &h0, uint64 &h1, uint64 &h2, uint64 &h3) {
+    static void ShortMix(uint64 &h0, uint64 &h1, uint64 &h2, uint64 &h3) {
         h2 = Rot64(h2,50);  h2 += h3;  h0 ^= h2;
         h3 = Rot64(h3,52);  h3 += h0;  h1 ^= h3;
         h0 = Rot64(h0,30);  h0 += h1;  h2 ^= h0;
@@ -403,7 +392,7 @@ public:
     // with probability 50 +- .3% (it is probably better than that)
     // For every pair of input bits,
     // with probability 50 +- .75% (the worst case is approximately that)
-    static inline void ShortEnd(uint64 &h0, uint64 &h1, uint64 &h2, uint64 &h3) {
+    static void ShortEnd(uint64 &h0, uint64 &h1, uint64 &h2, uint64 &h3) {
         h3 ^= h2;  h2 = Rot64(h2,15);  h3 += h2;
         h0 ^= h3;  h3 = Rot64(h3,52);  h0 += h3;
         h1 ^= h0;  h0 = Rot64(h0,26);  h1 += h0;
