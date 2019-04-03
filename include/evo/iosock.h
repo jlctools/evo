@@ -1,5 +1,5 @@
 // Evo C++ Library
-/* Copyright 2018 Justin Crowell
+/* Copyright 2019 Justin Crowell
 Distributed under the BSD 2-Clause License -- see included file LICENSE.txt for details.
 */
 ///////////////////////////////////////////////////////////////////////////////
@@ -11,6 +11,7 @@ Distributed under the BSD 2-Clause License -- see included file LICENSE.txt for 
 #include "io.h"
 #include "impl/sysio_sock.h"
 #include "substring.h"
+#include "strscan.h"
 #if !defined(_WIN32)
     #include <net/if.h>
 	#include <sys/select.h>
@@ -380,9 +381,9 @@ struct SocketAddressIp : public SocketAddressBase {
                 #if !defined(_WIN32)
                     // Linux/Unix: Map interface name to ID
                     if (*p < '0' || *p > '9') {
-                        const char* p0 = str_scan_to(p, pend, ']', ':', IF_NAMESIZE-1);
-                        if (p0 == NULL)
-                            return false; // interface name too long
+                        const char* p0 = str_scan_to(IF_NAMESIZE-1, p, pend, ']', ':');
+                        if (p0 == NULL || p0 == pend)
+                            return false; // interface name too long, or missing delim
                         const uint len = p0 - p;
                         char buf[IF_NAMESIZE];
                         memcpy(buf, p, len);
@@ -931,7 +932,7 @@ public:
 
     /** Create and bind Unix Domain socket to file path and listen for connections (linux/unix).
      - Use SocketAddressUnix* for client_address with accept()
-     - Not supported in Windows -- fails with EInval
+     - Not supported in Windows -- fails with ENotImpl
      - Note that the path length limit is lower than normal file paths
        - Limit is usually between 92 - 108 (inclusive), depending on the system
        - This returns error ESize if path is too long
@@ -946,7 +947,7 @@ public:
         (void)path;     // prevent compiler warnings
         (void)backlog;
         errno  = EINVAL;
-        error_ = EInval;
+        error_ = ENotImpl;
     #else
         SocketAddressUnix address;
         if (address.parse(path)) {
@@ -1035,7 +1036,7 @@ public:
     }
 
     /** Connect to Unix Domain socket at file path (linux/unix).
-     - Not supported in Windows -- fails with EInval
+     - Not supported in Windows -- fails with ENotImpl
      - Note that the path length limit is lower than normal file paths
        - Limit is usually between 92 - 108 (exclusive), depending on the system
        - This returns error ESize if path is too long
@@ -1049,7 +1050,7 @@ public:
     #if defined(_WIN32)
         (void)path;     // prevent compiler warning
         errno  = EINVAL;
-        error_ = EInval;
+        error_ = ENotImpl;
     #else
         SocketAddressUnix address;
         if (address.parse(path)) {

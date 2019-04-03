@@ -1,14 +1,14 @@
 // Evo C++ Library
-/* Copyright 2018 Justin Crowell
+/* Copyright 2019 Justin Crowell
 Distributed under the BSD 2-Clause License -- see included file LICENSE.txt for details.
 */
 ///////////////////////////////////////////////////////////////////////////////
-/** \file timer.h Evo Timer class. */
+/** \file timer.h Evo Timer classes. */
 #pragma once
 #ifndef INCL_evo_timer_h
 #define INCL_evo_timer_h
 
-#include "impl/sys.h"
+#include "impl/systime.h"
 
 namespace evo {
 /** \addtogroup EvoTime
@@ -18,62 +18,85 @@ Evo time management
 
 ///////////////////////////////////////////////////////////////////////////////
 
-/** %Timer that works like a stopwatch.
- - This measures actual time elapsed (as opposed to process CPU time)
- - Accuracy depends on the system
+/** Holds a real (wall clock) timer-stamp, used as template argument with TimerT.
+ - See \link Timer\endlink, \link TimerCpu\endlink
 */
-class Timer {
-private:
-    // General types and temp macros for current system
-    #if defined(_WIN32)
-        typedef FILETIME Stamp;
-        #define EVO_TIMER_GET(STAMP) GetSystemTimeAsFileTime(&STAMP)
-        #define EVO_TIMER_DIFF_USEC(START,END) \
-            (( (((ulongl)END.dwHighDateTime << 32) | END.dwLowDateTime) - (((ulongl)START.dwHighDateTime << 32) | START.dwLowDateTime) ) / 10ULL)
-    #else
-        typedef timeval Stamp;
-        #define EVO_TIMER_GET(STAMP) gettimeofday(&STAMP, NULL)
-        #define EVO_TIMER_DIFF_USEC(START,END) \
-            ( ((ulongl)(END.tv_sec - START.tv_sec) * 1000000ULL) + END.tv_usec - START.tv_usec )
-    #endif
-
+class TimerStampWall : public SysTimestamp {
 public:
+    void set() {
+        set_wall_timer();
+    }
+
+private:
+    void set_wall_datetime() EVO_ONCPP11(= delete);
+    void set_cpu() EVO_ONCPP11(= delete);
+};
+
+/** Holds a CPU (process) timer-stamp, used as template argument with TimerT.
+ - See \link TimerCpu\endlink, \link Timer\endlink
+*/
+class TimerStampCpu : public SysTimestamp {
+public:
+    void set() {
+        set_cpu();
+    }
+
+private:
+    void set_wall_datetime() EVO_ONCPP11(= delete);
+    void set_wall_timer() EVO_ONCPP11(= delete);
+};
+
+///////////////////////////////////////////////////////////////////////////////
+
+/** %Timer that works like a stopwatch.
+ - Use \link Timer\endlink or \link TimerCpu\endlink
+ - Accuracy depends on the system and hardware
+*/
+template<class T=TimerStampWall>
+class TimerT {
+public:
+    typedef TimerT<T> This;     ///< This type
+
     /** Constructor. */
-    Timer()
-        { memset(this, 0, sizeof(Timer)); }
+    TimerT() {
+        memset(this, 0, sizeof(This));
+    }
 
     /** Copy constructor.
      \param  src  Source to copy
     */
-    Timer(const Timer& src)
-        { memcpy(this, &src, sizeof(Timer)); }
+    TimerT(const This& src) {
+        memcpy(this, &src, sizeof(This));
+    }
 
     /** Assignment/Copy operator.
      \param  src  Source to copy
      \return      This
     */
-    Timer& operator=(const Timer& src)
-        { memcpy(this, &src, sizeof(Timer)); return *this; }
+    This& operator=(const This& src) {
+        memcpy(this, &src, sizeof(This));
+        return *this;
+    }
 
     /** Stop and clear timer. */
-    void clear()
-        { memset(this, 0, sizeof(Timer)); }
+    void clear() {
+        memset(this, 0, sizeof(This));
+    }
 
     /** Get whether timer is active (started).
      \return  Whether active, false if not started
     */
-    bool active() const
-        { return active_; }
+    bool active() const {
+        return active_;
+    }
 
-    /** Get current time elapsed in seconds with fraction.
+    /** Get current time elapsed in floating-point seconds (with fraction).
      - If timer is active then this gives time elapsed so far, otherwise time elapsed from last start/stop
      .
      \return  Time elapsed in seconds
     */
     double sec() const {
-        const ulongl cur_usec = elapsed();
-        const ulongl cur_sec  = (cur_usec / 1000000ULL);
-        return ( (double)(cur_usec - (cur_sec * 1000000ULL)) / 1000000.0 ) + cur_sec;
+        return (double)nsec() / SysTimestamp::NSEC_PER_SEC;
     }
 
     /** Get current time elapsed in milliseconds.
@@ -81,25 +104,36 @@ public:
      .
      \return  Time elapsed in milliseconds
     */
-    ulongl msec() const
-        { return (elapsed() / 1000ULL); }
+    ulongl msec() const {
+        return elapsed() / SysTimestamp::NSEC_PER_MSEC;
+    }
 
     /** Get current time elapsed in microseconds.
      - If timer is active then this gives time elapsed so far, otherwise time elapsed from last start/stop
      .
      \return  Time elapsed in microseconds
     */
-    ulongl usec() const
-        { return elapsed(); }
+    ulongl usec() const {
+        return elapsed() / SysTimestamp::NSEC_PER_USEC;
+    }
+
+    /** Get current time elapsed in nanoseconds.
+     - If timer is active then this gives time elapsed so far, otherwise time elapsed from last start/stop
+     .
+     \return  Time elapsed in nanoseconds
+    */
+    ulongl nsec() const {
+        return elapsed();
+    }
 
     /** Start timer.
      - This clears stored elapsed time
      - Call stop() to stop timer
     */
     void start() {
-        active_       = true;
-        elapsed_usec_ = 0;
-        EVO_TIMER_GET(start_);
+        elapsed_ = 0;
+        active_ = true;
+        start_.set();
     }
 
     /** Resume timer from last stop.
@@ -109,41 +143,86 @@ public:
     */
     void resume() {
         active_ = true;
-        EVO_TIMER_GET(start_);
+        start_.set();
     }
 
     /** Stop timer.
      - Time elapsed is stored internally
      - Timer may started again with start() or resume()
     */
-    Timer& stop() {
-        elapsed_usec_ = elapsed();
+    This& stop() {
+        elapsed_ = elapsed();
         active_ = false;
         return *this;
     }
 
 private:
-    bool   active_;            ///< Whether timer is active (started)
-    Stamp  start_;            ///< Start timestamp
-    ulongl elapsed_usec_;    ///< Stored time elapsed in microseconds
+    T start_;
+    ulongl elapsed_;
+    bool active_; 
 
-    /** Get current elapsed time in microseconds.
-     \return  Elapsed time
-    */
     ulongl elapsed() const {
-        ulongl usec = elapsed_usec_;
+        ulongl nsec = elapsed_;
         if (active_) {
-            Stamp end;
-            EVO_TIMER_GET(end);
-            usec += EVO_TIMER_DIFF_USEC(start_, end);
+            T end;
+            end.set();
+            nsec += end.diff_nsec(start_);
         }
-        return usec;
+        return nsec;
     }
-
-    // Delete temp macros
-    #undef EVO_TIMER_GET
-    #undef EVO_TIMER_DIFF_USEC
 };
+
+///////////////////////////////////////////////////////////////////////////////
+
+/** %Timer that works like a stopwatch and measures real (wall clock) time.
+ - See TimerT for full interface
+ .
+
+\par Example
+
+\code
+#include <evo/timer.h>
+#include <evo/io.h>
+using namespace evo;
+
+int main() {
+    Timer timer;
+
+    timer.start();
+    sleepus(1);
+    timer.stop();
+
+    con().out << "Slept for " << timer.nsec() << " nsec" << NL;
+    return 0;
+}
+\endcode
+*/
+typedef TimerT<TimerStampWall> Timer;
+
+/** %Timer that works like a stopwatch and measures CPU (process) time.
+ - See TimerT for full interface
+ .
+
+\par Example
+
+\code
+#include <evo/timer.h>
+#include <evo/io.h>
+using namespace evo;
+
+int main() {
+    TimerCpu timer;
+
+    timer.start();
+    sleepus(1);
+    timer.stop();
+
+    con().out << "Slept for " << timer.nsec() << " nsec" << NL;
+    return 0;
+}
+\endcode
+*/
+typedef TimerT<TimerStampCpu> TimerCpu;
 
 ///////////////////////////////////////////////////////////////////////////////
 //@}

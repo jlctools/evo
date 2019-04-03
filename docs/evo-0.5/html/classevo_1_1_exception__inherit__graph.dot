@@ -1,0 +1,35 @@
+digraph "Exception"
+{
+  edge [fontname="Helvetica",fontsize="10",labelfontname="Helvetica",labelfontsize="10"];
+  node [fontname="Helvetica",fontsize="10",shape=record];
+  rankdir="LR";
+  Node1 [label="Exception",height=0.2,width=0.4,color="black", fillcolor="grey75", style="filled", fontcolor="black"];
+  Node1 -> Node2 [dir="back",color="midnightblue",fontsize="10",style="solid",fontname="Helvetica"];
+  Node2 [label="ExceptionDirOpen",height=0.2,width=0.4,color="black", fillcolor="white", style="filled",URL="$classevo_1_1_exception_dir_open.html",tooltip="Directory open exception for errors opening a directory for reading entries, see Exception. "];
+  Node1 -> Node3 [dir="back",color="midnightblue",fontsize="10",style="solid",fontname="Helvetica"];
+  Node3 [label="ExceptionLogger",height=0.2,width=0.4,color="black", fillcolor="white", style="filled",URL="$classevo_1_1_exception_logger.html",tooltip="Logger exception, see Exception. "];
+  Node1 -> Node4 [dir="back",color="midnightblue",fontsize="10",style="solid",fontname="Helvetica"];
+  Node4 [label="ExceptionStream",height=0.2,width=0.4,color="black", fillcolor="white", style="filled",URL="$classevo_1_1_exception_stream.html",tooltip="Base stream exception for all stream errors, see Exception. "];
+  Node4 -> Node5 [dir="back",color="midnightblue",fontsize="10",style="solid",fontname="Helvetica"];
+  Node5 [label="ExceptionSocketConfig",height=0.2,width=0.4,color="black", fillcolor="white", style="filled",URL="$classevo_1_1_exception_socket_config.html",tooltip="Socket config exception for getopt() or setopt() errors, see Exception. "];
+  Node4 -> Node6 [dir="back",color="midnightblue",fontsize="10",style="solid",fontname="Helvetica"];
+  Node6 [label="ExceptionStreamIn",height=0.2,width=0.4,color="black", fillcolor="white", style="filled",URL="$classevo_1_1_exception_stream_in.html",tooltip="Input stream exception for stream read errors, see Exception. "];
+  Node6 -> Node7 [dir="back",color="midnightblue",fontsize="10",style="solid",fontname="Helvetica"];
+  Node7 [label="ExceptionFileIn",height=0.2,width=0.4,color="black", fillcolor="white", style="filled",URL="$classevo_1_1_exception_file_in.html",tooltip="File input stream exception for file read errors, see Exception. "];
+  Node6 -> Node8 [dir="back",color="midnightblue",fontsize="10",style="solid",fontname="Helvetica"];
+  Node8 [label="ExceptionSocketIn",height=0.2,width=0.4,color="black", fillcolor="white", style="filled",URL="$classevo_1_1_exception_socket_in.html",tooltip="Socket input stream exception for socket read errors, see Exception. "];
+  Node4 -> Node9 [dir="back",color="midnightblue",fontsize="10",style="solid",fontname="Helvetica"];
+  Node9 [label="ExceptionStreamOpen",height=0.2,width=0.4,color="black", fillcolor="white", style="filled",URL="$classevo_1_1_exception_stream_open.html",tooltip="Stream open exception for errors opening a stream, see Exception. "];
+  Node9 -> Node10 [dir="back",color="midnightblue",fontsize="10",style="solid",fontname="Helvetica"];
+  Node10 [label="ExceptionFileOpen",height=0.2,width=0.4,color="black", fillcolor="white", style="filled",URL="$classevo_1_1_exception_file_open.html",tooltip="File open exception for errors opening a file, see Exception. "];
+  Node9 -> Node11 [dir="back",color="midnightblue",fontsize="10",style="solid",fontname="Helvetica"];
+  Node11 [label="ExceptionSocketOpen",height=0.2,width=0.4,color="black", fillcolor="white", style="filled",URL="$classevo_1_1_exception_socket_open.html",tooltip="Socket open exception for socket connect/bind/listen errors, see Exception. "];
+  Node4 -> Node12 [dir="back",color="midnightblue",fontsize="10",style="solid",fontname="Helvetica"];
+  Node12 [label="ExceptionStreamOut",height=0.2,width=0.4,color="black", fillcolor="white", style="filled",URL="$classevo_1_1_exception_stream_out.html",tooltip="Output stream exception for stream write errors, see Exception. "];
+  Node12 -> Node13 [dir="back",color="midnightblue",fontsize="10",style="solid",fontname="Helvetica"];
+  Node13 [label="ExceptionFileOut",height=0.2,width=0.4,color="black", fillcolor="white", style="filled",URL="$classevo_1_1_exception_file_out.html",tooltip="File output stream exception for file write errors, see Exception. "];
+  Node12 -> Node14 [dir="back",color="midnightblue",fontsize="10",style="solid",fontname="Helvetica"];
+  Node14 [label="ExceptionSocketOut",height=0.2,width=0.4,color="black", fillcolor="white", style="filled",URL="$classevo_1_1_exception_socket_out.html",tooltip="Socket output stream exception for socket write errors, see Exception. "];
+  Node1 -> Node15 [dir="back",color="midnightblue",fontsize="10",style="solid",fontname="Helvetica"];
+  Node15 [label="ExceptionSubStringMapList",height=0.2,width=0.4,color="black", fillcolor="white", style="filled",URL="$classevo_1_1_exception_sub_string_map_list.html",tooltip="SubStringMapList input ordering verification failed, see Exception. "];
+}

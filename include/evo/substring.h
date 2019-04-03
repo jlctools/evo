@@ -1,5 +1,5 @@
 // Evo C++ Library
-/* Copyright 2018 Justin Crowell
+/* Copyright 2019 Justin Crowell
 Distributed under the BSD 2-Clause License -- see included file LICENSE.txt for details.
 */
 ///////////////////////////////////////////////////////////////////////////////
@@ -10,10 +10,17 @@ Distributed under the BSD 2-Clause License -- see included file LICENSE.txt for 
 
 #include "sublist.h"
 #include "string.h"
+#include "strscan.h"
 
 namespace evo {
 /** \addtogroup EvoContainers */
 //@{
+
+///////////////////////////////////////////////////////////////////////////////
+
+/** SubStringMapList input ordering verification failed, see Exception. */
+class ExceptionSubStringMapList : public Exception
+    { EVO_CREATE_EXCEPTION_IMPL(ExceptionSubStringMapList, Exception) };
 
 ///////////////////////////////////////////////////////////////////////////////
 
@@ -23,7 +30,7 @@ Use to explictly reference string data, split/tokenize string data, and to conve
 
 \par Features
 
- - Similar to STL string_view from C++17
+ - Similar to STL `string_view` from C++17
  - This provides read-only methods similar to String, but with reduced overhead
    - This is useful for referencing static/immutable data, or when performance or size is critical
    - String is generally safer, though SubString is smaller and slightly faster
@@ -33,7 +40,16 @@ Use to explictly reference string data, split/tokenize string data, and to conve
  - See also: StrTok, String, UnicodeString
  .
 
-Note: including this automatically includes evo/string.h
+C++11:
+ - Range-based for loop
+   \code
+    SubString str;
+    for (auto ch : str) {
+    }
+   \endcode
+ - Move semantics
+
+Note: Including this automatically includes `evo/string.h` too
 
 \par Iterators
 
@@ -48,6 +64,7 @@ Note: including this automatically includes evo/string.h
  - SubString(const StringBase*)
  - SubString(const char*,Size)
  - SubString(const char*)
+ - SubString(SubString&&) [C++11]
  .
 
 \par Read Access
@@ -81,6 +98,8 @@ Note: including this automatically includes evo/string.h
    - findanyr()
  - findanybut()
    - findanybutr()
+ - findword(), findwordr()
+   - findnonword(), findnonwordr()
  - contains(char) const
    - contains(const char*,Size) const
    - contains(const StringBase&) const
@@ -90,6 +109,8 @@ Note: including this automatically includes evo/string.h
    - operator==(const char*) const
    - operator!=(const StringBase&) const
    - operator!=(const char*) const
+ - cbegin(), cend()
+   - begin(), end()
  - starts(ItemVal) const
    - starts(const char*,Size) const
    - starts(const char*) const
@@ -119,16 +140,17 @@ Note: including this automatically includes evo/string.h
    - set(const char*)
    - set2(const StringBase&,Key,Key)
    - clear()
+   - operator=(const SubString&)
+   - operator=(SubString&&) [C++11]
    - operator=(const StringBase&)
    - operator=(const StringBase*)
    - operator=(const char*)
    - operator=(const ValNull&)
    - operator=(const ValEmpty&)
  - convert_set()
- - token()
-   - tokenr()
-   - token_any()
-   - tokenr_any()
+ - token(), tokenr()
+   - token_any(), tokenr_any()
+   - token_line(), tokenr_line()
  - truncate()
    - triml(), trimr()
  - strip()
@@ -136,6 +158,12 @@ Note: including this automatically includes evo/string.h
    - stripl(), stripr()
    - stripl(char,Size), stripr(char,Size)
    - stripl(const char*,Size,Size), stripr(const char*,Size,Size)
+ - strip2()
+   - stripl2()
+   - stripr2()
+ - strip_newlines()
+   - stripl_newlines(), stripl_newlines(Size)
+   - stripr_newlines(), stripr_newlines(Size)
  - splitat_setl(Key)
    - splitat_setl(Key,T2&)
  - splitat_setr(Key)
@@ -207,18 +235,38 @@ struct SubString : public SubList<char,StrSizeT> {
         { }
 
     /** Copy constructor.
+     - This will reference the same pointer as given string
+     - \b Caution: Source string pointer must remain valid
+     .
      \param  str  %String to copy
     */
     SubString(const ThisType& str) : SubList<char,StrSizeT>(str)
         { }
 
     /** Copy constructor.
+     - This will reference the same pointer as given string
+     - \b Caution: Source string pointer must remain valid
+     .
      \param  str  %String to copy
     */
     SubString(const StringBase& str) : SubList<char,StrSizeT>(str)
         { }
 
     /** Copy constructor.
+     - This will reference the same pointer as given string
+     - \b Caution: Source string pointer must remain valid
+     .
+     \param  str    %String to reference
+     \param  index  Start index of string to reference, END to set as empty
+     \param  size   Size as item count, ALL for all from index
+    */
+    SubString(const StringBase& str, Key index, Size size=ALL) : SubList<char,StrSizeT>(str, index, size)
+        { }
+
+    /** Copy constructor.
+     - This will reference the same pointer as given string
+     - \b Caution: Source string pointer must remain valid
+     .
      \param  str  Pointer to string to copy, NULL to set as null
     */
     SubString(const StringBase* str) {
@@ -239,7 +287,38 @@ struct SubString : public SubList<char,StrSizeT> {
     SubString(const char* data) : SubList<char,StrSizeT>(data, data?(Size)strlen(data):0)
         { }
 
+#if defined(EVO_CPP11)
+    /** Move constructor (C++11).
+     \param  src  Source to move
+    */
+    SubString(SubString&& src) {
+        ::memcpy(this, &src, sizeof(SubString));
+    }
+
+    /** Move assignment operator (C++11).
+     \param  src  Source to move
+     \return      This
+    */
+    SubString& operator=(SubString&& src) {
+        ::memcpy(this, &src, sizeof(SubString));
+        return *this;
+    }
+#endif
+
+    /** Explicitly use a const reference to this.
+     - This is useful to force using this as const without casting
+     .
+     \return  This
+    */
+    const SubString& asconst() const {
+        return *this;
+    }
+
     // SET
+
+    /** \copydoc evo::SubList::operator=(const ThisType&) */
+    SubString& operator=(const SubString& src)
+        { set(src); return *this; }
 
     /** \copydoc evo::SubList::operator=(const ListBaseType&) */
     SubString& operator=(const StringBase& data)
@@ -295,20 +374,22 @@ struct SubString : public SubList<char,StrSizeT> {
      - The extracted token is removed from this string, including the delim (if found)
      - See also: StrTok (and variants)
      .
+     \tparam  StringT  Output string type to store line (String or SubString), inferred from first parameter
      \param  value  %Set to next token value, or null if none  [out]
      \param  delim  Delimiter to tokenize on
      \return        Whether next token was found, false if current string is empty
     */
-    bool token(SubString& value, char delim) {
+    template<class StringT>
+    bool token(StringT& value, char delim) {
         if (size_ > 0) {
-            for (Key i=0; i < size_; ++i) {
-                if (data_[i] == delim) {
-                    value.set(data_, i);
-                    ++i;
-                    data_ += i;
-                    size_ -= i;
-                    return true;
-                }
+            const char* ptr = (char*)memchr(data_, delim, size_);
+            if (ptr != NULL) {
+                Key i = (Key)(ptr - data_);
+                value.set(data_, i);
+                ++i;
+                data_ += i;
+                size_ -= i;
+                return true;
             }
             value.set(data_, size_);
             clear();
@@ -324,12 +405,24 @@ struct SubString : public SubList<char,StrSizeT> {
      - The extracted token is removed from this string, including the delim (if found)
      - See also: StrTokR (and variants)
      .
+     \tparam  StringT  Output string type to store line (String or SubString), inferred from first parameter
      \param  value  %Set to next token value, or null if none  [out]
      \param  delim  Delimiter to tokenize on
      \return        Whether next token was found, false if current string is empty
     */
-    bool tokenr(SubString& value, char delim) {
+    template<class StringT>
+    bool tokenr(StringT& value, char delim) {
         if (size_ > 0) {
+        #if defined(EVO_GLIBC_MEMRCHR)
+            const char* ptr = (char*)memrchr(data_, delim, size_);
+            if (ptr != NULL) {
+                const Key i = (Key)(ptr - data_);
+                const Size len = size_ - i;
+                value.set(data_ + i + 1, len - 1);
+                size_ -= len;
+                return true;
+            }
+        #else
             for (Key i=size_; i > 0; ) {
                 if (data_[--i] == delim) {
                     Size len = size_ - i;
@@ -338,6 +431,7 @@ struct SubString : public SubList<char,StrSizeT> {
                     return true;
                 }
             }
+        #endif
             value.set(data_, size_);
             clear();
             return true;
@@ -352,13 +446,15 @@ struct SubString : public SubList<char,StrSizeT> {
      - The extracted token is removed from this string, including the delim (if found)
      - See also: StrTok (and variants)
      .
+     \tparam  StringT  Output string type to store line (String or SubString), inferred from first parameter
      \param  value        %Set to next token value, or null if none  [out]
      \param  found_delim  %Set to delimited found, null if no delim found  [out]
      \param  delims       Delimiters to search for
      \param  count        Count of delimiters to search for, must be positive
      \return              Whether next token was found, false if current string is empty
     */
-    bool token_any(SubString& value, Char& found_delim, const char* delims, Size count) {
+    template<class StringT>
+    bool token_any(StringT& value, Char& found_delim, const char* delims, Size count) {
         assert( count > 0 );
         if (size_ > 0) {
             Size j;
@@ -390,13 +486,15 @@ struct SubString : public SubList<char,StrSizeT> {
      - The extracted token is removed from this string, including the delim (if found)
      - See also: StrTokR (and variants)
      .
+     \tparam  StringT  Output string type to store line (String or SubString), inferred from first parameter
      \param  value        %Set to next token value, or null if none  [out]
      \param  found_delim  %Set to delimited found, null if no delim found  [out]
      \param  delims       Delimiters to search for
      \param  count        Count of delimiters to search for, must be positive
      \return              Whether next token was found, false if current string is empty
     */
-    bool tokenr_any(SubString& value, Char& found_delim, const char* delims, Size count) {
+    template<class StringT>
+    bool tokenr_any(StringT& value, Char& found_delim, const char* delims, Size count) {
         assert( count > 0 );
         if (size_ > 0) {
             Size j;
@@ -420,6 +518,74 @@ struct SubString : public SubList<char,StrSizeT> {
         value.set();
         found_delim.set();
         return false;
+    }
+
+    /** Extract next line from string.
+     - The extracted line is removed from this string, along with the ending newline
+     - This recognizes all the main newlines types, see \ref Newline
+     - See also: StrTokLine
+     .
+     \tparam  StringT  Output string type to store line (String or SubString), inferred from parameter
+     \param  line  %Set to extracted line (newline removed), null if no line extracted
+     \return       Whether line extracted, false if this is empty
+    */
+    template<class StringT>
+    bool token_line(StringT& line) {
+        const char* NEWLINE_CHARS = "\n\r";
+        Size i = findany(NEWLINE_CHARS, 2);
+        if (i == END) {
+            if (size_ > 0) {
+                line.set(data_, size_);
+                setempty();
+                return true;
+            }
+            line.set();
+            return false;
+        }
+        line.set(data_, i);
+
+        if (++i < size_) {
+            char ch1 = data_[i - 1];
+            char ch2 = data_[i];
+            if ((ch1 == '\n' && ch2 == '\r') || (ch1 == '\r' && ch2 == '\n'))
+                ++i;
+        }
+        data_ += i;
+        size_ -= i;
+        return true;
+    }
+
+    /** Extract next line from string in reverse (from end of string).
+     - The extracted line is removed from this string, along with the ending newline
+     - This recognizes all the main newlines types, see \ref Newline
+     .
+     \tparam  StringT  Output string type to store line (String or SubString), inferred from parameter
+     \param  line  %Set to extracted line (newline removed), null if no line extracted
+     \return       Whether line extracted, false if this is empty
+    */
+    template<class StringT>
+    bool tokenr_line(StringT& line) {
+        const char* NEWLINE_CHARS = "\n\r";
+        Size i = findanyr(NEWLINE_CHARS, 2);
+        if (i == END) {
+            if (size_ > 0) {
+                line.set(data_, size_);
+                setempty();
+                return true;
+            }
+            line.set();
+            return false;
+        }
+        line.set(data_ + i + 1, size_ - i - 1);
+
+        if (i > 1) {
+            char ch1 = data_[i - 1];
+            char ch2 = data_[i];
+            if ((ch1 == '\n' && ch2 == '\r') || (ch1 == '\r' && ch2 == '\n'))
+                --i;
+        }
+        size_ = i;
+        return true;
     }
 
     // INFO
@@ -743,6 +909,54 @@ struct SubString : public SubList<char,StrSizeT> {
     Key findanybutr(const StringBase& chars, Key start=0, Key end=END) const
         { return findanybutr(chars.data_, chars.size_, start, end); }
 
+    /** \copydoc evo::String::findword(Key,Key) const */
+    Key findword(Key start=0, Key end=END) const {
+        if (start < size_ && start < end) {
+            if (end > size_)
+                end = size_;
+            for (; start < end; ++start)
+                if (ascii_breaktype(data_[start]) == cbtWORD)
+                    return start;
+        }
+        return NONE;
+    }
+
+    /** \copydoc evo::String::findwordr(Key,Key) const */
+    Key findwordr(Key start=0, Key end=END) const {
+        if (start < size_ && start < end) {
+            if (end > size_)
+                end = size_;
+            while (end > start)
+                if (ascii_breaktype(data_[--end]) == cbtWORD)
+                    return end;
+        }
+        return NONE;
+    }
+
+    /** \copydoc evo::String::findnonword(Key,Key) const */
+    Key findnonword(Key start=0, Key end=END) const {
+        if (start < size_ && start < end) {
+            if (end > size_)
+                end = size_;
+            for (; start < end; ++start)
+                if (ascii_breaktype(data_[start]) != cbtWORD)
+                    return start;
+        }
+        return NONE;
+    }
+
+    /** \copydoc evo::String::findnonwordr(Key,Key) const */
+    Key findnonwordr(Key start=0, Key end=END) const {
+        if (start < size_ && start < end) {
+            if (end > size_)
+                end = size_;
+            while (end > start)
+                if (ascii_breaktype(data_[--end]) != cbtWORD)
+                    return end;
+        }
+        return NONE;
+    }
+
     /** \copydoc evo::String::contains(char) const */
     bool contains(char ch) const
         { return find(ch) != NONE; }
@@ -946,6 +1160,112 @@ struct SubString : public SubList<char,StrSizeT> {
             if (count > 0)
                 size_ -= (count * strsize);
         }
+        return *this;
+    }
+
+    /** \copydoc evo::String::strip2() */
+    SubString& strip2() {
+        if (size_ > 0) {
+            const char* end = data_ + size_;
+            data_ = (char*)str_scan_nws(data_, end);
+            size_ = (Size)(str_scan_nws_r(data_, end) - data_);
+        }
+        return *this;
+    }
+
+    /** \copydoc evo::String::stripl2() */
+    SubString& stripl2() {
+        if (size_ > 0) {
+            const char* end = data_ + size_;
+            data_ = (char*)str_scan_nws(data_, end);
+            size_ = (Size)(end - data_);
+        }
+        return *this;
+    }
+
+    /** \copydoc evo::String::stripr2() */
+    SubString& stripr2() {
+        if (size_ > 0) {
+            const char* end = data_ + size_;
+            size_ = (Size)(str_scan_nws_r(data_, end) - data_);
+        }
+        return *this;
+    }
+
+    /** \copydoc evo::String::stripl_newlines() */
+    SubString& stripl_newlines() {
+        char ch;
+        Size count = 0;
+        while ( count < size_ && ((ch=data_[count]) == '\n' || ch == '\r') )
+            ++count;
+        if (count > 0) {
+            size_ -= count;
+            data_ += count;
+        }
+        return *this;
+    }
+
+    /** \copydoc evo::String::stripl_newlines(Size) */
+    SubString& stripl_newlines(Size max) {
+        char ch;
+        Size count = 0;
+        for (; count < size_ && max > 0; --max) {
+            ch = data_[count];
+            if (ch == '\n') {
+                if (count + 1 < size_ && data_[count + 1] == '\r') {
+                    count += 2;
+                    continue;
+                }
+            } else if (ch == '\r') {
+                if (count + 1 < size_ && data_[count + 1] == '\n') {
+                    count += 2;
+                    continue;
+                }
+            } else
+                break;
+            ++count;
+        }
+        if (count > 0) {
+            size_ -= count;
+            data_ += count;
+        }
+        return *this;
+    }
+
+    /** \copydoc evo::String::stripr_newlines() */
+    SubString& stripr_newlines() {
+        char ch;
+        while ( size_ > 0 && ((ch=data_[size_-1]) == '\n' || ch == '\r') )
+            --size_;
+        return *this;
+    }
+
+    /** \copydoc evo::String::stripr_newlines(Size) */
+    SubString& stripr_newlines(Size max) {
+        char ch;
+        for (; size_ > 0 && max > 0; --max) {
+            ch = data_[size_ - 1];
+            if (ch == '\n') {
+                if (size_ > 1 && data_[size_ - 2] == '\r') {
+                    size_ -= 2;
+                    continue;
+                }
+            } else if (ch == '\r') {
+                if (size_ > 1 && data_[size_ - 2] == '\n') {
+                    size_ -= 2;
+                    continue;
+                }
+            } else
+                break;
+            --size_;
+        }
+        return *this;
+    }
+
+    /** \copydoc evo::String::strip_newlines() */
+    SubString& strip_newlines() {
+        stripl_newlines();
+        stripr_newlines();
         return *this;
     }
 
@@ -1244,8 +1564,8 @@ template<class T> struct Convert_SubStringToIntBase {
         STATIC_ASSERT_FUNC_UNUSED
     template<class U> static void add(U&, const SubString&)
         STATIC_ASSERT_FUNC_UNUSED
-    template<class U> static void addq(U&, const SubString&, char)
-        STATIC_ASSERT_FUNC_UNUSED
+    template<class U> static bool addq(U&, const SubString&, char)
+        STATIC_ASSERT_FUNC_UNUSED_RET(false)
     static T value(const SubString& src)
         { return src.getnum<T>(); }
 };
@@ -1255,8 +1575,8 @@ template<class T> struct Convert_SubStringToFltBase {
         STATIC_ASSERT_FUNC_UNUSED
     template<class U> static void add(U&, const SubString&)
         STATIC_ASSERT_FUNC_UNUSED
-    template<class U> static void addq(U&, const SubString&, char)
-        STATIC_ASSERT_FUNC_UNUSED
+    template<class U> static bool addq(U&, const SubString&, char)
+        STATIC_ASSERT_FUNC_UNUSED_RET(false)
     static T value(const SubString& src)
         { return src.getnumf<T>(); }
 };
@@ -1267,8 +1587,8 @@ template<> struct Convert<const char*,SubString> {
         STATIC_ASSERT_FUNC_UNUSED
     template<class U> static void add(U&, const SubString&)
         STATIC_ASSERT_FUNC_UNUSED
-    template<class U> static void addq(U&, const SubString&, char)
-        STATIC_ASSERT_FUNC_UNUSED
+    template<class U> static bool addq(U&, const SubString&, char)
+        STATIC_ASSERT_FUNC_UNUSED_RET(false)
     static SubString value(const char* src)
         { return src; }
 };
@@ -1278,8 +1598,8 @@ template<> struct Convert<char*,SubString> {
         STATIC_ASSERT_FUNC_UNUSED
     template<class U> static void add(U&, const SubString&)
         STATIC_ASSERT_FUNC_UNUSED
-    template<class U> static void addq(U&, const SubString&, char)
-        STATIC_ASSERT_FUNC_UNUSED
+    template<class U> static bool addq(U&, const SubString&, char)
+        STATIC_ASSERT_FUNC_UNUSED_RET(false)
     static SubString value(const char* src)
         { return src; }
 };
@@ -1288,8 +1608,8 @@ template<> struct Convert<String,SubString> {
         { dest = value; }
     static void add(String& dest, const SubString& value)
         { dest.add(value); }
-    static void addq(String& dest, const SubString& value, char delim)
-        { StrQuoting::addq(dest, value, delim); }
+    static bool addq(String& dest, const SubString& value, char delim)
+        { return (value.size() == 0 || dest.writequoted(value.data(), value.size(), delim, true) > 0); }
     static SubString value(const String& src)
         { return src; }
 };
@@ -1299,8 +1619,8 @@ template<> struct Convert<SubString,String> {
     // Invalid: Add String to SubString
     template<class U> static void add(U& dest, const String& value)
         STATIC_ASSERT_FUNC_UNUSED
-    template<class U> static void addq(U&, const SubString&, char)
-        STATIC_ASSERT_FUNC_UNUSED
+    template<class U> static bool addq(U&, const SubString&, char)
+        STATIC_ASSERT_FUNC_UNUSED_RET(false)
     static String value(const SubString& src)
         { return src; }
 };
@@ -1310,8 +1630,8 @@ template<> struct Convert<SubString,SubString> {
     // Invalid: Add SubString to SubString
     template<class U> static void add(U& dest, const SubString& value)
         STATIC_ASSERT_FUNC_UNUSED
-    template<class U> static void addq(U&, const SubString&, char)
-        STATIC_ASSERT_FUNC_UNUSED
+    template<class U> static bool addq(U&, const SubString&, char)
+        STATIC_ASSERT_FUNC_UNUSED_RET(false)
     static const SubString& value(const SubString& src)
         { return src; }
 };
@@ -1323,8 +1643,8 @@ template<> struct Convert<SubString,bool> {
     // Invalid: Add bool to SubString
     template<class U> static void add(U& dest, const SubString& value)
         STATIC_ASSERT_FUNC_UNUSED
-    template<class U> static void addq(U&, const SubString&, char)
-        STATIC_ASSERT_FUNC_UNUSED
+    template<class U> static bool addq(U&, const SubString&, char)
+        STATIC_ASSERT_FUNC_UNUSED_RET(false)
     static bool value(const SubString& src)
         { return src.getbool<bool>(); }
 };
@@ -1348,8 +1668,8 @@ template<> struct Convert<SubString,Bool> {
     // Invalid: Add Bool to SubString
     template<class U> static void add(U& dest, const SubString& value)
         STATIC_ASSERT_FUNC_UNUSED
-    template<class U> static void addq(U&, const SubString&, char)
-        STATIC_ASSERT_FUNC_UNUSED
+    template<class U> static bool addq(U&, const SubString&, char)
+        STATIC_ASSERT_FUNC_UNUSED_RET(false)
     static Bool value(const SubString& src)
         { return src.getbool<Bool>(); }
 };
@@ -1369,17 +1689,16 @@ template<> struct Convert<SubString,FloatL> : public Convert_SubStringToFltBase<
 
 ///////////////////////////////////////////////////////////////////////////////
 
-/** References a list of ordered substrings for fast lookup.
- - Item order must already be ordered
+/** References a list of sorted substrings for fast lookup.
  - Lookups are done with binary search
- - \b Caution: %String list _must be sorted_ for `find` methods to work
+ - \b Caution: %String list _must be sorted_ for `find` methods to work correctly
  - See also: \ref EnumConversion "Enum Conversion"
  .
 
 \par Example
 
 \code
-#include <evo/substring.h>
+#include <evo/enum.h>
 using namespace evo;
 
 int main() {
@@ -1408,6 +1727,7 @@ public:
 
     /** Constructor for referencing an existing SubString list.
      - This references list data and does not allocate any memory
+     - If `verify_order` is true and verify() fails, this throws ExceptionMapVerifyOrder
      .
      \param  data          List data, NULL to set as null
      \param  size          Size as number of strings in list, 0 to set as empty
@@ -1415,7 +1735,21 @@ public:
     */
     SubStringMapList(const SubString* data, SizeT size, bool verify_order=false) : data_((SubString*)data), size_(size) {
         if (verify_order && !verify())
-            abort();    // verify failed, string out of order
+            EVO_THROW(ExceptionSubStringMapList, "SubStringMapList verify order failed -- the constructor requires ordered input");
+    }
+
+    /** Get pointer to map string values.
+     \return  Pointer to string values
+    */
+    const SubString* data() const {
+        return data_;
+    }
+
+    /** Get number of items in map.
+     \return  Number of items, 0 if empty
+    */
+    SizeT size() const {
+        return size_;
     }
 
     /** Get whether empty.
@@ -1471,7 +1805,7 @@ public:
 
     \par Example
     \code
-    #include <evo/substring.h>
+    #include <evo/enum.h>
     using namespace evo;
 
     enum Color {
@@ -1499,75 +1833,65 @@ public:
         assert( (SizeT)last_enum >= (SizeT)first_enum );
         assert( (SizeT)last_enum - (SizeT)first_enum + 1 == size_ );
         SizeT i = find(key);
-        if (i == NONE)
-            return unknown;
-        i += (SizeT)first_enum;
-        assert( i <= (SizeT)last_enum );
-        if (i > (SizeT)last_enum)
+        if (i == NONE || (i += (SizeT)first_enum) > (SizeT)last_enum)
             return unknown;
         return (T)i;
     }
 
-    /** Find key string in list and convert to enum value using a traits class.
-     - This uses a binary search so list must be sorted, otherwise results are inaccurate
-     - This calls assert() to check the number of enum values matches the string list size
-     - This uses a traits class to call find_enum()
-     - \b Caution: String values _must have been sorted_
+    /** Find key string in list and convert to enum value, with unsorted enum remapped to sorted values.
+     - This is a variant of find_enum() for an unsorted enum
+     - This uses `remap_array` to map an unsorted enum to sorted values -- the data should be constant and static
      - See also: \ref EnumConversion "Enum Conversion"
      .
-     \tparam  T  Traits class with enum type `Type`, and constants: `FIRST`, `LAST`, `UNKNOWN`
-     \param  key  Key string to look for
+     \tparam  T  Enum type to convert to, inferred from arguments
+     \param  remap_array  Pointer to array of enum values sorted so they match the mapped sorted strings
+     \param  key          Key string to look for
+     \param  first_enum   First enum value to map to -- _must be first unsorted value_
+     \param  last_enum    Last enum value to map to -- _must be last unsorted value_, and must be >= `first_enum`
+     \param  unknown      Unknown enum value to use if key not found or result out of range
+     \return              Found enum value, `unknown` if not found or out of range
 
     \par Example
     \code
-    #include <evo/substring.h>
+    #include <evo/enum.h>
     using namespace evo;
 
+    // Unsorted values
     enum Color {
         cUNKNOWN = 0,
-        cBLUE,
+        cRED,
         cGREEN,
-        cRED
-    };
-
-    struct ColorTraits {
-        typedef Color Type;
-        static const Color FIRST   = cBLUE;
-        static const Color LAST    = cRED;
-        static const Color UNKNOWN = cUNKNOWN;
-
-        static const SubStringMapList& map() {
-            static const SubString LIST[] = {
-                "blue",
-                "green",
-                "red"
-            };
-            static const SubStringMapList MAP(LIST, fixed_array_size(LIST));
-            return MAP;
-        }
-
-        static Color get_enum(const SubString& key) {
-            return map().find_enum_traits<ColorTraits>(key);
-        }
-
-        static SubString get_string(Color value) {
-            return map().get_enum_traits_string<ColorTraits>(value);
-        }
+        cBLUE
     };
 
     int main() {
-        Color     color_val = ColorTraits::get_enum("green");
-        SubString color_str = ColorTraits::get_string(cGREEN);
+        // Values in sorted order
+        static const Color COLORS_REMAP[] = {
+            cBLUE,
+            cGREEN,
+            cRED
+        };
+        static const SubString COLORS[] = {
+            "blue",
+            "green",
+            "red"
+        };
+        static const SubStringMapList COLOR_MAP(COLORS, fixed_array_size(COLORS));
+
+        Color color = COLOR_MAP.find_enum_remap(COLORS_REMAP, "green", cRED, cBLUE, cUNKNOWN);
         return 0;
     }
     \endcode
     */
     template<class T>
-    typename T::Type find_enum_traits(const SubString& key) const {
-        return find_enum<typename T::Type>(key, T::FIRST, T::LAST, T::UNKNOWN);
+    T find_enum_remap(const T* remap_array, const SubString& key, T first_enum, T last_enum, T unknown) const {
+        SizeT i = find(key);
+        if (i == NONE || (SizeT)last_enum < (SizeT)first_enum || i >= ((SizeT)last_enum - (SizeT)first_enum + 1))
+            return unknown;
+        return (T)remap_array[i];
     }
 
-    /** Convert enum value to key string from list.
+    /** %Convert enum value to key string from list.
      - This is the reverse of find_enum()
      - See also: \ref EnumConversion "Enum Conversion"
      .
@@ -1579,29 +1903,32 @@ public:
     */
     template<class T>
     SubString get_enum_string(T enum_value, T first_enum, T last_enum) const {
-        if ((SizeT)enum_value < (SizeT)first_enum || (SizeT)enum_value > (SizeT)last_enum)
-            return SubString();
-        SizeT i = (SizeT)enum_value - (SizeT)first_enum;
-        assert( i < size_ );
-        if (i >= size_)
+        SizeT i;
+        if ((SizeT)enum_value < (SizeT)first_enum || (SizeT)enum_value > (SizeT)last_enum || (i = (SizeT)enum_value - (SizeT)first_enum) >= size_)
             return SubString();
         return data_[i];
     }
 
-    /** Convert enum value to key string from list using a traits class.
-     - This is the reverse of find_enum_traits()
+    /** %Convert enum value to key string from list, with unsorted enum remapped to sorted values.
+     - This is the reverse of find_enum_remap()
      - See also: \ref EnumConversion "Enum Conversion"
      .
-     \tparam  T  Traits class with enum type `Type`, and constants: `FIRST`, `LAST`
-     \param  enum_value  Enum value to convert from
-     \return             %String for enum value, null if unknown
+     \tparam  T  Enum type to convert from, inferred from arguments
+     \param  reverse_remap_array  Pointer to index array for mapping sorted strings to unsorted enum values -- see ReverseRemap
+     \param  enum_value           Enum value to convert from
+     \param  first_enum           First enum value to map to, maps to first string
+     \param  last_enum            Last enum value to map to, maps to last string -- must be >= `first_enum`
+     \return                      %String for enum value, null if unknown
     */
     template<class T>
-    SubString get_enum_traits_string(typename T::Type enum_value) const {
-        return get_enum_string(enum_value, T::FIRST, T::LAST);
+    SubString get_enum_string_remap(const SizeT* reverse_remap_array, T enum_value, T first_enum, T last_enum) const {
+        SizeT i;
+        if ((SizeT)enum_value < (SizeT)first_enum || (SizeT)enum_value > (SizeT)last_enum || (i = (SizeT)enum_value - (SizeT)first_enum) >= size_)
+            return SubString();
+        return data_[reverse_remap_array[i]];
     }
 
-#if defined(EVO_CPP11) || defined(DOXYGEN)
+#if defined(EVO_CPP11)
     /** Find key string in list and convert to enum class value (C++11).
      - This uses a binary search so list must be sorted, otherwise results are inaccurate
      - This calls assert() to check the number of enum values matches the string list size
@@ -1614,7 +1941,7 @@ public:
 
     \par Example
     \code
-    #include <evo/substring.h>
+    #include <evo/enum.h>
     using namespace evo;
 
     enum class Color {
@@ -1643,7 +1970,7 @@ public:
         return find_enum<T>(key, (T)((SizeT)T::UNKNOWN + 1), (T)((SizeT)T::ENUM_END - 1), T::UNKNOWN);
     }
 
-    /** Convert enum class value to key string from list (C++11).
+    /** %Convert enum class value to key string from list (C++11).
      - This is the reverse of find_enum_class()
      - This assumes the enum class has guard values: starts with `T::UNKNOWN`, ends with `T::ENUM_END`, with at least 1 mapped value in between
      - See also: \ref EnumConversion "Enum Conversion"
@@ -1673,114 +2000,32 @@ public:
         return true;
     }
 
+    /** Builds a reversed enum value remap array for fast reverse lookups.
+     - This is used by EVO_ENUM_REMAP(), EVO_ENUM_REMAP_PREFIXED(), EVO_ENUM_CLASS_REMAP()
+     .
+     \tparam  T  Enun traits type
+    */
+    template<class T>
+    struct ReverseRemap {
+        typedef typename T::Type EnumType;      ///< Alias for enum type used (`T::Type`)
+
+        static const int SIZE = (int)T::LAST - (int)T::FIRST + 1;   ///< %Array size as number of enum values
+
+        SizeT array[SIZE];  ///< Remap array built by constructor
+
+        /** Constructor.
+         \param  remap_array  Pointer to remap array to build reversed array from
+        */
+		EVO_ONCPP14_FULL(constexpr) ReverseRemap(const EnumType* remap_array) EVO_ONCPP14_FULL(: array()) {
+            for (SizeT i = 0; i < (uint)SIZE; ++i)
+                array[(int)remap_array[i] - (int)T::FIRST] = i;
+        }
+    };
+
 private:
     SubString* data_;
     SizeT size_;
 };
-
-///////////////////////////////////////////////////////////////////////////////
-
-/** Helper for creating enum string/value mappers with explicit first/last/unknown values.
- - See better alternative: EVO_ENUM_MAP_PREFIXED()
- - This creates a struct with traits that uses SubStringMapList::find_enum_traits() and SubStringMapList::get_enum_traits_string()
- - The created struct type is named after ENUM with suffix "Enum", and has helper functions:
-   - static ENUM get_enum(const evo::SubString& key):
-     - Map string key to ENUM value
-   - static SubString get_string(ENUM value):
-     - Map ENUM value to string key, null if unknown
-   .
- - \b Caution: The string values _must match ENUM and must be sorted_
- - See: \ref EnumConversion "Enum Conversion"
- .
- \param  ENUM         Enum type to create traits for
- \param  FIRST_VAL    First enum value to map to, maps to first string
- \param  LAST_VAL     Last enum value to map to, maps to last string -- must be >= first_enum
- \param  UNKNOWN_VAL  Unknown enum value to use if key not found or result out of range
- \param  ...          _Sorted_ list of string literals to map to each enum value -- ex: `"a", "b", "c"`
-*/
-#define EVO_ENUM_MAP(ENUM, FIRST_VAL, LAST_VAL, UNKNOWN_VAL, ...) \
-    struct ENUM ## Enum { \
-        typedef ENUM Type; \
-        static const ENUM FIRST   = FIRST_VAL; \
-        static const ENUM LAST    = LAST_VAL; \
-        static const ENUM UNKNOWN = UNKNOWN_VAL; \
-        static const evo::SubStringMapList& map() { \
-            static const evo::SubString LIST[] = { __VA_ARGS__ }; \
-            static const evo::SubStringMapList MAP(LIST, evo::fixed_array_size(LIST)); \
-            return MAP; \
-        } \
-        static ENUM get_enum(const evo::SubString& key) \
-            { return map().find_enum_traits< ENUM ## Enum >(key); } \
-        static SubString get_string(ENUM val) \
-            { return map().get_enum_traits_string< ENUM ## Enum >(val); } \
-    }
-
-/** Helper for creating enum string/value mappers with prefixed enum values.
- - This creates a struct with traits that uses SubStringMapList::find_enum_class() and SubStringMapList::get_enum_class_string()
- - The created struct type is named after ENUM with suffix "Enum", and has helper functions:
-   - static ENUM get_enum(const evo::SubString& key):
-     - Map string key to ENUM value
-   - static SubString get_string(ENUM value):
-     - Map ENUM value to string key, null if unknown
-   .
- - This requires ENUM type to have the following value names defined, each name beginning with PREFIX:
-   - UNKNOWN -- must be first
-   - ENUM_END -- must be last
-   - and there _must not_ be any gaps between the above values
-   .
- - \b Caution: The string values _must match ENUM and must be sorted_
- - See example here: \ref EnumConversion "Enum Conversion"
- - See also: EVO_ENUM_MAP()
- .
- \param  ENUM    Enum type to create mappings for
- \param  PREFIX  Prefix for enum values, used to find UNKNOWN and ENUM_END values
- \param  ...     _Sorted_ list of string literals to map to each enum value -- ex: `"a", "b", "c"`
-*/
-#define EVO_ENUM_MAP_PREFIXED(ENUM, PREFIX, ...) \
-    struct ENUM ## Enum { \
-        typedef ENUM Type; \
-        static const ENUM FIRST   = (ENUM)((int)(PREFIX ## UNKNOWN) + 1); \
-        static const ENUM LAST    = (ENUM)((int)(PREFIX ## ENUM_END) - 1); \
-        static const ENUM UNKNOWN = PREFIX ## UNKNOWN; \
-        static const evo::SubStringMapList& map() { \
-            static const evo::SubString LIST[] = { __VA_ARGS__ }; \
-            static const evo::SubStringMapList MAP(LIST, evo::fixed_array_size(LIST)); \
-            return MAP; \
-        } \
-        static ENUM get_enum(const evo::SubString& key) \
-            { return map().find_enum_traits< ENUM ## Enum >(key); } \
-        static SubString get_string(ENUM val) \
-            { return map().get_enum_traits_string< ENUM ## Enum >(val); } \
-    }
-
-#if defined(EVO_CPP11) || defined(DOXYGEN)
-    /** Helper for creating enum class string/value mappers (C++11).
-     - This creates a struct with traits that uses SubStringMapList::find_enum_class() and SubStringMapList::get_enum_class_string()
-     - The created struct type is named after ENUM with suffix "Enum", and has helper functions:
-       - static ENUM get_enum(const evo::SubString& key):
-         - Map string key to ENUM value
-       - static SubString get_string(ENUM value):
-         - Map ENUM value to string key, null if unknown
-       .
-     - \b Caution: The string values _must match ENUM and must be sorted_
-     - See example here: \ref EnumConversion "Enum Conversion"
-     .
-     \param  ENUM  Enum type to create mappings for
-     \param  ...   _Sorted_ list of string literals to map to each enum value -- ex: `"a", "b", "c"`
-    */
-    #define EVO_ENUM_CLASS_MAP(ENUM, ...) \
-        struct ENUM ## Enum { \
-            static const evo::SubStringMapList& map() { \
-                static const evo::SubString LIST[] = { __VA_ARGS__ }; \
-                static const evo::SubStringMapList MAP(LIST, evo::fixed_array_size(LIST)); \
-                return MAP; \
-            } \
-            static ENUM get_enum(const evo::SubString& key) \
-                { return map().find_enum_class<ENUM>(key); } \
-            static SubString get_string(ENUM val) \
-                { return map().get_enum_class_string(val); } \
-        }
-#endif
 
 ///////////////////////////////////////////////////////////////////////////////
 //@}

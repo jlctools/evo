@@ -1,5 +1,5 @@
 // Evo C++ Library
-/* Copyright 2018 Justin Crowell
+/* Copyright 2019 Justin Crowell
 Distributed under the BSD 2-Clause License -- see included file LICENSE.txt for details.
 */
 ///////////////////////////////////////////////////////////////////////////////
@@ -15,10 +15,13 @@ Distributed under the BSD 2-Clause License -- see included file LICENSE.txt for 
 // Version
 
 /** Evo version number (major.minor). */
-#define EVO_VERSION 0.4
+#define EVO_VERSION 0.5
 
 /** Evo version patch number. */
 #define EVO_VERSION_PATCH 0
+
+/** Evo version string (major.minor.patch). */
+#define EVO_VERSION_STRING "0.5.0"
 
 ///////////////////////////////////////////////////////////////////////////////
 // Global
@@ -55,7 +58,7 @@ Distributed under the BSD 2-Clause License -- see included file LICENSE.txt for 
     #define EVO_STD_STRING 0
 #endif
 
-// TODO -- Work-In-Progress: Do not change from defaults at this time
+// Work-In-Progress: Do not change from defaults at this time
 
 // Size Type
 #if !defined(EVO_SIZE_TYPE)

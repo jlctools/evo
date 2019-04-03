@@ -1,9 +1,9 @@
 // Evo C++ Library
-/* Copyright 2018 Justin Crowell
+/* Copyright 2019 Justin Crowell
 Distributed under the BSD 2-Clause License -- see included file LICENSE.txt for details.
 */
 ///////////////////////////////////////////////////////////////////////////////
-/** \file strtok.h Evo string tokenizer. */
+/** \file strtok.h Evo string tokenizers. */
 #pragma once
 #ifndef INCL_evo_strtok_h
 #define INCL_evo_strtok_h
@@ -26,13 +26,13 @@ public:
 
     /** Get current index before next token.
      \return  Current index, END if at end
-     */
+    */
     Size index() const
         { return index_; }
 
     /** Get current delimiter before next token.
      \return  Current delimiter, null if none or at end
-     */
+    */
     Char delim() const
         { return delim_; }
 
@@ -81,7 +81,7 @@ protected:
 
 /** %String forward tokenizer.
  - Variants: \link StrTokWord\endlink
- - This skips whitespace between delimiters so tokens will not start or end with any whitespace
+ - This skips whitespace (spaces, tabs) between delimiters so tokens will not start or end with any whitespace
  - This references target string data -- results are undefined if target string is modified while referenced
  - For reverse tokenizing see: StrTokR
  - For "strict" tokenizing (without skipping whitespace) see: StrTokS, StrTokRS
@@ -167,178 +167,96 @@ public:
     }
 
     /** Find next token using delimiter. Call value() to get token value.
-     - This will skip leading whitespace before and after next token
+     - This will skip leading whitespace (spaces, tabs) before and after next token
      .
      \param  delim  Delimiter to use
      \return        Whether next token was found, false if no more
     */
     bool next(char delim) {
-        const Size  str_size_ = this->string_.size_;
-        Size&       ind_      = this->index_;
-        if (ind_ > str_size_) {
+        Size& ind  = this->index_;
+        Size  size = this->string_.size_;
+        if (ind > size) {
             this->value_.set();
+            this->delim_.set();
             return false;
         }
 
-        const char* str_data_ = this->string_.data_;
-        char ch;
-        while ( ind_ < str_size_ && ((ch=str_data_[ind_]) == ' ' || ch == '\t') )
-            ++ind_;
-
-        Size start = ind_, end = ind_;
-        while (ind_ < str_size_) {
-            ch = str_data_[ind_];
-            if (ch == delim) {
-                ++ind_;
-                this->value_.set2(this->string_, start, end);
-                this->delim_ = delim;
-                return true;
-            }
-            switch (ch) {
-                case ' ':
-                case '\t':
-                    ++ind_;
-                    break;
-                default:
-                    end = ++ind_;
-                    break;
-            }
+        // Skip whitespace
+        const char* data = this->string_.data_;
+        for (char ch; ind < size && ((ch=data[ind]) == ' ' || ch == '\t'); )
+            ++ind;
+        if (ind == size) {
+            this->value_.setempty();
+            this->delim_.set();
+            ind = END;
+            return true;
         }
-        ind_ = END;
-        this->value_.set2(this->string_, start, end);
-        this->delim_.set();
+
+        // Extract token
+        data += ind;
+        size -= ind;
+        const char* p = (char*)::memchr(data, delim, size);
+        if (p == NULL) {
+            this->value_.set(data, size).stripr();
+            this->delim_.set();
+            ind = END;
+        } else {
+            size = (Size)(p - data);
+            this->value_.set(data, size).stripr();
+            this->delim_ = delim;
+            ind = ind + size + 1;
+        }
         return true;
     }
 
-    /** Find next token with quoting support using delimiter with quoting support. Call value() to get token value.
-     - This will skip leading whitespace before and after next token
+    /** Find next token using delimiter with quoting support. Call value() to get token value.
+     - This will skip leading whitespace (spaces, tabs) before and after next token
      - Token may be single-quoted ( ' ), double-quoted ( " ), backtick-quoted ( ` ), or triple-quoted ( ''' or """ or ``` )
        - This also supports backtick-DEL quoting -- backtick followed by the DEL char (7F) -- used when no other quoting is possible
      - Token is only considered quoted if it begins and ends with given quotes, after excluding whitespace -- so an unquoted token can contain quote chars
+     - See \ref SmartQuoting
      .
      \param  delim  Delimiter to use
      \return        Whether next token was found, false if no more
     */
     bool nextq(char delim) {
-        const char CHAR_DEL = '\x7F';
-        const Size str_size_ = this->string_.size_;
-        Size&      ind_      = this->index_;
-        if (ind_ > str_size_) {
+        Size& ind  = this->index_;
+        Size  size = this->string_.size_;
+        if (ind > size) {
             this->value_.set();
+            this->delim_.set();
             return false;
         }
 
         // Skip whitespace
-        const char* str_data_ = this->string_.data_;
-        char ch;
-        while ( ind_ < str_size_ && ((ch=str_data_[ind_]) == ' ' || ch == '\t') )
-            ++ind_;
-
-        // Check for quoting
-        char quote_char  = 0;
-        char quote_count = 1;
-        if ( ind_ < str_size_ && ((ch=str_data_[ind_]) == '\'' || ch == '"' || ch == '`') ) {
-            quote_char = ch;
-            if (ind_+2 < str_size_ && str_data_[ind_+1] == quote_char && str_data_[ind_+2] == quote_char)
-                quote_count = 3;
-            else if (quote_char == '`' && ind_+1 < str_size_ && str_data_[ind_+1] == CHAR_DEL)
-                quote_count = 2;
-            ind_ += quote_count;
-        }
-
-        // Parse next token
-        bool end_quoted = false;
-        Size start = ind_, end_unquoted = END, ind_unquoted = 0;
-        Size end = ind_;
-        while (ind_ < str_size_) {
-            ch = str_data_[ind_];
-            if (ch == quote_char && ch != 0) {
-                // Found end-quote
-                if (quote_count == 3) {
-                    if (ind_+2 < str_size_ && str_data_[ind_+1] == quote_char && str_data_[ind_+2] == quote_char) {
-                        // Any extra quotes before end-triple-quote are part of token
-                        end_quoted = true;
-                        end = ind_;
-                        ind_ += quote_count;
-                        while (ind_ < str_size_ && str_data_[ind_] == quote_char)
-                            ++ind_, ++end;
-                    } else
-                        // Not an end-triple-quote, include in token, update end
-                        end = ++ind_;
-                } else if (quote_count == 2) {
-                    // Backtick-DEL
-                    if (ind_+1 < str_size_ && str_data_[ind_+1] == CHAR_DEL) {
-                        end_quoted = true;
-                        end = ind_;
-                        ind_ += quote_count;
-                    } else
-                        // Not an end Backtick-DEL, include in token, update end
-                        end = ++ind_;
-                } else {
-                    end_quoted = true;
-                    end        = ind_;
-                    ind_ += quote_count;
-                }
-            } else if (ch == delim) {
-                // Found delimiter
-                if (!quote_char || end_quoted) {
-                    ++ind_;
-                    this->value_.set2(this->string_, start, end);
-                    this->delim_ = delim;
-                    return true;
-                }
-                if (end_unquoted == END) {
-                    // Skipping delim due to quoting, save state for later in case of quoting error
-                    end_unquoted = end;
-                    ind_unquoted = ind_;
-                }
-                end = ++ind_;
-            } else {
-                switch (ch) {
-                    case ' ':
-                    case '\t':
-                        // Whitespace -- moves index but not end
-                        ++ind_;
-                        break;
-                    default:
-                        // Include char in token, update end
-                        end = ++ind_;
-                        if (end_quoted) {
-                            // Data after end-quote, revert to unquoted
-                            start -= quote_count;
-                            if (end_unquoted != END) {
-                                // Use delim that was skipped due to quoting
-                                end  = end_unquoted;
-                                ind_ = ind_unquoted + 1;
-                                this->value_.set2(this->string_, start, end);
-                                this->delim_ = delim;
-                                return true;
-                            }
-                            end_quoted = false;
-                            quote_char = 0;
-                        }
-                        break;
-                }
-            }
-        }
-
-        if (quote_char != 0 && !end_quoted) {
-            // Missing end-quote, revert to unquoted
-            if (end_unquoted != END) {
-                // Use delim that was skipped due to quoting
-                end  = end_unquoted;
-                ind_ = ind_unquoted + 1;
-                this->delim_ = delim;
-            } else {
-                ind_ = END;
-                this->delim_.set();
-            }
-            start -= quote_count;
-        } else {
-            ind_ = END;
+        const char* data = this->string_.data_;
+        for (char ch; ind < size && ((ch=data[ind]) == ' ' || ch == '\t'); )
+            ++ind;
+        if (ind == size) {
+            this->value_.setempty();
             this->delim_.set();
+            ind = END;
+            return true;
         }
-        this->value_.set2(this->string_, start, end);
+
+        // Extract token
+        const char* start = data + ind;
+        const char* end = data + size;
+        const char* startq;
+        const char* endq;
+        const char* p = str_scan_endq(startq, endq, start, end, delim);
+        size = (Size)(endq - startq);
+        if (p == end) {
+            this->value_.set(startq, size);
+            this->delim_.set();
+            ind = END;
+        } else {
+            this->value_.set(startq, size);
+            this->delim_ = *p;
+            ind = (Size)(p + 1 - data);
+        }
+        if (startq == start)
+            this->value_.strip();
         return true;
     }
 
@@ -349,236 +267,172 @@ public:
      \return        Whether next token was found, false if no more
     */
     bool nextw(char delim) {
-        const Size  str_size_ = this->string_.size_;
-        Size&       ind_      = this->index_;
-        if (ind_ > str_size_) {
-            this->value_.set();
-            return false;
-        }
-
-        const char* str_data_ = this->string_.data_;
-        char ch;
-        while ( ind_ < str_size_ && ((ch=str_data_[ind_]) == ' ' || ch == '\t' || ch == delim) )
-            ++ind_;
-
-        if (ind_ == str_size_) {
-            ind_ = END;
+        Size& ind  = this->index_;
+        Size  size = this->string_.size_;
+        if (ind > size) {
             this->value_.set();
             this->delim_.set();
             return false;
+        }
+
+        // Skip whitespace and dup delims
+        const char* data = this->string_.data_;
+        for (char ch; ind < size && ((ch=data[ind]) == ' ' || ch == '\t' || ch == delim); )
+            ++ind;
+        if (ind == size) {
+            this->value_.set();
+            this->delim_.set();
+            ind = END;
+            return false;
+        }
+
+        // Extract token
+        data += ind;
+        size -= ind;
+        const char* p = (char*)::memchr(data, delim, size);
+        if (p == NULL) {
+            this->value_.set(data, size).stripr();
+            this->delim_.set();
+            ind = END;
         } else {
-            Size start = ind_, end = ind_;
-            while (ind_ < str_size_) {
-                ch = str_data_[ind_];
-                if (ch == delim) {
-                    ++ind_;
-                    this->value_.set2(this->string_, start, end);
-                    this->delim_ = ch;
-                    return true;
-                }
-                switch (ch) {
-                    case ' ':
-                    case '\t':
-                        ++ind_;
-                        break;
-                    default:
-                        end = ++ind_;
-                        break;
-                }
-            }
-            ind_ = END;
-            this->value_.set2(this->string_, start, end);
-            this->delim_.set();
-            return true;
+            size = (Size)(p - data);
+            this->value_.set(data, size).stripr();
+            this->delim_ = delim;
+            ind = ind + size + 1;
         }
+        return true;
     }
 
     /** Find next token using any of given delimiters. Call value() to get token value.
-     - This will skip leading whitespace before and after next token
+     - This will skip leading whitespace (spaces, tabs) before and after next token
      .
      \param  delims  Delimiters to use
      \return         Whether next token was found, false if no more
     */
     bool nextany(const SubString& delims) {
-        const Size  str_size_ = this->string_.size_;
-        Size&       ind_      = this->index_;
-        if (ind_ > str_size_) {
+        Size& ind  = this->index_;
+        Size  size = this->string_.size_;
+        if (ind > size) {
             this->value_.set();
-            return false;
-        }
-
-        const char* str_data_ = this->string_.data_;
-        char ch;
-        while ( ind_ < str_size_ && ((ch=str_data_[ind_]) == ' ' || ch == '\t') )
-            ++ind_;
-
-        Size start = ind_, end = ind_, i;
-        const Size        delim_count = delims.size();
-        const char* const delim_data  = delims.data();
-        while (ind_ < str_size_) {
-            ch = str_data_[ind_];
-            for (i=0; i<delim_count; ++i) {
-                if (ch == delim_data[i]) {
-                    ++ind_;
-                    this->value_.set2(this->string_, start, end);
-                    this->delim_ = ch;
-                    return true;
-                }
-            }
-            switch (ch) {
-                case ' ':
-                case '\t':
-                    ++ind_;
-                    break;
-                default:
-                    end = ++ind_;
-                    break;
-            }
-        }
-        ind_ = END;
-        this->value_.set2(this->string_, start, end);
-        this->delim_.set();
-        return true;
-    }
-
-    /** Find next token using any of given delimiters with quoting support. Call value() to get token value.
-     - This will skip leading whitespace before and after next token
-     - Token may be single-quoted ( ' ), double-quoted ( " ), backtick-quoted ( ` ), or triple-quoted ( ''' or """ or ``` )
-       - This also supports backtick-DEL quoting -- backtick followed by the DEL char (7F) -- used when no other quoting is possible
-     - Token is only considered quoted if it begins and ends with given quotes, after excluding whitespace -- so an unquoted token can contain quote chars
-     .
-     \param  delims  Delimiters to use
-     \return         Whether next token was found, false if no more
-    */
-    bool nextanyq(const SubString& delims) {
-        const char CHAR_DEL = '\x7F';
-        const Size  str_size_ = this->string_.size_;
-        Size&       ind_      = this->index_;
-        if (ind_ > str_size_) {
-            this->value_.set();
+            this->delim_.set();
             return false;
         }
 
         // Skip whitespace
-        const char* str_data_ = this->string_.data_;
-        char ch;
-        while ( ind_ < str_size_ && ((ch=str_data_[ind_]) == ' ' || ch == '\t') )
-            ++ind_;
-
-        // Check for quoting
-        char quote_char  = 0;
-        char quote_count = 1;
-        if ( ind_ < str_size_ && ((ch=str_data_[ind_]) == '\'' || ch == '"' || ch == '`') ) {
-            quote_char = ch;
-            if (ind_+2 < str_size_ && str_data_[ind_+1] == quote_char && str_data_[ind_+2] == quote_char)
-                quote_count = 3;
-            else if (quote_char == '`' && ind_+1 < str_size_ && str_data_[ind_+1] == CHAR_DEL)
-                quote_count = 2;
-            ind_ += quote_count;
-        }
-
-        // Parse next token
-        bool end_quoted = false;
-        Size start = ind_, end = ind_, end_unquoted = END, ind_unquoted = 0, i;
-        const Size        delim_count = delims.size();
-        const char* const delim_data  = delims.data();
-        while (ind_ < str_size_) {
-            ch = str_data_[ind_];
-            if (ch == quote_char && ch != 0) {
-                // Found end-quote
-                if (quote_count == 3) {
-                    if (ind_+2 < str_size_ && str_data_[ind_+1] == quote_char && str_data_[ind_+2] == quote_char) {
-                        // Any extra quotes before end-triple-quote are part of token
-                        end_quoted = true;
-                        end = ind_;
-                        ind_ += quote_count;
-                        while (ind_ < str_size_ && str_data_[ind_] == quote_char)
-                            ++ind_, ++end;
-                    } else
-                        // Not an end-triple-quote, include in token, update end
-                        end = ++ind_;
-                } else if (quote_count == 2) {
-                    // Backtick-DEL
-                    if (ind_+1 < str_size_ && str_data_[ind_+1] == CHAR_DEL) {
-                        end_quoted = true;
-                        end = ind_;
-                        ind_ += quote_count;
-                    } else
-                        // Not an end Backtick-DEL, include in token, update end
-                        end = ++ind_;
-                } else {
-                    end_quoted = true;
-                    end        = ind_;
-                    ind_ += quote_count;
-                }
-            } else {
-                bool found_delim = false;
-                for (i=0; i < delim_count; ++i) {
-                    if (ch == delim_data[i]) {
-                        // Found delimiter
-                        if (!quote_char || end_quoted) {
-                            ++ind_;
-                            this->value_.set2(this->string_, start, end);
-                            this->delim_ = ch;
-                            return true;
-                        }
-                        if (end_unquoted == END) {
-                            // Skipping delim due to quoting, save state for later in case of quoting error
-                            end_unquoted = end;
-                            ind_unquoted = ind_;
-                        }
-                        end = ++ind_;
-                        found_delim = true;
-                        break;
-                    }
-                }
-                if (!found_delim) {
-                    switch (ch) {
-                        case ' ':
-                        case '\t':
-                            ++ind_;
-                            break;
-                        default:
-                            // Include char in token, update end
-                            end = ++ind_;
-                            if (end_quoted) {
-                                // Data after end-quote, revert to unquoted
-                                start -= quote_count;
-                                if (end_unquoted != END) {
-                                    // Use delim that was skipped due to quoting
-                                    end  = end_unquoted;
-                                    ind_ = ind_unquoted + 1;
-                                    this->value_.set2(this->string_, start, end);
-                                    this->delim_ = str_data_[ind_unquoted];
-                                    return true;
-                                }
-                                end_quoted = false;
-                                quote_char = 0;
-                            }
-                            break;
-                    }
-                }
-            }
-        }
-
-        if (quote_char != 0 && !end_quoted) {
-            // Missing end-quote, revert to unquoted
-            if (end_unquoted != END) {
-                // Use delim that was skipped due to quoting
-                end  = end_unquoted;
-                ind_ = ind_unquoted + 1;
-                this->delim_ = str_data_[ind_unquoted];
-            } else {
-                ind_ = END;
-                this->delim_.set();
-            }
-            start -= quote_count;
-        } else {
-            ind_ = END;
+        const char* data = this->string_.data_;
+        for (char ch; ind < size && ((ch=data[ind]) == ' ' || ch == '\t'); )
+            ++ind;
+        if (ind == size) {
+            this->value_.setempty();
             this->delim_.set();
+            ind = END;
+            return true;
         }
-        this->value_.set2(this->string_, start, end);
+
+        // Extract token
+        size -= ind;
+        const char* start = data + ind;
+        const char* end = start + size;
+        const char* p = str_scan_delim(start, end, delims.data(), delims.size());
+        size = (Size)(p - start);
+        this->value_.set(start, size).strip();
+        if (p == end) {
+            this->delim_.set();
+            ind = END;
+        } else {
+            this->delim_ = *p;
+            ind = (Size)(p + 1 - data);
+        }
         return true;
+    }
+
+    /** Find next token using any of given delimiters with quoting support. Call value() to get token value.
+     - This will skip leading whitespace (spaces, tabs) before and after next token
+     - Token may be single-quoted ( ' ), double-quoted ( " ), backtick-quoted ( ` ), or triple-quoted ( ''' or """ or ``` )
+       - This also supports backtick-DEL quoting -- backtick followed by the DEL char (7F) -- used when no other quoting is possible
+     - Token is only considered quoted if it begins and ends with given quotes, after excluding whitespace -- so an unquoted token can contain quote chars
+     - For best performance set `ws_delim` to 0 or the whitespace delimiter to skip whitespace delimiter detection
+     .
+     \param  delims    Delimiters to use -- must not have more than 1 whitespace character (space, tab, newline)
+     \param  ws_delim  Use to specify a whitespace char in `delims` so it's handled correctly, 1 to auto-detect, 0 if no whitespace delim
+     \return           Whether next token was found, false if no more
+    */
+    bool nextanyq(const SubString& delims, char ws_delim) {
+        Size& ind  = this->index_;
+        Size  size = this->string_.size_;
+        if (ind > size) {
+            this->value_.set();
+            this->delim_.set();
+            return false;
+        }
+
+        // Skip whitespace
+        const char* data = this->string_.data_;
+        for (char ch; ind < size && ((ch=data[ind]) == ' ' || ch == '\t'); )
+            ++ind;
+        if (ind == size) {
+            this->value_.setempty();
+            this->delim_.set();
+            ind = END;
+            return true;
+        }
+
+        // Detect whitespace delim
+        char ws_delim_char;
+        if (ws_delim == 1) {
+            const StrSizeT ws_i = delims.findany(" \t\r\n", 4);
+            ws_delim_char = (ws_i == NONE ? 0 : delims[ws_i]);
+        } else
+            ws_delim_char = ws_delim;
+
+        // Extract token
+        const char* start = data + ind;
+        const char* end = data + size;
+        const char* startq;
+        const char* endq;
+        const char* p = str_scan_endq(startq, endq, start, end, delims.data(), delims.size(), ws_delim_char);
+        size = (Size)(endq - startq);
+        if (p == end) {
+            this->value_.set(startq, size);
+            this->delim_.set();
+            ind = END;
+        } else {
+            this->value_.set(startq, size);
+            this->delim_ = *p;
+            ind = (Size)(p + 1 - data);
+        }
+        if (startq == start)
+            this->value_.strip();
+        return true;
+    }
+
+    /** Find next token using any of given delimiters with quoting support. Call value() to get token value.
+     - This will skip leading whitespace (spaces, tabs) before and after next token
+     - Token may be single-quoted ( ' ), double-quoted ( " ), backtick-quoted ( ` ), or triple-quoted ( ''' or """ or ``` )
+       - This also supports backtick-DEL quoting -- backtick followed by the DEL char (7F) -- used when no other quoting is possible
+     - Token is only considered quoted if it begins and ends with given quotes, after excluding whitespace -- so an unquoted token can contain quote chars
+     - For best performance use `nextanyq(const SubString&,char)` and set `ws_delim` to 0 or the whitespace delimiter to skip whitespace delimiter detection
+     .
+     \param  delims  Delimiters to use -- must not have more than 1 whitespace character (space, tab, newline)
+     \return         Whether next token was found, false if no more
+    */
+    bool nextanyq(const SubString& delims) {
+        return nextanyq(delims, 1); // 1 to detect a whitespace delim
+    }
+
+    /** Advance current position for next token by skipping whitespace.
+     - This gives the index where the next token starts
+     - This is useful for advanced parsing that needs to look at the context of next token (indent amount, characters before token, etc)
+     .
+     \return  Current index for next token
+    */
+    Size skipws() {
+        const char* data = this->string_.data_;
+        const Size  size = this->string_.size_;
+        Size&       ind  = this->index_;
+        for (char ch; ind < size && ((ch=data[ind]) == ' ' || ch == '\t'); )
+            ++ind;
+        return ind;
     }
 
     /** Split delimited string into item list using next().
@@ -728,39 +582,37 @@ public:
      \return        Whether next token was found, false if no more
     */
     bool next(char delim) {
-        Size& ind_ = this->index_;
-        if (ind_ > this->string_.size_) {
+        Size& ind  = this->index_;
+        Size  size = this->string_.size_;
+        if (ind > size) {
             this->value_.set();
+            this->delim_.set();
             return false;
         }
 
-        const char* str_data_ = this->string_.data_;
-        char ch;
-        while ( ind_ > 0 && ((ch=str_data_[ind_-1]) == ' ' || ch == '\t') )
-            --ind_;
-
-        Size start = ind_, end = ind_;
-        while (ind_ > 0) {
-            ch = str_data_[ind_-1];
-            if (ch == delim) {
-                this->value_.set2(this->string_, start, end);
-                this->delim_ = delim;
-                --ind_;
-                return true;
-            }
-            switch (ch) {
-                case ' ':
-                case '\t':
-                    --ind_;
-                    break;
-                default:
-                    start = --ind_;
-                    break;
-            }
+        // Skip whitespace
+        const char* data = this->string_.data_;
+        for (char ch; ind > 0 && ((ch=data[ind - 1]) == ' ' || ch == '\t'); )
+            --ind;
+        if (ind == 0) {
+            this->value_.setempty();
+            this->delim_.set();
+            ind = END;
+            return true;
         }
-        this->value_.set2(this->string_, start, end);
-        this->delim_.set();
-        ind_ = END;
+
+        // Extract token
+        const char* p = string_memrchr(data, delim, ind);
+        if (p == NULL) {
+            this->value_.set(data, ind).stripl();
+            this->delim_.set();
+            ind = END;
+        } else {
+            size = (Size)(data + ind - (++p));
+            this->value_.set(p, size).stripl();
+            this->delim_ = delim;
+            ind = ind - size - 1;
+        }
         return true;
     }
 
@@ -774,128 +626,43 @@ public:
      \return        Whether next token was found, false if no more
     */
     bool nextq(char delim) {
-        const char CHAR_DEL = '\x7F';
-        Size& ind_ = this->index_;
-        if (ind_ > this->string_.size_) {
+        Size& ind  = this->index_;
+        Size  size = this->string_.size_;
+        if (ind > size) {
             this->value_.set();
+            this->delim_.set();
             return false;
         }
 
         // Skip whitespace
-        const char* str_data_ = this->string_.data_;
-        char ch;
-        while ( ind_ > 0 && ((ch=str_data_[ind_-1]) == ' ' || ch == '\t') )
-            --ind_;
-
-        // Check for quoting
-        char quote_char  = 0;
-        char quote_count = 1;
-        if (ind_ > 0) {
-            if ( (ch=str_data_[ind_-1]) == '\'' || ch == '"' || ch == '`' ) {
-                quote_char = ch;
-                if (ind_ > 2 && str_data_[ind_-2] == quote_char && str_data_[ind_-3] == quote_char)
-                    quote_count = 3;
-                ind_ -= quote_count;
-            } else if (ind_ > 3 && ch == CHAR_DEL && str_data_[ind_-2] == '`') {
-                quote_char  = CHAR_DEL;
-                quote_count = 2;
-                ind_ -= 2;
-            }
-        }
-
-        // Parse next token
-        bool quoting_valid = false;
-        Size start = ind_;
-        Size end = ind_, start_unquoted = END, ind_unquoted = 0;
-        while (ind_ > 0) {
-            ch = str_data_[ind_-1];
-            if (ch == quote_char && ch != 0) {
-                // Found begin-quote
-                if (quote_count == 3) {
-                    if (ind_ > 2 && str_data_[ind_-2] == quote_char && str_data_[ind_-3] == quote_char) {
-                        // Any extra quotes after begin-triple-quote are part of token
-                        quoting_valid = true;
-                        start = ind_;
-                        ind_ -= quote_count;
-                        while (ind_ > 0 && str_data_[ind_-1] == quote_char)
-                            --ind_, --start;
-                    } else
-                        // Not a begin-triple-quote, include in token, update start
-                        start = --ind_;
-                } else if (quote_count == 2) {
-                    // Backtick-DEL
-                    if (ind_ > 1 && str_data_[ind_-2] == '`') {
-                        quoting_valid = true;
-                        start = ind_;
-                        ind_ -= quote_count;
-                    } else
-                        // Not a begin Backtick-DEL, include in token, update start
-                        start = --ind_;
-                } else {
-                    quoting_valid = true;
-                    start         = ind_;
-                    ind_ -= quote_count;
-                }
-            } else if (ch == delim) {
-                // Found delimiter
-                if (!quote_char || quoting_valid) {
-                    --ind_;
-                    this->value_.set2(this->string_, start, end);
-                    this->delim_ = delim;
-                    return true;
-                }
-                if (start_unquoted == END) {
-                    // Skipping delim due to quoting, save state for later in case of quoting error
-                    start_unquoted = start;
-                    ind_unquoted   = ind_ - 1;
-                }
-                start = --ind_;
-            } else {
-                switch (ch) {
-                    case ' ':
-                    case '\t':
-                        // Whitespace -- moves index but not start
-                        --ind_;
-                        break;
-                    default:
-                        // Include char in token, update start
-                        start = --ind_;
-                        if (quoting_valid) {
-                            // Data before begin-quote, revert to unquoted
-                            end += quote_count;
-                            if (start_unquoted != END) {
-                                // Use delim that was skipped due to quoting
-                                start = start_unquoted;
-                                ind_  = ind_unquoted;
-                                this->value_.set2(this->string_, start, end);
-                                this->delim_ = delim;
-                                return true;
-                            }
-                            quoting_valid = false;
-                            quote_char    = 0;
-                        }
-                        break;
-                }
-            }
-        }
-
-        if (quote_char != 0 && !quoting_valid) {
-            // Missing end-quote, revert to unquoted
-            if (start_unquoted != END) {
-                // Use delim that was skipped due to quoting
-                start  = start_unquoted;
-                ind_   = ind_unquoted;
-                this->delim_ = delim;
-            } else {
-                ind_ = END;
-                this->delim_.set();
-            }
-            end += quote_count;
-        } else {
-            ind_ = END;
+        const char* data = this->string_.data_;
+        for (char ch; ind > 0 && ((ch=data[ind - 1]) == ' ' || ch == '\t'); )
+            --ind;
+        if (ind == 0) {
+            this->value_.setempty();
             this->delim_.set();
+            ind = END;
+            return true;
         }
-        this->value_.set2(this->string_, start, end);
+
+        // Extract token
+        const char* end = data + ind;
+        const char* startq;
+        const char* endq;
+        const char* p = str_scan_endq_r(startq, endq, data, end, delim);
+        size = (Size)(endq - startq);
+        p = str_scan_nws_r(data, p, delim);
+        if (p == data) {
+            this->delim_.set();
+            ind = END;
+        } else {
+            --p;
+            this->delim_ = *p;
+            ind = (Size)(p - data);
+        }
+        this->value_.set(startq, size);
+        if (endq == end)
+            this->value_.strip();
         return true;
     }
 
@@ -906,47 +673,38 @@ public:
      \return        Whether next token was found, false if no more
     */
     bool nextw(char delim) {
-        Size& ind_ = this->index_;
-        if (ind_ > this->string_.size_) {
+        Size& ind  = this->index_;
+        Size  size = this->string_.size_;
+        if (ind > size) {
             this->value_.set();
+            this->delim_.set();
             return false;
         }
 
-        const char* str_data_ = this->string_.data_;
-        char ch;
-        while ( ind_ > 0 && ((ch=str_data_[ind_-1]) == ' ' || ch == '\t' || ch == delim) )
-            --ind_;
-
-        if (ind_ == 0) {
+        // Skip whitespace
+        const char* data = this->string_.data_;
+        for (char ch; ind > 0 && ((ch=data[ind - 1]) == ' ' || ch == '\t' || ch == delim); )
+            --ind;
+        if (ind == 0) {
             this->value_.set();
             this->delim_.set();
-            ind_ = END;
+            ind = END;
             return false;
+        }
+
+        // Extract token
+        const char* p = string_memrchr(data, delim, ind);
+        if (p == NULL) {
+            this->value_.set(data, ind).stripl();
+            this->delim_.set();
+            ind = END;
         } else {
-            Size start = ind_, end = ind_;
-            while (ind_ > 0) {
-                ch = str_data_[ind_-1];
-                if (ch == delim) {
-                    this->value_.set2(this->string_, start, end);
-                    this->delim_ = delim;
-                    --ind_;
-                    return true;
-                }
-                switch (ch) {
-                    case ' ':
-                    case '\t':
-                        --ind_;
-                        break;
-                    default:
-                        start = --ind_;
-                        break;
-                }
-            }
-            this->value_.set2(this->string_, start, end);
-            this->delim_.set();
-            ind_ = END;
-            return true;
+            size = (Size)(data + ind - (++p));
+            this->value_.set(p, size).stripl();
+            this->delim_ = delim;
+            ind = ind - size - 1;
         }
+        return true;
     }
 
     /** Find next token using any of given delimiters (in reverse order). Call value() to get token value.
@@ -956,44 +714,38 @@ public:
      \return         Whether next token was found, false if no more
     */
     bool nextany(const SubString& delims) {
-        Size& ind_ = this->index_;
-        if (ind_ > this->string_.size_) {
+        Size& ind  = this->index_;
+        Size  size = this->string_.size_;
+        if (ind > size) {
             this->value_.set();
+            this->delim_.set();
             return false;
         }
 
-        const char* str_data_ = this->string_.data_;
-        char ch;
-        while ( ind_ > 0 && ((ch=str_data_[ind_-1]) == ' ' || ch == '\t') )
-            --ind_;
-
-        Size end = ind_;
-        Size start = ind_, i;
-        const Size        delim_count = delims.size();
-        const char* const delim_data  = delims.data();
-        while (ind_ > 0) {
-            ch = str_data_[ind_-1];
-            for (i=0; i<delim_count; ++i) {
-                if (ch == delim_data[i]) {
-                    --ind_;
-                    this->value_.set2(this->string_, start, end);
-                    this->delim_ = ch;
-                    return true;
-                }
-            }
-            switch (ch) {
-                case ' ':
-                case '\t':
-                    --ind_;
-                    break;
-                default:
-                    start = --ind_;
-                    break;
-            }
+        // Skip whitespace
+        const char* data = this->string_.data_;
+        for (char ch; ind > 0 && ((ch=data[ind - 1]) == ' ' || ch == '\t'); )
+            --ind;
+        if (ind == 0) {
+            this->value_.setempty();
+            this->delim_.set();
+            ind = END;
+            return true;
         }
-        this->value_.set2(this->string_, start, end);
-        this->delim_.set();
-        ind_ = END;
+
+        // Extract token
+        const char* end = data + ind;
+        const char* p = str_scan_delim_r(data, end, delims.data(), delims.size());
+        size = (Size)(end - p);
+        this->value_.set(p, size).stripl();
+        if (p == data) {
+            this->delim_.set();
+            ind = END;
+        } else {
+            --p;
+            this->delim_ = *p;
+            ind = (Size)(p - data);
+        }
         return true;
     }
 
@@ -1002,142 +754,73 @@ public:
      - Token may be single-quoted ( ' ), double-quoted ( " ), backtick-quoted ( ` ), or triple-quoted ( ''' or """ or ``` )
        - This also supports backtick-DEL quoting -- backtick followed by the DEL char (7F) -- used when no other quoting is possible
      - Token is only considered quoted if it begins and ends with given quotes, after excluding whitespace -- so an unquoted token can contain quote chars
+     - For best performance set `ws_delim` to 0 or the whitespace delimiter to skip whitespace delimiter detection
      .
-     \param  delims  Delimiters to use
-     \return         Whether next token was found, false if no more
+     \param  delims    Delimiters to use -- must not have more than 1 whitespace character (space, tab, newline)
+     \param  ws_delim  Use to specify a whitespace char in `delims` so it's handled correctly, 1 to auto-detect, 0 if no whitespace delim
+     \return           Whether next token was found, false if no more
     */
-    bool nextanyq(const SubString& delims) {
-        const char CHAR_DEL = '\x7F';
-        Size& ind_ = this->index_;
-        if (ind_ > this->string_.size_) {
+    bool nextanyq(const SubString& delims, char ws_delim) {
+        Size& ind  = this->index_;
+        Size  size = this->string_.size_;
+        if (ind > size) {
             this->value_.set();
+            this->delim_.set();
             return false;
         }
 
         // Skip whitespace
-        const char* str_data_ = this->string_.data_;
-        char ch;
-        while ( ind_ > 0 && ((ch=str_data_[ind_-1]) == ' ' || ch == '\t') )
-            --ind_;
-
-        // Check for quoting
-        char quote_char  = 0;
-        char quote_count = 1;
-        if (ind_ > 0) {
-            if ( (ch=str_data_[ind_-1]) == '\'' || ch == '"' || ch == '`' ) {
-                quote_char = ch;
-                if (ind_ > 2 && str_data_[ind_-2] == quote_char && str_data_[ind_-3] == quote_char)
-                    quote_count = 3;
-                ind_ -= quote_count;
-            } else if (ind_ > 3 && ch == CHAR_DEL && str_data_[ind_-2] == '`') {
-                quote_char  = CHAR_DEL;
-                quote_count = 2;
-                ind_ -= 2;
-            }
-        }
-
-        // Parse next token
-        bool quoting_valid = false;
-        Size start = ind_, end = ind_, start_unquoted = END, ind_unquoted = 0, i;
-        const Size        delim_count = delims.size();
-        const char* const delim_data  = delims.data();
-        while (ind_ > 0) {
-            ch = str_data_[ind_-1];
-            if (ch == quote_char && ch != 0) {
-                // Found begin-quote
-                if (quote_count == 3) {
-                    if (ind_ > 2 && str_data_[ind_-2] == quote_char && str_data_[ind_-3] == quote_char) {
-                        // Any extra quotes after begin-triple-quote are part of token
-                        quoting_valid = true;
-                        start = ind_;
-                        ind_ -= quote_count;
-                        while (ind_ > 0 && str_data_[ind_-1] == quote_char)
-                            --ind_, --start;
-                    } else
-                        // Not a begin-triple-quote, include in token, update start
-                        start = --ind_;
-                } else if (quote_count == 2) {
-                    // Backtick-DEL
-                    if (ind_ > 1 && str_data_[ind_-2] == '`') {
-                        quoting_valid = true;
-                        start = ind_;
-                        ind_ -= quote_count;
-                    } else
-                        // Not a begin Backtick-DEL, include in token, update start
-                        start = --ind_;
-                } else {
-                    quoting_valid = true;
-                    start         = ind_;
-                    ind_ -= quote_count;
-                }
-            } else {
-                bool found_delim = false;
-                for (i=0; i<delim_count; ++i) {
-                    if (ch == delim_data[i]) {
-                        // Found delimiter
-                        if (!quote_char || quoting_valid) {
-                            --ind_;
-                            this->value_.set2(this->string_, start, end);
-                            this->delim_ = ch;
-                            return true;
-                        }
-                        if (start_unquoted == END) {
-                            // Skipping delim due to quoting, save state for later in case of quoting error
-                            start_unquoted = start;
-                            ind_unquoted   = ind_ - 1;
-                        }
-                        start = --ind_;
-                        found_delim = true;
-                        break;
-                    }
-                }
-                if (!found_delim) {
-                    switch (ch) {
-                        case ' ':
-                        case '\t':
-                            --ind_;
-                            break;
-                        default:
-                            // Include char in token, update start
-                            start = --ind_;
-                            if (quoting_valid) {
-                                // Data before begin-quote, revert to unquoted
-                                end += quote_count;
-                                if (start_unquoted != END) {
-                                    // Use delim that was skipped due to quoting
-                                    start = start_unquoted;
-                                    ind_  = ind_unquoted;
-                                    this->value_.set2(this->string_, start, end);
-                                    this->delim_ = str_data_[ind_unquoted];
-                                    return true;
-                                }
-                                quoting_valid = false;
-                                quote_char    = 0;
-                            }
-                            break;
-                    }
-                }
-            }
-        }
-
-        if (quote_char != 0 && !quoting_valid) {
-            // Missing end-quote, revert to unquoted
-            if (start_unquoted != END) {
-                // Use delim that was skipped due to quoting
-                start  = start_unquoted;
-                ind_   = ind_unquoted;
-                this->delim_ = str_data_[ind_unquoted];
-            } else {
-                ind_ = END;
-                this->delim_.set();
-            }
-            end += quote_count;
-        } else {
-            ind_ = END;
+        const char* data = this->string_.data_;
+        for (char ch; ind > 0 && ((ch=data[ind - 1]) == ' ' || ch == '\t'); )
+            --ind;
+        if (ind == 0) {
+            this->value_.setempty();
             this->delim_.set();
+            ind = END;
+            return true;
         }
-        this->value_.set2(this->string_, start, end);
+
+        // Detect whitespace delim
+        char ws_delim_char;
+        if (ws_delim == 1) {
+            const StrSizeT ws_i = delims.findany(" \t\r\n", 4);
+            ws_delim_char = (ws_i == NONE ? 0 : delims[ws_i]);
+        } else
+            ws_delim_char = ws_delim;
+
+        // Extract token
+        const char* end = data + ind;
+        const char* startq;
+        const char* endq;
+        const char* p = str_scan_endq_r(startq, endq, data, end, delims.data(), delims.size(), ws_delim_char);
+        size = (Size)(endq - startq);
+        p = str_scan_nws_r(data, p, ws_delim_char);
+        if (p == data) {
+            this->delim_.set();
+            ind = END;
+        } else {
+            --p;
+            this->delim_ = *p;
+            ind = (Size)(p - data);
+        }
+        this->value_.set(startq, size);
+        if (endq == end)
+            this->value_.strip();
         return true;
+    }
+
+    /** Find next token using any of given delimiters (in reverse order) with quoting support. Call value() to get token value.
+     - This will skip leading whitespace before and after next token
+     - Token may be single-quoted ( ' ), double-quoted ( " ), backtick-quoted ( ` ), or triple-quoted ( ''' or """ or ``` )
+       - This also supports backtick-DEL quoting -- backtick followed by the DEL char (7F) -- used when no other quoting is possible
+     - Token is only considered quoted if it begins and ends with given quotes, after excluding whitespace -- so an unquoted token can contain quote chars
+     - For best performance set `ws_delim` to 0 or the whitespace delimiter to skip whitespace delimiter detection
+     .
+     \param  delims  Delimiters to use -- must not have more than 1 whitespace character (space, tab, newline)
+     \return         Whether next token was found, false if no more
+    */
+    bool nextanyq(const SubString& delims) {
+        return nextanyq(delims, 1); // 1 to detect a whitespace delim
     }
 
     /** Split delimited string into item list using next() (in reverse order).
@@ -1286,27 +969,33 @@ public:
      \return        Whether next token was found, false if no more
     */
     bool next(char delim) {
-        const Size  str_size_ = this->string_.size_;
-        Size&       ind_      = this->index_;
-        if (ind_ > str_size_) {
+        Size& ind  = this->index_;
+        Size  size = this->string_.size_;
+        if (ind > size) {
             this->value_.set();
+            this->delim_.set();
             return false;
+        } else if (ind == size) {
+            this->value_.setempty();
+            this->delim_.set();
+            ind = END;
+            return true;
         }
 
-        const char* str_data_ = this->string_.data_;
-        Size start = ind_;
-        while (ind_ < str_size_) {
-            if (str_data_[ind_] == delim) {
-                this->value_.set2(this->string_, start, ind_);
-                this->delim_ = delim;
-                ++ind_;
-                return true;
-            }
-            ++ind_;
+        // Extract token
+        size -= ind;
+        const char* data = this->string_.data_ + ind;
+        const char* p = (char*)::memchr(data, delim, size);
+        if (p == NULL) {
+            this->value_.set(data, size);
+            this->delim_.set();
+            ind = END;
+        } else {
+            size = (Size)(p - data);
+            this->value_.set(data, size);
+            this->delim_ = delim;
+            ind = ind + size + 1;
         }
-        this->value_.set(this->string_, start);
-        this->delim_.set();
-        ind_ = END;
         return true;
     }
 
@@ -1317,38 +1006,40 @@ public:
      \return        Whether next token was found, false if no more
     */
     bool nextw(char delim) {
-        const Size  str_size_ = this->string_.size_;
-        Size&       ind_      = this->index_;
-        if (ind_ > str_size_) {
-            this->value_.set();
-            return false;
-        }
-
-        const char* str_data_ = this->string_.data_;
-        while (ind_ < str_size_ && str_data_[ind_] == delim)
-            ++ind_;
-
-        if (ind_ == str_size_) {
-            ind_ = END;
+        Size& ind  = this->index_;
+        Size  size = this->string_.size_;
+        if (ind > size) {
             this->value_.set();
             this->delim_.set();
             return false;
+        }
+
+        // Skip dup delims
+        const char* data = this->string_.data_;
+        while (ind < size && data[ind] == delim)
+            ++ind;
+        if (ind == size) {
+            this->value_.set();
+            this->delim_.set();
+            ind = END;
+            return false;
+        }
+
+        // Extract token
+        data += ind;
+        size -= ind;
+        const char* p = (char*)::memchr(data, delim, size);
+        if (p == NULL) {
+            this->value_.set(data, size);
+            this->delim_.set();
+            ind = END;
         } else {
-            Size start = ind_;
-            while (ind_ < str_size_) {
-                if (str_data_[ind_] == delim) {
-                    this->value_.set2(this->string_, start, ind_);
-                    this->delim_ = delim;
-                    ++ind_;
-                    return true;
-                }
-                ++ind_;
-            }
-            this->value_.set(this->string_, start);
-            this->delim_.set();
-            ind_ = END;
-            return true;
+            size = (Size)(p - data);
+            this->value_.set(data, size);
+            this->delim_ = delim;
+            ind = ind + size + 1;
         }
+        return true;
     }
 
     /** Find next token using any of given delimiters. Call value() to get token value.
@@ -1356,33 +1047,34 @@ public:
      \return         Whether next token was found, false if no more
     */
     bool nextany(const SubString& delims) {
-        const Size  str_size_ = this->string_.size_;
-        Size&       ind_      = this->index_;
-        if (ind_ > str_size_) {
+        Size& ind  = this->index_;
+        Size  size = this->string_.size_;
+        if (ind > size) {
             this->value_.set();
+            this->delim_.set();
             return false;
+        } else if (ind == size) {
+            this->value_.setempty();
+            this->delim_.set();
+            ind = END;
+            return true;
         }
 
-        const char* str_data_ = this->string_.data_;
-        char ch;
-        Size start = ind_, i;
-        const Size        delim_count = delims.size();
-        const char* const delim_data  = delims.data();
-        while (ind_ < str_size_) {
-            ch = str_data_[ind_];
-            for (i=0; i<delim_count; ++i) {
-                if (ch == delim_data[i]) {
-                    this->value_.set2(this->string_, start, ind_);
-                    this->delim_ = ch;
-                    ++ind_;
-                    return true;
-                }
-            }
-            ++ind_;
+        // Extract token
+        size -= ind;
+        const char* data = this->string_.data_;
+        const char* start = data + ind;
+        const char* end = start + size;
+        const char* p = str_scan_delim(start, end, delims.data(), delims.size());
+        size = (Size)(p - start);
+        this->value_.set(start, size);
+        if (p == end) {
+            this->delim_.set();
+            ind = END;
+        } else {
+            this->delim_ = *p;
+            ind = (Size)(p + 1 - data);
         }
-        ind_ = END;
-        this->value_.set(this->string_, start);
-        this->delim_.set();
         return true;
     }
 
@@ -1520,25 +1212,32 @@ public:
      \return        Whether next token was found, false if no more
     */
     bool next(char delim) {
-        Size& ind_ = this->index_;
-        if (ind_ > this->string_.size_) {
+        Size& ind  = this->index_;
+        Size  size = this->string_.size_;
+        if (ind > size) {
             this->value_.set();
+            this->delim_.set();
             return false;
+        } else if (ind == 0) {
+            this->value_.setempty();
+            this->delim_.set();
+            ind = END;
+            return true;
         }
 
-        const char* str_data_ = this->string_.data_;
-        Size start = ind_;
-        while (ind_ > 0) {
-            --ind_;
-            if (str_data_[ind_] == delim) {
-                this->value_.set2(this->string_, ind_+1, start);
-                this->delim_ = delim;
-                return true;
-            }
+        // Extract token
+        const char* data = this->string_.data_;
+        const char* p = string_memrchr(data, delim, ind);
+        if (p == NULL) {
+            this->value_.set(data, ind);
+            this->delim_.set();
+            ind = END;
+        } else {
+            size = (Size)(data + ind - (++p));
+            this->value_.set(p, size);
+            this->delim_ = delim;
+            ind = ind - size - 1;
         }
-        this->value_.set2(this->string_, 0, start);
-        this->delim_.set();
-        ind_ = END;
         return true;
     }
 
@@ -1549,36 +1248,38 @@ public:
      \return        Whether next token was found, false if no more
     */
     bool nextw(char delim) {
-        Size& ind_ = this->index_;
-        if (ind_ > this->string_.size_) {
+        Size& ind  = this->index_;
+        Size  size = this->string_.size_;
+        if (ind > size) {
             this->value_.set();
+            this->delim_.set();
             return false;
         }
 
-        const char* str_data_ = this->string_.data_;
-        while (ind_ > 0 && str_data_[ind_-1] == delim)
-            --ind_;
-
-        if (ind_ == 0) {
+        // Skip dup delims
+        const char* data = this->string_.data_;
+        while (ind > 0 && data[ind - 1] == delim)
+            --ind;
+        if (ind == 0) {
             this->value_.set();
             this->delim_.set();
-            ind_ = END;
+            ind = END;
             return false;
+        }
+
+        // Extract token
+        const char* p = string_memrchr(data, delim, ind);
+        if (p == NULL) {
+            this->value_.set(data, ind);
+            this->delim_.set();
+            ind = END;
         } else {
-            Size start = ind_;
-            while (ind_ > 0) {
-                --ind_;
-                if (str_data_[ind_] == delim) {
-                    this->value_.set2(this->string_, ind_+1, start);
-                    this->delim_ = delim;
-                    return true;
-                }
-            }
-            this->value_.set2(this->string_, 0, start);
-            this->delim_.set();
-            ind_ = END;
-            return true;
+            size = (Size)(data + ind - (++p));
+            this->value_.set(p, size);
+            this->delim_ = delim;
+            ind = ind - size - 1;
         }
+        return true;
     }
 
     /** Find next token using any of given delimiters (in reverse order). Call value() to get token value.
@@ -1586,30 +1287,33 @@ public:
      \return         Whether next token was found, false if no more
     */
     bool nextany(const SubString& delims) {
-        Size& ind_ = this->index_;
-        if (ind_ > this->string_.size_) {
+        Size& ind  = this->index_;
+        Size  size = this->string_.size_;
+        if (ind > size) {
             this->value_.set();
+            this->delim_.set();
             return false;
+        } else if (ind == 0) {
+            this->value_.setempty();
+            this->delim_.set();
+            ind = END;
+            return true;
         }
 
-        const char* str_data_ = this->string_.data_;
-        char ch;
-        Size start = ind_, i;
-        const Size        delim_count = delims.size();
-        const char* const delim_data  = delims.data();
-        while (ind_ > 0) {
-            ch = str_data_[--ind_];
-            for (i=0; i<delim_count; ++i) {
-                if (ch == delim_data[i]) {
-                    this->value_.set2(this->string_, ind_+1, start);
-                    this->delim_ = ch;
-                    return true;
-                }
-            }
+        // Extract token
+        const char* data = this->string_.data_;
+        const char* end = data + ind;
+        const char* p = str_scan_delim_r(data, end, delims.data(), delims.size());
+        size = (Size)(end - p);
+        this->value_.set(p, size);
+        if (p == data) {
+            this->delim_.set();
+            ind = END;
+        } else {
+            --p;
+            this->delim_ = *p;
+            ind = (Size)(p - data);
         }
-        this->value_.set2(this->string_, 0, start);
-        this->delim_.set();
-        ind_ = END;
         return true;
     }
 
@@ -1927,35 +1631,35 @@ public:
      \return  Whether next token was found, false if no more
     */
     bool next() {
-        const Size  str_size_ = this->string_.size_;
-        Size&       ind_      = this->index_;
-        if (ind_ > str_size_) {
+        Size& ind  = this->index_;
+        Size  size = this->string_.size_;
+        if (ind > size) {
             this->value_.set();
+            this->delim_.set();
             return false;
+        } else if (ind == size) {
+            this->value_.setempty();
+            this->delim_.set();
+            ind = END;
+            return true;
         }
 
-        const char* str_data_ = this->string_.data_;
-        Size start = ind_;
-        while (ind_ < str_size_) {
-            switch (str_data_[ind_]) {
-                case '\n':
-                    this->value_.set2(this->string_, start, ind_);
-                    if (++ind_ < str_size_ && str_data_[ind_] == '\r')
-                        ++ind_;
-                    return true;
-                case '\r':
-                    this->value_.set2(this->string_, start, ind_);
-                    if (++ind_ < str_size_ && str_data_[ind_] == '\n')
-                        ++ind_;
-                    return true;
-                default:
-                    break;
-            }
-            ++ind_;
+        // Extract token
+        size -= ind;
+        const char* data = this->string_.data_;
+        const char* start = data + ind;
+        const char* end = start + size;
+        const char* p = str_scan_delim(start, end, '\r', '\n');
+        size = (Size)(p - start);
+        this->value_.set(start, size);
+        this->delim_.set();
+        if (p == end) {
+            ind = END;
+        } else {
+            ind = (Size)(p + 1 - data);
+            if (p + 1 < end && ((*p == '\r' && p[1] == '\n') || (*p == '\n' && p[1] == '\r')))
+                ++ind;
         }
-
-        this->value_.set2(this->string_, start, ind_);
-        ind_ = END;
         return true;
     }
 

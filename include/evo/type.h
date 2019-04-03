@@ -1,5 +1,5 @@
 // Evo C++ Library
-/* Copyright 2018 Justin Crowell
+/* Copyright 2019 Justin Crowell
 Distributed under the BSD 2-Clause License -- see included file LICENSE.txt for details.
 */
 ///////////////////////////////////////////////////////////////////////////////
@@ -118,6 +118,8 @@ namespace impl {
 template<class T>
 class Nullable : public SafeBool<Nullable<T> > {
 public:
+    typedef void EvoNullableType;   ///< Identify as nullable type
+
     /** Constructor. */
     Nullable() : value_((T)0), null_(true)
         { }
@@ -127,6 +129,12 @@ public:
     */
     Nullable(const Nullable<T>& src) : value_(src.value_), null_(src.null_)
         { }
+
+    /** Constructor to explicitly set as null.
+     - Use param vNULL
+    */
+    Nullable(ValNull) : value_((T)0), null_(true) {
+    }
 
     /** Constructor to init with num.
      \param  num  Number to use
@@ -292,10 +300,16 @@ public:
         return (value_ == val ? 0 : (value_ < val ? -1 : 1));
     }
 
-    /** Dereference for explicit conversion to underlying type. Alternative to value().
+    /** Dereference for explicit conversion to underlying type (const). Alternative to value().
      \return  Underlying type value
     */
     const T& operator*() const
+        { return value_; }
+
+    /** Dereference for explicit conversion to underlying type. Alternative to value().
+     \return  Underlying type value
+    */
+    T& operator*()
         { return value_; }
 
     /** Get whether null.
@@ -310,10 +324,16 @@ public:
     bool valid() const
         { return !null_; }
 
-    /** Get underlying value. Alternative to operator*().
+    /** Get underlying value (const). Alternative to operator*().
      \return  Whether valid
     */
     const T& value() const
+        { return value_; }
+
+    /** Get underlying value. Alternative to operator*().
+     \return  Whether valid
+    */
+    T& value()
         { return value_; }
 
     /** %Set as null.
@@ -1540,6 +1560,7 @@ typedef FloatT<long double> FloatL;
 */
 template<class T, class P=T*>
 struct PtrBase : public SafeBool<PtrBase<T> > {
+    typedef void EvoNullableType;   ///< Identify as nullable type
     typedef PtrBase<T,P> Base;      ///< This pointer base type
 
     P ptr_;            ///< Pointer
@@ -1759,9 +1780,10 @@ template<class T, class C> struct Convert {
      \param  dest   Destination to add to
      \param  value  Value to add
      \param  delim  Delimiter to consider for quoting
+     \return        Whether successful, false if input is a string and is not quotable (invalid text)
     */
-    static void addq(C& dest, T value, typename C::Value delim)
-        STATIC_ASSERT_FUNC_UNUSED               // Override required to support conversion
+    static bool addq(C& dest, T value, typename C::Value delim)
+        STATIC_ASSERT_FUNC_UNUSED_RET(false)    // Override required to support conversion
 
     /** %Convert value to target.
      \param  src  Source value to convert
@@ -1810,7 +1832,7 @@ template<class T> bool operator!=(EndT, T b)
 static const EndT NONE;
 
 /** Special integer value for indicating all items or all remaining items.
- - Passed to methods like \link evo::String::replace(Key,Size,const String&) replace()\endlink
+ - Passed to methods like \link evo::String::replace(Key,Size,const StringBase&) replace()\endlink
  - Evo uses unsigned Size types, so this is used instead of the common special index value -1
  - Implicitly converts and compares with any Size (integer) type -- actual value is the max integer of the type converted/compared to
 */

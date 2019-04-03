@@ -1,5 +1,5 @@
 // Evo C++ Library
-/* Copyright 2018 Justin Crowell
+/* Copyright 2019 Justin Crowell
 Distributed under the BSD 2-Clause License -- see included file LICENSE.txt for details.
 */
 ///////////////////////////////////////////////////////////////////////////////
@@ -13,6 +13,11 @@ Distributed under the BSD 2-Clause License -- see included file LICENSE.txt for 
 
 #include "../meta.h"
 #include "hash.h"
+
+#if defined(EVO_CPP11)
+    #include <initializer_list> // std::initializer_list
+    #include <utility>          // std::move
+#endif
 
 namespace evo {
 /** \addtogroup EvoContainers

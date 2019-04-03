@@ -1,5 +1,5 @@
 // Evo C++ Library
-/* Copyright 2018 Justin Crowell
+/* Copyright 2019 Justin Crowell
 Distributed under the BSD 2-Clause License -- see included file LICENSE.txt for details.
 */
 ///////////////////////////////////////////////////////////////////////////////
@@ -23,315 +23,13 @@ namespace evo {
 
 ///////////////////////////////////////////////////////////////////////////////
 
-static const char NULL_DELIM = '\x7F';  ///< Used in some cases for NULL delimiter -- this unprintable char generally doesn't appear in any valid text
-
-/** Internal: Helper for converting strings with quoting as needed. */
-struct StrQuoting {
-    /** Quoting type for string returned by quoting(). */
-    enum Type {  // Note: Order matters here, see addq() below
-        tNONE = 0,          ///< No quoting needed
-        tSINGLE,            ///< Single-quotes: '
-        tDOUBLE,            ///< Double-quotes: "
-        tBACKTICK,          ///< Backtick: `
-        tTRIPLE_SINGLE,     ///< Triple single-quotes: '''
-        tTRIPLE_DOUBLE,     ///< Triple double-quotes: """
-        tTRIPLE_BACKTICK,   ///< Triple backtick: ```
-        tBACKTICK_DEL       ///< Backtick followed by DEL char (7F) -- last resort
-    };
-
-    /** Scan string data and determine required quoting type to make it parsable with a delimiter.
-     - Quoting is needed to preserve existing quoting or given delim
-     .
-     \param  str    %String pointer
-     \param  size   %String size
-     \param  delim  Delimiter used for parsing, \link NULL_DELIM\endlink for none
-     \return        Quoting type for string
-    */
-    static Type get(const char* str, ulong size, char delim=NULL_DELIM) {
-        if (size > 0) {
-            const char QS  = '\'';
-            const char QD  = '"';
-            const char QB  = '`';
-            const char* end = str + size;
-
-            bool d  = false,    // set when delimiter found
-                 qs = false,    // set when single-quote found
-                 qd = false,    // set when double-quote found
-                 qb = false,    // set when backtick found
-                 f  = false;    // set when first char is a quote (any type)
-            const char* p = str;
-
-            // First char
-            if (*p == delim)
-                d = true;
-            else if (*p == QS)
-                f = qs = true;
-            else if (*p == QD)
-                f = qd = true;
-            else if (*p == QB)
-                f = qb = true;
-            ++p;
-
-            // Remaining chars
-            while (p < end) {
-                if (*p == delim) {
-                    if (!d)
-                        d = true;
-                } else if (*p == QS) {
-                    if (!qs)
-                        qs = true;
-                } else if (*p == QD) {
-                    if (!qd)
-                        qd = true;
-                } else if (*p == QB && !qb)
-                    qb = true;
-                ++p;
-            }
-
-            // Check if quoting required
-            if (d || f) {
-                if (!qs)
-                    return tSINGLE;
-                if (!qd)
-                    return tDOUBLE;
-                if (!qb)
-                    return tBACKTICK;
-
-                // Rescan for triple quoting
-                ulong count = 0;
-                char  last  = 0;
-                qs = false;     // set when triple single-quotes found
-                qd = false;     // set when triple double-quotes found
-                qb = false;     // set when triple backticks found
-                for (p=str; p < end; ++p) {
-                    if (*p == last && last != 0) {
-                        // Consecutive quote
-                        if (++count == 3) {
-                            switch (last) {
-                                case QS:
-                                    qs = true;
-                                    break;
-                                case QD:
-                                    qd = true;
-                                    break;
-                                case QB:
-                                    qb = true;
-                                    break;
-                            }
-                            last = 0;
-                        }
-                    } else {
-                        switch (*p) {
-                            case QS:
-                            case QD:
-                            case QB:
-                                last  = *p;
-                                count = 1;
-                                break;
-                            default:
-                                if (last != 0)
-                                    last = 0;
-                                break;
-                        }
-                    }
-                }
-
-                // Determine quoting needed
-                if (!qs)
-                    return tTRIPLE_SINGLE;
-                if (!qd)
-                    return tTRIPLE_DOUBLE;
-                if (!qb)
-                    return tTRIPLE_BACKTICK;
-                return tBACKTICK_DEL;  // last resort
-            }
-        }
-        return tNONE;
-    }
-
-    /** Append string value to string with quoting as needed.
-     - This calls get() to determine quoting needed
-     - This calls dest.add() to append needed quotes and string value
-     - When applicable, strings are scanned to determine how to quote:
-       - no quoting if delim not preset and doesn't start with any quotes (containing quotes is ok)
-       - single-quoting ( ' ), double-quoting ( " ), backtick-quoting ( \` ): 'foo bar'
-       - triple-quoting ( ''' or """ or \`\`\` ): '''foo bar'''
-       - backtick-DEL (backtick then code 7F) quoting as a rare last resort ( \`␡ ): \`␡foo bar\`␡
-       .
-     - This is used by Convert::addq() when applicable
-     .
-     \param  dest   Destination string to append to
-     \param  value  %String value to appened
-     \param  delim  Delimiter to use for determining quoting, must not be a letter or digit
-    */
-    template<class T, class C>
-    static void addq(C& dest, T value, typename C::Value delim) {
-        typedef typename T::ListBaseType BaseType;
-        const BaseType& value_base = (const BaseType&)value;
-        const Type type = StrQuoting::get(value_base.data_, value_base.size_, delim);
-        if (type == tNONE) {
-            // No quoting needed
-            dest.add(value);
-        } else if (type < tTRIPLE_SINGLE) {
-            // Single char quotes
-            const char* const Q_CH = "'\"`";
-            const char q = Q_CH[(int)type - (int)tSINGLE];
-            dest.reserve(value_base.size_+2);
-            dest.add(q).add(value).add(q);
-        } else if (type < tBACKTICK_DEL) {
-            // Triple char quotes
-            const char* const Q_STR = "'''\"\"\"```";
-            const char* const q = Q_STR + (((int)type - (int)tTRIPLE_SINGLE) * 3);
-            dest.reserve(value_base.size_+6);
-            dest.add(q, 3).add(value).add(q, 3);
-        } else {
-            // Double char quotes
-            const char* const Q_STR = "`\x7F";
-            dest.reserve(value_base.size_+4);
-            dest.add(Q_STR, 2).add(value).add(Q_STR, 2);
-        }
-    }
-};
-
-///////////////////////////////////////////////////////////////////////////////
-
-/** Scan string pointer for char and return stop pointer.
- \param  str     %String pointer to scan, must not be NULL
- \param  end     Pointer to stop scanning, must be >= str
- \param  ch      %Char to scan for
- \param  maxlen  Max allowed length to scan before returning an error, ignored if 0
- \return         Stop pointer, end if whole string was scanned, NULL if maxlen exceeded
-*/
-inline const char* str_scan_to(const char* str, const char* end, char ch, uint maxlen=0) {
-    const char* p = str;
-    const char* endmax = (maxlen > 0 ? str + maxlen : end);
-    for (; p < end; ++p) {
-        if (p >= endmax)
-            return NULL;
-        if (*p == ch)
-            break;
-    }
-    return p;
-}
-
-/** Scan string pointer for either of 2 chars and return stop pointer.
- \param  str     %String pointer to scan, must not be NULL
- \param  end     Pointer to stop scanning, must be >= str
- \param  ch1     First char to scan for
- \param  ch2     Second char to scan for
- \param  maxlen  Max allowed length to scan before returning an error, ignored if 0
- \return         Stop pointer, end if whole string was scanned, NULL if maxlen exceeded
-*/
-inline const char* str_scan_to(const char* str, const char* end, char ch1, char ch2, uint maxlen=0) {
-    const char* p = str;
-    const char* endmax = (maxlen > 0 ? str + maxlen : end);
-    for (; p < end; ++p) {
-        if (p >= endmax)
-            return NULL;
-        if (*p == ch1 || *p == ch2)
-            break;
-    }
-    return p;
-}
-
-/** Scan string pointer for any given chars and return stop pointer.
- \param  str     %String pointer to scan, must not be NULL
- \param  end     Pointer to stop scanning, must be >= str
- \param  chars   Pointer to chars to scan for
- \param  count   %Char count to scan for (length of chars)
- \param  maxlen  Max allowed length to scan before returning an error, ignored if 0
- \return         Stop pointer, end if whole string was scanned, NULL if maxlen exceeded
-*/
-inline const char* str_scan_to(const char* str, const char* end, const char* chars, uint count, uint maxlen=0) {
-    const char* p = str;
-    if (count > 0) {
-        const char* endmax = (maxlen > 0 ? str + maxlen : end);
-        uint i;
-        for (; p < end; ++p) {
-            if (p >= endmax)
-                return NULL;
-            for (i = 0; i < count; ++i)
-                if (*p == chars[i])
-                    break;
-        }
-    }
-    return p;
-}
-
-/** Scan string pointer for decimal number and return stop pointer.
- \param  num  Stores parsed number (not reset to 0)  [in/out]
- \param  str  %String pointer to scan, must not be NULL
- \param  end  Pointer to stop scanning, must be >= str
- \return      Stop pointer, end if whole string was scanned, NULL if invalid number or too many digits
-*/
-template<class T>
-inline const char* str_scan_decimal(T& num, const char* str, const char* end) {
-    const T BASE = 10;
-    static const T limitbase = IntegerT<T>::MAX / BASE;
-    static const T limitdig  = IntegerT<T>::MAX % BASE;
-    char ch;
-    const char* p = str;
-    for (; p < end; ++p) {
-        ch = *p;
-        if (ch < '0' || ch > '9')
-            return p;
-        ch -= '0';
-        if (num > limitbase || (num == limitbase && (T)ch > limitdig))
-            return NULL;
-        num *= BASE;
-        num += (T)ch;
-    }
-    if (p == str)
-        return NULL;
-    return p;
-}
-
-/** Scan string pointer for hex number and return stop pointer.
- \param  num  Stores parsed number (not reset to 0)  [in/out]
- \param  str  %String pointer to scan, must not be NULL
- \param  end  Pointer to stop scanning, must be >= str
- \return      Stop pointer, end if whole string was scanned, NULL if invalid number or too many digits
-*/
-template<class T>
-inline const char* str_scan_hex(T& num, const char* str, const char* end) {
-    const T BASE = 16;
-    static const T limitbase = IntegerT<T>::MAX / BASE;
-    static const T limitdig  = IntegerT<T>::MAX % BASE;
-    char ch;
-    const char* p = str;
-    for (; p < end; ++p) {
-        ch = *p;
-        if (ch <= '9') {
-            if (ch < '0')
-                return p;
-            ch -= '0';
-        } else if (ch >= 'a') {
-            if (ch > 'f')
-                return p;
-            ch -= ('a' - 10);
-        } else if (ch <= 'F') {
-            if (ch < 'A')
-                return p;
-            ch -= ('A' - 10);
-        } else
-            return p;
-        if (num > limitbase || (num == limitbase && ch > limitdig))
-            return NULL;
-        num *= BASE;
-        num += (T)ch;
-    }
-    if (p == str)
-        return NULL;
-    return p;
-}
-
-///////////////////////////////////////////////////////////////////////////////
-
 /** \cond impl */
 namespace impl {
     static const char CHARMAP_TYPE_MASK = 0x07;
     inline const char* CHARMAP_TYPE()
         { return "@@@@@@@@@AAAAA@@@@@@@@@@@@@@@@@@ABBBBBBBBBBBBBBBCCCCCCCCCCBBBBBBBDDDDDDDDDDDDDDDDDDDDDDDDDDBBBBBBEEEEEEEEEEEEEEEEEEEEEEEEEEBBBB@"; }
+    inline const char* CHARMAP_BREAK_TYPE()
+        { return "@@@@@@@@@AAAAA@@@@@@@@@@@@@@@@@@ADB@@D@BCD@@DDDDEEEEEEEEEE@DC@DD@EEEEEEEEEEEEEEEEEEEEEEEEEEC@D@EBEEEEEEEEEEEEEEEEEEEEEEEEEEC@D@@"; }
 
     static const int CHARMAP_ALPHA_LEN = 36;
 
@@ -357,7 +55,18 @@ enum CharType {
     ctLOWER         ///< Lowercase alphabetic character (a-z)
 };
 
+/** Character break type returned by ascii_breaktype(). */
+enum CharBreakType {
+    cbtOTHER = 0,   ///< Other charcater type
+    cbtWSPACE,      ///< Whitespace character, used between words
+    cbtQUOTE,       ///< Quote character, break word before or after this depending on whether begin or end quote ('"`)
+    cbtBEGIN,       ///< Punctuation used before a word begins, break words before this ( ([{< )
+    cbtEND,         ///< Punctuation used after a word ends, break words after this ( )]}>!%;,./ )
+    cbtWORD         ///< Word character (A-Z, a-z, 0-9, _)
+};
+
 /** Get ASCII character type.
+ - \#include <evo/strscan.h> or <evo/string.h> or <evo/substring.h>
  - This recognizes standard ASCII codes 0-127
  - This does not use any locale information
  .
@@ -370,7 +79,23 @@ inline CharType ascii_type(char ch) {
     return (CharType)(impl::CHARMAP_TYPE()[(int)ch] & impl::CHARMAP_TYPE_MASK);
 }
 
-/** Convert ASCII character to uppercase.
+/** Get ASCII character word-break type.
+ - \#include <evo/strscan.h> or <evo/string.h> or <evo/substring.h>
+ - This is used to help find a good place to insert a word-break
+ - This recognizes standard ASCII codes 0-127
+ - This does not use any locale information
+ .
+ \param  ch  Character to check
+ \return     Character break type, see CharBreakType
+*/
+inline CharBreakType ascii_breaktype(char ch) {
+    if (ch & 0x80)
+        return cbtOTHER;
+    return (CharBreakType)(impl::CHARMAP_BREAK_TYPE()[(int)ch] & impl::CHARMAP_TYPE_MASK);
+}
+
+/** %Convert ASCII character to uppercase.
+ - \#include <evo/strscan.h> or <evo/string.h> or <evo/substring.h>
  - This recognizes standard ASCII codes 0-127
  - This does not use any locale information
  .
@@ -383,7 +108,8 @@ inline char ascii_toupper(char ch) {
     return impl::CHARMAP_UPPER()[ch - impl::CHARMAP_LOWER_FIRST];
 }
 
-/** Convert ASCII character to lowercase.
+/** %Convert ASCII character to lowercase.
+ - \#include <evo/strscan.h> or <evo/string.h> or <evo/substring.h>
  - This recognizes standard ASCII codes 0-127
  - This does not use any locale information
  .
@@ -417,6 +143,7 @@ enum UtfMode {
 ///////////////////////////////////////////////////////////////////////////////
 
 /** Scan for next Unicode character in UTF-8 string.
+ - \#include <evo/strscan.h> or <evo/string.h> or <evo/substring.h>
  - Each UTF-8 character may span 1-4 bytes, depending on the character
  - Call this in a loop to iterate through Unicode characters in a UTF-8 string, stop when NULL is returned
  .
@@ -491,6 +218,7 @@ inline const char* utf8_scan(wchar32& code, const char* str, const char* end, Ut
 }
 
 /** Scan for next Unicode character in terminated UTF-8 string.
+ - \#include <evo/strscan.h> or <evo/string.h> or <evo/substring.h>
  - Each UTF-8 character may span 1-4 bytes, depending on the character
  - Call this in a loop to iterate through Unicode characters in a UTF-8 string, stop when NULL is returned
  .
@@ -565,6 +293,7 @@ inline const char* utf8_scan_term(wchar32& code, const char* str, UtfMode mode=u
 }
 
 /** %Compare two non-terminated UTF-8 strings.
+ - \#include <evo/strscan.h> or <evo/string.h> or <evo/substring.h>
  - See also terminated variants: utf8_compare(const char*,ulong,const char*), utf16_compare(const char*,const char*)
  .
  \param  str1  First string to compare, can be NULL
@@ -606,6 +335,7 @@ inline int utf8_compare(const char* str1, ulong len1, const char* str2, ulong le
 }
 
 /** %Compare non-terminated and terminated UTF-8 strings.
+ - \#include <evo/strscan.h> or <evo/string.h> or <evo/substring.h>
  - See also non-terminated and terminated variants: utf8_compare(const char*,ulong,const char*,ulong), utf16_compare(const char*,const char*)
  .
  \param  str1  First string to compare, can be NULL
@@ -640,6 +370,7 @@ inline int utf8_compare(const char* str1, ulong len1, const char* str2) {
 }
 
 /** %Compare two terminated UTF-8 strings.
+ - \#include <evo/strscan.h> or <evo/string.h> or <evo/substring.h>
  - See also non-terminated variants: utf8_compare(const char*,ulong,const char*,ulong), utf16_compare(const char*,ulong,const char*)
  .
  \param  str1  First string to compare, must be terminated, can be NULL
@@ -672,6 +403,7 @@ inline int utf8_compare(const char* str1, const char* str2) {
 }
 
 /** Scan for UTF-8 multi-byte characters of at least minsize.
+ - \#include <evo/strscan.h> or <evo/string.h> or <evo/substring.h>
  - Multi-byte characters are used for higher Unicode code points
  - Valid UTF-8 single-byte characters are also valid ASCII characters
  - Use `minsize` to set the multi-byte characters to stop at -- character sizes smaller than this are ignored
@@ -734,6 +466,7 @@ inline const char* utf8_min(const char* str, const char* end, bool strict=false,
 }
 
 /** Count Unicode character values in UTF-8 string.
+ - \#include <evo/strscan.h> or <evo/string.h> or <evo/substring.h>
  - Each UTF-8 character may span 1-4 bytes, depending on the character
  .
  \param  str   Pointer to string to scan, must not be NULL
@@ -794,7 +527,8 @@ inline ulong utf8_count(const char* str, const char* end, UtfMode mode=umREPLACE
     return count;
 }
 
-/** Convert UTF-8 string to UTF-16 string.
+/** %Convert UTF-8 string to UTF-16 string.
+ - \#include <evo/strscan.h> or <evo/string.h> or <evo/substring.h>
  \param  str      Pointer to input UTF-8 string to convert, set to stopping point on return, must not be NULL  [in/out]
  \param  end      Pointer to stop input at (end of input, exclusive)
  \param  outbuf   Output buffer to write UTF-16 string to, NULL to scan without writing
@@ -877,6 +611,7 @@ inline ulong utf8_to16(const char*& str, const char* end, wchar16* outbuf=NULL, 
 ///////////////////////////////////////////////////////////////////////////////
 
 /** Scan for next Unicode character in UTF-16 string.
+ - \#include <evo/strscan.h> or <evo/string.h> or <evo/substring.h>
  - A UTF-16 character may span 1 or 2 16-bit values (2 or 4 bytes), depending on the character
    - 2 byte values are the raw Unicode 16-bit code value
    - 4 byte values are pairs of reserved 16-bit values called surrogate pairs
@@ -929,6 +664,7 @@ inline const wchar16* utf16_scan(wchar32& code, const wchar16* str, const wchar1
 }
 
 /** Scan for next Unicode character in terminated UTF-16 string.
+ - \#include <evo/strscan.h> or <evo/string.h> or <evo/substring.h>
  - A UTF-16 character may span 1 or 2 16-bit values (2 or 4 bytes), depending on the character
    - 2 byte values are the raw Unicode 16-bit code value
    - 4 byte values are pairs of reserved 16-bit values called surrogate pairs
@@ -981,6 +717,7 @@ inline const wchar16* utf16_scan_term(wchar32& code, const wchar16* str, UtfMode
 }
 
 /** %Compare two non-terminated UTF-16 strings.
+ - \#include <evo/strscan.h> or <evo/string.h> or <evo/substring.h>
  - See also terminated variants: utf16_compare(const wchar16*,ulong,const wchar16*), utf16_compare(const wchar16*,const wchar16*)
  .
  \param  str1  First string to compare, must not be NULL
@@ -1023,6 +760,7 @@ inline int utf16_compare(const wchar16* str1, ulong len1, const wchar16* str2, u
 }
 
 /** %Compare a non-terminated UTF-16 string with a terminated UTF-16 string.
+ - \#include <evo/strscan.h> or <evo/string.h> or <evo/substring.h>
  - See also non-terminated variant: utf16_compare(const wchar16*,ulong,const wchar16*,ulong)
  .
  \param  str1  First string to compare, must not be NULL
@@ -1058,6 +796,7 @@ inline int utf16_compare(const wchar16* str1, ulong len1, const wchar16* str2) {
 }
 
 /** %Compare two terminated UTF-16 strings.
+ - \#include <evo/strscan.h> or <evo/string.h> or <evo/substring.h>
  - See also non-terminated variant: utf16_compare(const wchar16*,ulong,const wchar16*,ulong)
  .
  \param  str1  First string to compare, must be terminated, must not be NULL
@@ -1091,6 +830,7 @@ inline int utf16_compare(const wchar16* str1, const wchar16* str2) {
 }
 
 /** %Compare a non-terminated UTF-16 string to a non-terminated UTF-8 string.
+ - \#include <evo/strscan.h> or <evo/string.h> or <evo/substring.h>
  - See also terminated variants: utf16_compare(const wchar16*,ulong,const char*), utf16_compare(const wchar16*,const char*)
  .
  \param  str1  First string to compare, must not be NULL
@@ -1128,6 +868,7 @@ inline int utf16_compare8(const wchar16* str1, ulong len1, const char* str2, ulo
 }
 
 /** %Compare a non-terminated UTF-16 string to a terminated UTF-8 string.
+ - \#include <evo/strscan.h> or <evo/string.h> or <evo/substring.h>
  - See also non-terminated and terminated variants: utf16_compare(const wchar16*,ulong,const char*,ulong), utf16_compare(const wchar16*,const char*)
  .
  \param  str1  First string to compare, must not be NULL
@@ -1163,6 +904,7 @@ inline int utf16_compare8(const wchar16* str1, ulong len1, const char* str2) {
 }
 
 /** %Compare a terminated UTF-16 string to a terminated UTF-8 string.
+ - \#include <evo/strscan.h> or <evo/string.h> or <evo/substring.h>
  - See also non-terminated variants: utf16_compare(const wchar16*,ulong,const char*,ulong), utf16_compare(const wchar16*,ulong,const char*)
  .
  \param  str1  First string to compare, must be terminated, must not be NULL
@@ -1196,6 +938,8 @@ inline int utf16_compare8(const wchar16* str1, const char* str2) {
 }
 
 /** Find terminated UTF-16 string length.
+ - \#include <evo/strscan.h> or <evo/string.h> or <evo/substring.h>
+ .
  \param  str  Pointer to string, must be NULL terminated, NULL for none
  \return      %String length in UTF-16 values (not bytes), 0 if str=NULL
 */
@@ -1209,6 +953,7 @@ inline ulong utf16_strlen(const wchar16* str) {
 }
 
 /** Scan for UTF-16 surrogate pairs, which each require a pair of wchar16 values (4 bytes).
+ - \#include <evo/strscan.h> or <evo/string.h> or <evo/substring.h>
  - Surrogate pairs are used for Unicode code points 0x10000 to 0x10FFFF, which are less common
  - Valid UTF-16 without surrogate pairs is also valid UCS-2 (a precursor to UTF-16)
  .
@@ -1247,6 +992,7 @@ inline const wchar16* utf16_min(const wchar16* str, const wchar16* end, bool str
 }
 
 /** Count Unicode character values in UTF-16 string.
+ - \#include <evo/strscan.h> or <evo/string.h> or <evo/substring.h>
  - Each UTF-16 character may span 1 or 2 16-bit values (2 or 4 bytes), depending on the character
    - 2 byte values are the raw Unicode 16-bit code value
    - 4 byte values are pairs of reserved 16-bit values called surrogate pairs
@@ -1290,7 +1036,9 @@ inline ulong utf16_count(const wchar16* str, const wchar16* end, UtfMode mode=um
     return count;
 }
 
-/** Convert UTF-16 string to UTF-8 string.
+/** %Convert UTF-16 string to UTF-8 string.
+ - \#include <evo/strscan.h> or <evo/string.h> or <evo/substring.h>
+ .
  \param  str      Pointer to input UTF-16 string to convert, set to stopping point on return, must not be NULL  [in/out]
  \param  end      Pointer to stop input at (end of input, exclusive), must be >= `str`
  \param  outbuf   Output buffer to write UTF-8 string to, NULL to scan without writing
@@ -1385,6 +1133,29 @@ inline ulong utf16_to8(const wchar16*& str, const wchar16* end, char* outbuf=NUL
         }
     }
     return written;
+}
+
+///////////////////////////////////////////////////////////////////////////////
+
+/** Evo implementation of memrchr() to search for character in reverse.
+ - \#include <evo/strscan.h> or <evo/string.h> or <evo/substring.h>
+ - This searches for a character in reverse and returns a pointer to it, or `NULL` if not found
+ - This calls `memrchr()` (GNU C extension) when possible, otherwise this falls back to an equivalent implementation
+ .
+ \param  str   %String pointer to search
+ \param  ch    Character to search for
+ \param  size  %String size to search, search starts at the end
+ \return       Pointer to last occurence of `ch`, NULL if not found
+*/
+inline const char* string_memrchr(const char* str, char ch, size_t size) {
+    #if !defined(EVO_NO_MEMRCHR) && defined(EVO_GLIBC_MEMRCHR)
+        return (char*)::memrchr(str, ch, size);
+    #else
+        for (const char* p = str + size; p > str; )
+            if (*--p == ch)
+                return p;
+        return NULL;
+    #endif
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -3152,6 +2923,103 @@ struct FmtChar {
         { }
 };
 
+/** Explicitly format a string.
+ - Used with operator<<() on String, Stream, and StreamOut
+   - See \ref StringFormatting "String Formatting" and \ref StreamFormatting "Stream Formatting"
+ 
+*/
+struct FmtString {
+    typedef FmtString               This;           ///< %This type
+    typedef ListBase<char,StrSizeT> StringBase;     ///< StringBase type
+
+    StringBase  str;
+    FmtSetField fmt;
+
+    /** Constructor.
+     \param  str    %String pointer to format, must be terminated
+     \param  align  Alignment type for string -- see FmtAlign
+    */
+    FmtString(const char* str, FmtAlign align=fLEFT) : str(str), fmt(align)
+        { }
+
+    /** Constructor.
+     \param  str    %String pointer to format
+     \param  size   %String size to format
+     \param  width  Width to format within, -1 for default
+     \param  ch     Padding character to fill in `width` around string, 0 for default
+    */
+    FmtString(const char* str, StrSizeT size, int width=-1, char ch=0) : str(str, size), fmt(width, ch)
+        { }
+
+    /** Constructor.
+     \param  str    %String pointer to format
+     \param  size   %String size to format
+     \param  align  Alignment type for string -- see FmtAlign
+     \param  width  Width to format within, -1 for default
+     \param  ch     Padding character to fill in `width` around string, 0 for default
+    */
+    FmtString(const char* str, StrSizeT size, FmtAlign align, int width=-1, char ch=0) : str(str, size), fmt(align, width, ch)
+        { }
+
+    /** Constructor.
+     \param  str    %String to format
+     \param  width  Width to format within, -1 for default
+     \param  ch     Padding character to fill in `width` around string, 0 for default
+    */
+    FmtString(const StringBase& str, int width=-1, char ch=0) : str(str), fmt(width, ch)
+        { }
+
+    /** Constructor.
+     \param  str    %String to format
+     \param  align  Alignment type for string -- see FmtAlign
+     \param  width  Width to format within, -1 for default
+     \param  ch     Padding character to fill in `width` around string, 0 for default
+    */
+    FmtString(const StringBase& str, FmtAlign align, int width=-1, char ch=0) : str(str), fmt(align, width, ch)
+        { }
+
+    /** Helper for setting padding attributes.
+     \param  width  Width to format within, -1 for default
+     \param  ch     Padding character to fill in `width` around string, 0 for default
+     \return        This
+    */
+    This& width(int width, char ch=0) {
+        fmt.width = width;
+        fmt.fill  = ch;
+        return *this;
+    }
+};
+
+struct FmtStringWrap {
+    typedef ListBase<char,StrSizeT> StringBase;
+
+    StringBase str;
+    int width;
+    int indent;
+    NewlineValue newline;
+
+    FmtStringWrap(const char* str, StrSizeT size, int width, int indent=0) : str(str, size), width(width), indent(indent)
+        { }
+
+    FmtStringWrap(const StringBase& str, int width) : str(str), width(width), indent(0)
+        { }
+
+    FmtStringWrap& set_indent(int new_indent=0) {
+        indent = new_indent;
+        return *this;
+    }
+
+    FmtStringWrap& set_newline(Newline nl) {
+        newline = nl;
+        return *this;
+    }
+
+    FmtStringWrap& set_newline(NewlineDefault nl) {
+        newline = nl;
+        return *this;
+    }
+};
+
 /** Explicitly format an integer.
  - Used with operator<<() on String, Stream, and StreamOut
    - See \ref StringFormatting "String Formatting" and \ref StreamFormatting "Stream Formatting"
@@ -3308,6 +3176,54 @@ struct FmtFloatT {
 typedef FmtFloatT<float>   FmtFloat;    ///< \copydoc FmtFloatT
 typedef FmtFloatT<double>  FmtFloatD;   ///< \copydoc FmtFloatT
 typedef FmtFloatT<ldouble> FmtFloatL;   ///< \copydoc FmtFloatT
+
+///////////////////////////////////////////////////////////////////////////////
+
+/** Explicitly format a pointer.
+ - Used with operator<<() on String, Stream, and StreamOut
+ .
+
+\par Example
+
+\code
+#include <evo/string.h>
+using namespace evo;
+
+int main() {
+    int num = 1;
+
+    // Format string as: 
+    String str;
+    str << FmtPtr(&num);
+
+    return 0;
+}
+\endcode
+
+*/
+struct FmtPtr {
+    const void* ptr;    ///< Pointer to format
+    FmtSetInt fmt;      ///< Formatting attributes
+
+    /** Constructor for formatting a pointer.
+     \param  ptr     Pointer to format
+     \param  prefix  Formatting prefix to use (see FmtBasePrefix), fbpCURRENT for unspecified (default: fPREFIX0)
+     \param  width   Width to pad to, -1 for unspecified (default: 0)
+     \param  ch      Padding character to use, 0 for unspecified (default: '0')
+    */
+    FmtPtr(const void* ptr, FmtBasePrefix prefix=fbpCURRENT, int width=-1, char ch=0) : ptr(ptr), fmt(fHEX, prefix, width, ch) {
+    }
+
+    /** Constructor for formatting a pointer.
+     \param  ptr     Pointer to format
+     \param  base    Formatting base to use (see FmtBase), fbCURRENT for unspecified (default: fDEC)
+     \param  prefix  Formatting prefix to use (see FmtBasePrefix), fbpCURRENT for unspecified (default: fPREFIX0)
+     \param  width   Width to pad to, -1 for unspecified (default: 0)
+     \param  ch      Padding character to use, 0 for unspecified (default: '0')
+    */
+    FmtPtr(const void* ptr, int base, FmtBasePrefix prefix=fbpCURRENT, int width=-1, char ch=0) : ptr(ptr), fmt(base, prefix, width, ch) {
+    }
+};
 
 ///////////////////////////////////////////////////////////////////////////////
 

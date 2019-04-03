@@ -1,5 +1,5 @@
 // Evo C++ Library
-/* Copyright 2018 Justin Crowell
+/* Copyright 2019 Justin Crowell
 Distributed under the BSD 2-Clause License -- see included file LICENSE.txt for details.
 */
 ///////////////////////////////////////////////////////////////////////////////
@@ -118,7 +118,7 @@ namespace impl {
     #else
         int cpuinfo[4];
         __cpuid(cpuinfo, 0x00000001);
-        return cpuinfo[2] & 0x800000;
+        return (cpuinfo[2] & 0x800000) != 0;
     #endif
     }
 #elif defined(__GNUC__) && !defined(EVO_NOBUILTIN_BITS)
@@ -233,14 +233,10 @@ namespace impl {
     }
 #endif
 
-/** Get population count (number of set bits) for value.
- - GCC & Clang: Compile with `-msse4.2` (or similar) to enable SSE instructions for best performance
-   - You can also optimize further for current or specific hardware with `-march=` and `-tune=`
-   - See: https://gcc.gnu.org/onlinedocs/gcc/x86-Options.html
- - MSVC: Define `EVO_MSVC_POPCNT` (before including Evo headers) to enable POPCNT CPU instructions for better performance
-   - \b Caution: Runtime results are undefined if CPU doesn't support this instruction
-   - See: https://docs.microsoft.com/en-us/cpp/intrinsics/popcnt16-popcnt-popcnt64
- .
+/** Get population count (number of bits set) for value.
+ \tparam  T  Mask type (inferred from argument)
+ \param  mask  Bit mask to use
+ \return       Number of bits set in mask
 */
 template<class T>
 inline int bits_popcount(T mask) {
@@ -451,7 +447,8 @@ struct Bits {
             const T* p = data + index;
             if (offset_end <= BITS) {
                 // All in 1 chunk
-                return bits_popcount(*p & (((RBIT << count) - 1) << (BITS - offset_end)));
+                const T maskval = (count == BITS ? ALLBITS : (((RBIT << count) - 1) << (BITS - offset_end)));
+                return bits_popcount(*p & maskval);
             } else {
                 Size result = 0;
 
@@ -522,7 +519,8 @@ struct Bits {
             const T* p = data + index;
             if (offset_end <= BITS) {
                 // All in 1 chunk
-                return T(*p | (T)~(((RBIT << count) - 1) << (BITS - offset_end))) == ALLBITS;
+                const T maskval = (count == BITS ? ALLBITS :  (((RBIT << count) - 1) << (BITS - offset_end)));
+                return (*p | (T)~maskval) == ALLBITS;
             } else {
                 // First partial chunk
                 if (offset > 0) {
@@ -584,7 +582,8 @@ struct Bits {
             const T* p = data + index;
             if (offset_end <= BITS) {
                 // All in 1 chunk
-                return T(*p & (T)(((RBIT << count) - 1) << (BITS - offset_end))) != ZERO;
+                const T maskval = (count == BITS ? ALLBITS :  (((RBIT << count) - 1) << (BITS - offset_end)));
+                return (*p & maskval) != ZERO;
             } else {
                 // First partial chunk
                 if (offset > 0) {
@@ -621,8 +620,11 @@ struct Bits {
         T chunk;
     
         IterState() {
+            data = NULL;
             size = 0;
             index = NONE;
+            pos   = 0;
+            chunk = 0;
         }
     };
 
@@ -638,7 +640,7 @@ struct Bits {
     */
     static Size array_iter(IterState& state, const T* data, Size bitsize) {
         state.data = data;
-        state.size = bitsize / BITS;
+        state.size = (bitsize + BITS - 1) / BITS;
         for (Size i = 0, sz = state.size; i < sz; ++i) {
             if (data[i] != 0) {
                 state.chunk = data[i];
@@ -701,7 +703,7 @@ struct Bits {
         assert( !IntegerT<T>::SIGN );
         if (pos < bitsize) {
             const Size i = (pos / BITS);
-            return data[i] & (LBIT >> (pos - (i * BITS)));
+            return ( data[i] & (LBIT >> (pos - (i * BITS))) ) != 0;
         }
         return false;
     }
@@ -762,7 +764,7 @@ struct Bits {
             T maskval;
             if (offset_end <= BITS) {
                 // All in 1 chunk
-                maskval = (((RBIT << count) - 1) << (BITS - offset_end));
+                maskval = (count == BITS ? ALLBITS :  (((RBIT << count) - 1) << (BITS - offset_end)));
                 if (value)
                     *p |= maskval;
                 else
@@ -846,7 +848,8 @@ struct Bits {
             T* p = data + index;
             if (offset_end <= BITS) {
                 // All in 1 chunk
-                *p ^= (((RBIT << count) - 1) << (BITS - offset_end));
+                const T maskval = (count == BITS ? ALLBITS :  (((RBIT << count) - 1) << (BITS - offset_end)));
+                *p ^= maskval;
             } else {
                 // First partial chunk
                 if (offset > 0) {
@@ -913,7 +916,7 @@ struct Bits {
             if (offset_end <= BITS) {
                 // All in 1 chunk
                 const uint lshift = BITS - offset_end;
-                maskval = ~(((RBIT << count) - 1) << lshift);
+                maskval = (count == BITS ? 0 : ~(((RBIT << count) - 1) << lshift));
                 *p = (*p & maskval) | (T(uvalue) << lshift);
             } else {
                 // First partial chunk

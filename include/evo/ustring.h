@@ -1,5 +1,5 @@
 // Evo C++ Library
-/* Copyright 2018 Justin Crowell
+/* Copyright 2019 Justin Crowell
 Distributed under the BSD 2-Clause License -- see included file LICENSE.txt for details.
 */
 ///////////////////////////////////////////////////////////////////////////////
@@ -23,6 +23,18 @@ namespace evo {
  - \b Caution: Setting from a raw wchar16 pointer will use \ref UnsafePtrRef "Unsafe Pointer Referencing"
  .
 
+C++11:
+ - Move semantics
+ - `char8_t`, `char16_t`
+
+Windows Only:
+ - Conversion using Win32 API:
+   - set_win32(const char* str, int size)
+   - set_win32(const char* str)
+   - set(const WCHAR*,Size), set(const WCHAR*)
+   - copy(const WCHAR*,Size), copy(const WCHAR*)
+   - operator=(const WCHAR*)
+
 \par Example
 
 \code
@@ -32,6 +44,29 @@ using namespace evo;
 int main() {
     // Convert UTF-8 string literal to UTF-16
     UnicodeString ustr("test123");
+
+    // Convert UTF-16 string to UTF-8
+    String str(ustr);
+
+    // Modify str then convert it to UTF-16
+    str = "newtest";
+    ustr = str;
+
+    return 0;
+}
+\endcode
+
+\par Example with C++11
+
+C++11 UTF-16 string literal (`u` prefix) is supported.
+
+\code
+#include <evo/ustring.h>
+using namespace evo;
+
+int main() {
+    // Initialize with UTF-16 literal
+    UnicodeString ustr(u"test123");
 
     // Convert UTF-16 string to UTF-8
     String str(ustr);
@@ -114,6 +149,65 @@ public:
             copy(str.ptr_, (Size)len);
         }
     }
+
+#if defined(EVO_CPP11)
+    /** Move constructor (C++11).
+     \param  src  Source to move
+    */
+    UnicodeString(UnicodeString&& src) : List(std::move(src)) {
+    }
+
+    /** Constructor for UTF-16 string pointer (C++11).
+     - UnicodeString(const wchar16*,Size) is preferred, since `wchar16` is always 16 bits
+     - This requires `char16_t` to be 16 bits, which is normally the case but the standard allows it to be larger
+       - This uses `assert()` to check `char16_t` is 16 bits
+     - \b Caution: Uses \ref UnsafePtrRef "Unsafe Pointer Referencing"
+     .
+     \param  str   %String pointer to use
+     \param  size  %String size as `wchar16` count
+    */
+    UnicodeString(const char16_t* str, Size size) {
+        assert( sizeof(char16_t) == sizeof(wchar16) );
+        set((const wchar16*)str, size);
+    }
+
+    /** Constructor for UTF-16 string pointer (C++11).
+     - UnicodeString(const wchar16*,Size) is preferred, since `wchar16` is always 16 bits
+     - This requires `char16_t` to be 16 bits, which is normally the case but the standard allows it to be larger
+       - This uses `assert()` to check `char16_t` is 16 bits
+     - \b Caution: Uses \ref UnsafePtrRef "Unsafe Pointer Referencing"
+     .
+     \param  str  %String pointer to use, must be terminated
+    */
+    UnicodeString(const char16_t* str) {
+        assert( sizeof(char16_t) == sizeof(wchar16) );
+        set((const wchar16*)str);
+    }
+
+    /** Move assignment operator (C++11).
+     \param  src  Source to move
+     \return      This
+    */
+    UnicodeString& operator=(UnicodeString&& src) {
+        List::operator=(std::move(src));
+        return *this;
+    }
+
+    /** Assignment operator for terminated UTF-16 string pointer (C++11).
+     - operator=(const wchar16*) is preferred, since `wchar16` is always 16 bits
+     - This requires `char16_t` to be 16 bits, which is normally the case but the standard allows it to be larger
+       - This uses `assert()` to check `char16_t` is 16 bits
+     - \b Caution: Uses \ref UnsafePtrRef "Unsafe Pointer Referencing"
+     .
+     \param  str  %String pointer to use, must be terminated
+     \return      This
+    */
+    UnicodeString& operator=(const char16_t* str) {
+        assert( sizeof(char16_t) == sizeof(wchar16) );
+        set((const wchar16*)str);
+        return *this;
+    }
+#endif
 
     // SET
 

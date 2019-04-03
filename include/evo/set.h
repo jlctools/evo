@@ -1,5 +1,5 @@
 // Evo C++ Library
-/* Copyright 2018 Justin Crowell
+/* Copyright 2019 Justin Crowell
 Distributed under the BSD 2-Clause License -- see included file LICENSE.txt for details.
 */
 ///////////////////////////////////////////////////////////////////////////////
@@ -43,14 +43,16 @@ namespace evo {
 
 \par Read Access
 
+ - asconst()
  - size()
    - null(), empty()
    - capacity()
    - shared()
    - ordered()
  - contains()
+ - cbegin(), cend()
+   - begin() const, end() const
  - iter()
-   - cbegin(), cend()
  - operator==()
    - operator!=()
  .
@@ -62,8 +64,8 @@ namespace evo {
    - capacitymin()
    - unshare()
    - compact()
+ - begin(), end()
  - iterM()
-   - begin(), end()
  - set()
    - set(const SetBaseType&)
    - setempty()
@@ -133,8 +135,6 @@ public:
             { }
         IterKey(const IterKey& src)
             { memcpy(this, &src, sizeof(src)); }
-        IterKey& operator=(const IterKey& src)
-            { memcpy(this, &src, sizeof(src)); return *this; }
     };
     typedef Item IterItem;
     /** \endcond */
@@ -163,6 +163,11 @@ public:
     /** Destructor. */
     virtual ~Set()
         { }
+
+    /** \copydoc List::asconst() */
+    const SetBaseType& asconst() const {
+        return *this;
+    }
 
     // SET
 
@@ -280,45 +285,29 @@ public:
 
     // FIND
 
-    /** Get iterator at first item (const).
-     - This allows compatibility with range-based for loops and other libraries, otherwise use container Iter directly
-     .
-     \return  Iterator at first item, or at end position if empty
-     \see Iter, cend(), begin(), end()
-    */
+    /** \copydoc List::cbegin() */
     Iter cbegin() const
         { return Iter(*this); }
 
-    /** Get iterator at end (const).
-     - This allows compatibility with range-based for loops and other libraries, otherwise use container Iter directly
-     - This really just creates an empty iterator
-     .
-     \return  Iterator at end position
-     \see Iter, cbegin(), begin(), end()
-    */
+    /** \copydoc List::cend() */
     Iter cend() const
         { return Iter(); }
 
-    /** Get iterator at first item (mutable).
-     - This allows compatibility with range-based for loops and other libraries, otherwise use container Iter directly
-     - cbegin() is more efficient, since this effectively calls unshare() to make items mutable
-     - \b Caution: Results are undefined if value is modified in a way that changes it's ordered position in set
-     .
-     \return  Iterator at first item, or at end position if empty
-     \see IterM, end(), cbegin(), cend()
-    */
+    /** \copydoc List::begin() */
     IterM begin()
         { return IterM(*this); }
 
-    /** Get iterator at end.
-     - This allows compatibility with range-based for loops and other libraries, otherwise use container Iter directly
-     - This really just creates an empty iterator
-     .
-     \return  Iterator at end position
-     \see IterM, begin(), cbegin(), cend()
-    */
+    /** \copydoc List::begin() const */
+    Iter begin() const
+        { return Iter(*this); }
+
+    /** \copydoc List::end() */
     IterM end()
         { return IterM(); }
+
+    /** \copydoc List::end() const */
+    Iter end() const
+        { return Iter(); }
 
     /** Find (lookup) iterator for given value (const).
      \param  value  Value to find

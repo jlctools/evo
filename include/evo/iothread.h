@@ -1,5 +1,5 @@
 // Evo C++ Library
-/* Copyright 2018 Justin Crowell
+/* Copyright 2019 Justin Crowell
 Distributed under the BSD 2-Clause License -- see included file LICENSE.txt for details.
 */
 ///////////////////////////////////////////////////////////////////////////////
@@ -10,6 +10,7 @@ Distributed under the BSD 2-Clause License -- see included file LICENSE.txt for 
 
 #include "io.h"
 #include "thread.h"
+#include "file.h"
 
 ///////////////////////////////////////////////////////////////////////////////
 
@@ -125,29 +126,6 @@ namespace evo {
 
 ///////////////////////////////////////////////////////////////////////////////
 
-/** Extends an existing stream with mutex for multithreaded synchronization.
- - The stream is only thread safe when protected by this mutex
-*/
-template<class T>
-struct StreamExtMT {
-    typedef StreamExtMT<T> This;    ///< This type
-
-    Mutex mutex;    ///< Stream mutex
-    T&    stream;   ///< Stream object
-
-    /** Constructor.
-     \param  stream  %Stream to extend/wrap
-    */
-    StreamExtMT(T& stream) : stream(stream)
-        { }
-
-private:
-    StreamExtMT(This&);
-    This& operator=(This&);
-};
-
-///////////////////////////////////////////////////////////////////////////////
-
 /** %Stream with mutex for multithreaded synchronization.
  - The stream is only thread safe when protected by this mutex
 */
@@ -207,6 +185,7 @@ typedef StreamMT<File>    FileMT;         ///< %File with mutex for synchonizati
  - \b Compiler: ConsoleMT::get() and con_mt() aren't thread safe without compiler support for "magic statics", which requires at least:
    - <a href="https://msdn.microsoft.com/en-us/library/hh567368.aspx">Microsoft Visual C++ 2015</a>
    - <a href="http://en.cppreference.com/w/cpp/compiler_support#cpp11">gcc 4.3, clang 2.9</a>
+ - See also: ConsoleNotMT
  
 \par Example
 
@@ -225,9 +204,14 @@ int main() {
 \endcode 
 */
 struct ConsoleMT {
-    StreamExtMT<PipeIn>  in;        ///< Read console input
-    StreamExtMT<PipeOut> out;       ///< Write to console, normal output
-    StreamExtMT<PipeOut> err;       ///< Write to console, error output
+    typedef PipeOut::Format Format;             ///< \copydoc evo::StreamFormatter
+    typedef StreamExtMT<PipeIn,Mutex>  InT;     ///< Input type
+    typedef StreamExtMT<PipeOut,Mutex> OutT;    ///< Output type
+    typedef Mutex::Lock Lock;                   ///< Mutex lock type
+
+    InT  in;        ///< Read console input
+    OutT out;       ///< Write to console, normal output
+    OutT err;       ///< Write to console, error output
 
     /** Get console instance to use.
      \return  Console instance

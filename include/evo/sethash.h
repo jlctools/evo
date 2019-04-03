@@ -1,5 +1,5 @@
 // Evo C++ Library
-/* Copyright 2018 Justin Crowell
+/* Copyright 2019 Justin Crowell
 Distributed under the BSD 2-Clause License -- see included file LICENSE.txt for details.
 */
 ///////////////////////////////////////////////////////////////////////////////
@@ -36,6 +36,20 @@ namespace evo {
    - See PtrList features
  .
 
+ C++11:
+ - Range-based for loop -- see \ref StlCompatibility
+   \code
+    SetHash<int> hash;
+    for (auto num : hash.asconst()) {
+    }
+   \endcode
+ - Initialization lists
+   \code
+    SetHash<int> hash = {3, 1, 2};
+    SetHash<String> strhash = {"foo", "bar"};
+   \endcode
+ - Move semantics
+
 \par Hashing and Comparison
 
 You can leave the default hashing and comparison type (CompareHash) or specify an alternative.
@@ -47,14 +61,23 @@ See: \ref PrimitivesContainers "Primitives & Containers"
 
 \par Iterators
 
- - Set::Iter -- Read-Only Iterator (IteratorBi)
- - Set::IterM -- Mutable Iterator (IteratorBi)
+ - SetHash::Iter -- Read-Only Iterator (IteratorBi)
+ - SetHash::IterM -- Mutable Iterator (IteratorBi)
  .
 
 \b Caution: Modifying or resizing a set will shift or invalidate existing iterators (and pointers) using it.
 
+\par Constructors
+
+ - SetHash()
+ - SetHash(const SetBaseType&)
+ - SetHash(const ThisType&)
+ - SetHash(std::initializer_list<Value>) [C++11]
+ - SetHash(ThisType&&) [C++11]
+
 \par Read Access
 
+ - asconst()
  - size()
    - null(), empty()
    - capacity()
@@ -62,8 +85,9 @@ See: \ref PrimitivesContainers "Primitives & Containers"
    - ordered()
    - get_compare() const
  - contains()
+ - cbegin(), cend()
+   - begin() const, end() const
  - iter()
-   - cbegin(), cend()
  - operator==()
    - operator!=()
  .
@@ -76,13 +100,15 @@ See: \ref PrimitivesContainers "Primitives & Containers"
    - unshare()
    - compact()
    - get_compare()
+ - begin(), end()
  - iterM()
-   - begin(), end()
  - set()
    - set(const ThisType&)
    - setempty()
    - clear()
-   - operator=()
+   - operator=(const SetBaseType&)
+   - operator=(const ThisType&)
+   - operator=(ThisType&&) [C++11]
  - get()
  - add(const Value&,bool)
    - addfrom()
@@ -185,6 +211,43 @@ public:
     SetHash(const ThisType& src)
         { set(src); }
 
+#if defined(EVO_CPP11)
+    /** Sequence constructor (C++11).
+     \param  init  Initializer list, passed as comma-separated values in braces `{ }`
+    */
+    SetHash(std::initializer_list<Value> init) : SetHash() {
+        assert( init.size() < IntegerT<Size>::MAX );
+        capacitymin((Size)init.size());
+        for (const auto& val : init)
+            add(val);
+    }
+
+    /** Move constructor (C++11).
+     \param  src  Source to move
+    */
+    SetHash(ThisType&& src) : buckets_(std::move(src.buckets_)), data_(std::move(src.data_)) {
+        SetBaseType::size_ = src.SetBaseType::size_;
+        src.SetBaseType::size_ = 0;
+    }
+
+    /** Move assignment operator (C++11).
+     \param  src  Source to move
+     \return      This
+    */
+    ThisType& operator=(ThisType&& src) {
+        buckets_ = std::move(src.buckets_);
+        data_ = std::move(src.data_);
+        SetBaseType::size_ = src.SetBaseType::size_;
+        src.SetBaseType::size_ = 0;
+        return *this;
+    }
+#endif
+
+    /** \copydoc List::asconst() */
+    const ThisType& asconst() const {
+        return *this;
+    }
+
     // SET
 
     /** \copydoc Set::operator=() */
@@ -198,6 +261,7 @@ public:
     ThisType& set()
         { buckets_.set(); size_ = 0; return *this; }
 
+    /** \copydoc Set::set(const SetBaseType& src) */
     ThisType& set(const SetBaseType& src) {
         clear();
         for (typename SetBaseType::Iter iter(src); iter; ++iter)
@@ -264,6 +328,30 @@ public:
         { return !(*this == set); }
 
     // FIND
+
+    /** \copydoc List::cbegin() */
+    Iter cbegin() const
+        { return Iter(*this); }
+
+    /** \copydoc List::cend() */
+    Iter cend() const
+        { return Iter(); }
+
+    /** \copydoc List::begin() */
+    IterM begin()
+        { return IterM(*this); }
+
+    /** \copydoc List::begin() const */
+    Iter begin() const
+        { return Iter(*this); }
+
+    /** \copydoc List::end() */
+    IterM end()
+        { return IterM(); }
+
+    /** \copydoc List::end() const */
+    Iter end() const
+        { return Iter(); }
 
     bool contains(const Value& value) const
         { return (search(value) != NULL); }
@@ -570,10 +658,8 @@ private:
 
         Bucket()
             { others.setempty(); }
-
         Bucket(const Bucket& src) : first(src.first), others(src.others)
             { }
-
         bool operator==(const Bucket& data)
             { return (first == data.first && others == data.others); }
 
@@ -600,7 +686,7 @@ private:
 
     private:
         // Copying is done via copy constructor
-        Bucket& operator=(const Bucket&);
+        Bucket& operator=(const Bucket&) EVO_ONCPP11(= delete);
     };
 
     typedef PtrList<Bucket,Size> Buckets;
@@ -612,16 +698,33 @@ private:
         Size sizemask;
         Size threshold;
 
-        Data() : sizemask(0), threshold(0)
-            { }
-
+        Data() : sizemask(0), threshold(0) {
+        }
         Data& operator=(const Data& src) {
+            THash::operator=(src);
             sizemask  = src.sizemask;
             threshold = src.threshold;
-            THash::operator=(src);
             return *this;
         }
 
+    #if defined(EVO_CPP11)
+        Data(Data&& src) {
+            THash::operator=(std::move(src));
+            sizemask  = src.sizemask;
+            threshold = src.threshold;
+            src.sizemask  = 0;
+            src.threshold = 0;
+        }
+
+        Data& operator=(Data&& src) {
+            THash::operator=(std::move(src));
+            sizemask  = src.sizemask;
+            threshold = src.threshold;
+            src.sizemask  = 0;
+            src.threshold = 0;
+            return *this;
+        }
+    #endif
     private:
         // Copying is done via assignment operator
         Data(const Data&);

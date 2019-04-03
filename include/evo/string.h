@@ -1,5 +1,5 @@
 // Evo C++ Library
-/* Copyright 2018 Justin Crowell
+/* Copyright 2019 Justin Crowell
 Distributed under the BSD 2-Clause License -- see included file LICENSE.txt for details.
 */
 ///////////////////////////////////////////////////////////////////////////////
@@ -9,7 +9,7 @@ Distributed under the BSD 2-Clause License -- see included file LICENSE.txt for 
 #define INCL_evo_string_h
 
 #include "list.h"
-#include "impl/str.h"
+#include "strscan.h"
 
 namespace evo {
 /** \addtogroup EvoContainers */
@@ -126,6 +126,37 @@ struct StringInt : public ListBase<char,StrSizeT> {
             size_ = impl::fnumu(endptr, num, base);
         data_ = endptr - size_;
         return data_;
+    }
+
+    /** Append additional data to buffer.
+     - Results are undefined if null -- call StringInt(T,int,bool,uint) or set(T,int,bool,uint) first
+     - This assumes there's enough buffer padding via `PADDING` template param, and via `end_padding` argument when set
+     .
+     \param  data  Data pointer to copy from
+     \param  size  %Size to copy and add
+     \return       This
+    */
+    ThisType& add(const char* data, Size size) {
+        assert( data != NULL );
+        assert( data_ != NULL );
+        memcpy(data_ + size_, data, size);
+        size_ += size;
+        return *this;
+    }
+
+    /** Add additional space to buffer and return pointer to new uninitialized space in buffer.
+     - This increases the data size used and returns a pointer to the newly added data to write to, which should be considered uninitialized
+     - Results are undefined if null -- call StringInt(T,int,bool,uint) or set(T,int,bool,uint) first
+     - This assumes there's enough buffer padding via `PADDING` template param, and via `end_padding` argument when set
+     .
+     \param  size  %Size to add
+     \return       Pointer to newly added data (uninitialized)
+    */
+    char* addnew(Size size) {
+        assert( data_ != NULL );
+        char* p = data_ + size_;
+        size_ += size;
+        return p;
     }
 
 private:
@@ -334,7 +365,7 @@ private:
 
 \par Features
 
- - Similar to std::string
+ - Similar to STL `std::string`
  - Built-in formatting support -- see operator<<()
  - Built-in conversions -- see num(), numu(), numf(), boolval()
  - Searching and splitting with split() and find() methods
@@ -348,6 +379,23 @@ private:
  - \b Caution: Setting from a raw pointer will use \ref UnsafePtrRef "Unsafe Pointer Referencing"
  - See also: SubString, StrTok, UnicodeString
  .
+
+C++11:
+ - Range-based for loop -- see \ref StlCompatibility
+   \code
+    String str;
+    for (auto ch : str.asconst()) {
+    }
+   \endcode
+ - Initialization lists
+   \code
+    String str = {'a', 'b', 'c'};
+   \endcode
+ - Move semantics
+ - UTF-16 string literal, see UnicodeString
+   \code
+    String str = u"Hello"; // converts from UTF-16 literal to UTF-8
+   \endcode
 
 \par Iterators
 
@@ -363,10 +411,15 @@ private:
  - String(const PtrBase<char>&,Size)
  - String(const char*)
  - String(const PtrBase<char>&)
+ - String(const char16_t*,Size,UtfMode) [C++11]
+ - String(const char16_t*,UtfMode) [C++11]
+ - String(const std::initializer_list<char>&) [C++11]
+ - String(String&&) [C++11]
  .
 
 \par Read Access
 
+ - asconst()
  - size()
    - null(), empty()
    - capacity()
@@ -388,16 +441,18 @@ private:
  - \ref List::splitat(Key,T1&,T2&) const       "splitat(Key,T1&,T2&) const"
    - \ref List::splitat(Key,T1&) const         "splitat(Key,T1&) const"
    - \ref List::splitat(Key,ValNull,T2&) const "splitat(Key,ValNull,T2&) const"
+ - cbegin(), cend()
+   - begin() const, end() const
  - find(char,Key,Key) const, ...
    - find(const char*,uint,Key,Key) const, ...
    - find(const StringBase&,Key,Key) const, ...
  - findr(char,Key,Key) const, ...
    - findr(const char*,uint,Key,Key) const, ...
    - findr(const StringBase&,Key,Key) const, ...
- - findany()
-   - findanyr()
- - findanybut()
-   - findanybutr()
+ - findany(), findanyr()
+   - findanybut(), findanybutr()
+ - findword(), findwordr()
+   - findnonword(), findnonwordr()
  - contains(char) const
    - contains(const char*,Size) const
    - contains(const StringBase&) const
@@ -428,6 +483,9 @@ private:
 
 \par Slicing
 
+ - token(), tokenr()
+   - token_any(), tokenr_any()
+   - token_line(), tokenr_line()
  - slice(Key)
    - slice(Key,Size), slice2()
  - truncate()
@@ -437,6 +495,13 @@ private:
    - stripl(), stripr()
    - stripl(char,Size), stripr(char,Size)
    - stripl(const char*,Size,Size), stripr(const char*,Size,Size)
+   - stripl_newlines(), stripr_newlines()
+ - strip2()
+   - stripl2()
+   - stripr2()
+ - strip_newlines()
+   - stripl_newlines(), stripl_newlines(Size)
+   - stripr_newlines(), stripr_newlines(Size)
  - pop(), popq()
  - unslice()
  .
@@ -447,6 +512,7 @@ private:
  - dataM()
    - itemM()
    - operator()()
+ - begin(), end()
  - resize()
    - reserve()
    - capacity(Size)
@@ -461,11 +527,16 @@ private:
    - set(const PtrBase<char>&)
    - set2(const StringBase&,Key,Key), ...
    - setn(int,int), setn(uint,int), setn(float,int), ...
-   - set_unicode()
+   - set_unicode(const wchar16*,Size,UtfMode)
+     - set_unicode(const wchar16*,UtfMode)
+     - set_unicode(const char16_t*,Size,UtfMode) [C++11]
+     - set_unicode(const char16_t*,UtfMode) [C++11]
    - setempty()
    - clear()
    - operator=(const String&), ...
    - operator=(const StringBase&)
+   - operator=(String&&) [C++11]
+   - operator=(const char16_t*) [C++11]
    - operator=(const char*)
    - operator=(const PtrBase<char>&)
    - operator=(const ValNull&)
@@ -490,6 +561,7 @@ private:
    - operator<<(const char*)
    - operator<<(const ValNull&)
    - operator<<(const ValEmpty&)
+   - operator<<(const FmtChar&), operator<<(const FmtString&), operator<<(const FmtStringWrap&)
    - operator<<(int), operator<<(uint), operator<<(float), ...
    - operator<<(const FmtInt&), operator<<(const FmtUInt&), operator<<(const FmtFloat&), ...
  - prepend(char)
@@ -505,12 +577,17 @@ private:
    - insert(Key,const char*,Size)
    - insert(Key,const char*)
    - insertn(Key,int,int), insertn(Key,uint,int), insertn(Key,float,int), ...
- - replace(Key,Size,const String&)
+ - replace(Key,Size,const StringBase&)
    - replace(Key,Size,const char*,Size)
    - replace(Key,Size,const char*)
    - fillch()
+ - findreplace(char,const char*,Size,Size)
+   - findreplace(char,const StringBase&,Size)
+ - findreplace(const char*,Size,const char*,Size,Size)
+   - findreplace(const char*,Size,const StringBase&,Size)
+   - findreplace(const StringBase&,const StringBase&,Size)
+   - findreplace(const char*,Size,const StringBase&,Size)
  - remove()
-   - replace()
  - pop(char&)
    - \ref List::pop(T&,Key) "pop(char&,Key)"
    - popq(char&)
@@ -712,6 +789,71 @@ public:
             assert( len < IntegerT<Size>::MAX );
             copy(str.ptr_, (Size)len);
         }
+    }
+
+#if defined(EVO_CPP11)
+    /** Constructor to initialize and convert from UTF-16 string literal (using `u` prefix).
+     - This calls set_unicode(const char16_t*,Size,UtfMode)
+     .
+     \param  str   %String literal, NULL to set as null
+     \param  size  %String size in UTF-16 chars
+     \param  mode  How to handle invalid UTF-16 values, see set_unicode()
+    */
+    String(const char16_t* str, Size size, UtfMode mode=umREPLACE_INVALID) {
+        set_unicode(str, size, mode);
+    }
+
+    /** Constructor to initialize and convert from terminated UTF-16 string literal (using `u` prefix).
+     - This calls set_unicode(const char16_t*,UtfMode)
+     .
+     \param  str   UTF-16 string, NULL to set as null, otherwise must be terminated
+     \param  mode  How to handle invalid UTF-16 values, see set_unicode()
+    */
+    String(const char16_t* str, UtfMode mode=umREPLACE_INVALID) {
+        set_unicode(str, mode);
+    }
+
+    /** Sequence constructor (C++11).
+     \param  init  Initializer list, passed as comma-separated values in braces `{ }`
+    */
+    String(const std::initializer_list<char>& init) {
+        assert( init.size() < IntegerT<Size>::MAX );
+        ListType::advAdd((Size)init.size());
+        char* p = data_;
+        for (auto ch : init)
+            *(p++) = ch;
+    }
+
+    /** Move constructor (C++11).
+     \param  src  Source to move
+    */
+    String(String&& src) : List<char>(std::move(src)) {
+    }
+
+    /** Move assignment operator (C++11).
+     \param  src  Source to move
+     \return      This
+    */
+    String& operator=(String&& src) {
+        List<char>::operator=(std::move(src));
+        return *this;
+    }
+
+    /** Assignment operator to set and convert from terminated UTF-16 string.
+     - This calls set_unicode(const char16_t*,UtfMode)
+     .
+     \param  str  UTF-16 string, NULL to set as null
+     \return      This
+    */
+    String& operator=(const char16_t* str) {
+        set_unicode(str);
+        return *this;
+    }
+#endif
+
+    /** \copydoc List::asconst() */
+    const String& asconst() const {
+        return *this;
     }
 
     // SET
@@ -1070,6 +1212,35 @@ public:
         return true;
     }
 
+    /** %Set as normal UTF-8 string converted from a raw terminated UTF-16 string.
+     - Windows: See also: set_win32(const WCHAR*)
+     .
+     \param  str   Pointer to UTF-16 string to convert from, NULL to set as null, otherwise must be terminated
+     \param  mode  How to handle invalid UTF-16 values:
+                    - \ref umINCLUDE_INVALID - Invalid UTF-16 values are converted as-is (1 character each)
+                    - \ref umREPLACE_INVALID - Invalid UTF-16 values are each replaced with the Unicode Replacement Character (code: 0xFFFD)
+                    - \ref umSKIP_INVALID - Invalid UTF-16 values are skipped and ignored
+                    - \ref umSTRICT - Stop on invalid input with an error
+     \return       Whether successful, false if stopped on invalid input with umSTRICT
+    */
+    bool set_unicode(const wchar16* str, UtfMode mode=umREPLACE_INVALID) {
+        return set_unicode(str, utf16_strlen(str), mode);
+    }
+
+#if defined(EVO_CPP11)
+    /** \copydoc set_unicode(const wchar16*,Size,UtfMode) */
+    bool set_unicode(const char16_t* str, Size size, UtfMode mode=umREPLACE_INVALID) {
+        static_assert( sizeof(char16_t) == sizeof(wchar16), "ERROR: char16_t type larger than 16 bits" );
+        return set_unicode((const wchar16*)str, size, mode);
+    }
+
+    /** \copydoc set_unicode(const wchar16*,UtfMode) */
+    bool set_unicode(const char16_t* str, UtfMode mode=umREPLACE_INVALID) {
+        static_assert( sizeof(char16_t) == sizeof(wchar16), "ERROR: char16_t type larger than 16 bits" );
+        return set_unicode((const wchar16*)str, mode);
+    }
+#endif
+
 #if defined(_WIN32) || defined(DOXYGEN)
     /** %Set as normal (UTF-8) string converted from a Windows UTF-16 (WCHAR) string (Windows only).
      - This uses the Win32 API to do the conversion
@@ -1130,6 +1301,225 @@ public:
         return *this;
     }
 #endif
+
+    /** Extract next token from string.
+     - If delim is found, the token value up to that delim is extracted
+     - If delim isn't found, the whole string is extracted
+     - The extracted token is removed from this string, including the delim (if found)
+     - See also: StrTok (and variants)
+     .
+     \tparam  StringT  Output string type to store line (String or SubString), inferred from first parameter
+     \param  value  %Set to next token value, or null if none  [out]
+     \param  delim  Delimiter to tokenize on
+     \return        Whether next token was found, false if current string is empty
+    */
+    template<class StringT>
+    bool token(StringT& value, char delim) {
+        if (size_ > 0) {
+            const char* ptr = (char*)memchr(data_, delim, size_);
+            if (ptr != NULL) {
+                Key i = (Key)(ptr - data_);
+                value.set(data_, i);
+                ++i;
+                data_ += i;
+                size_ -= i;
+                return true;
+            }
+            value.set(data_, size_);
+            clear();
+            return true;
+        }
+        value.set();
+        return false;
+    }
+
+    /** Extract next token from string in reverse (from end of string).
+     - If delim is found, the token value up to that delim is extracted
+     - If delim isn't found, the whole string is extracted
+     - The extracted token is removed from this string, including the delim (if found)
+     - See also: StrTokR (and variants)
+     .
+     \tparam  StringT  Output string type to store line (String or SubString), inferred from first parameter
+     \param  value  %Set to next token value, or null if none  [out]
+     \param  delim  Delimiter to tokenize on
+     \return        Whether next token was found, false if current string is empty
+    */
+    template<class StringT>
+    bool tokenr(StringT& value, char delim) {
+        if (size_ > 0) {
+        #if defined(EVO_GLIBC_MEMRCHR)
+            const char* ptr = (char*)memrchr(data_, delim, size_);
+            if (ptr != NULL) {
+                const Key i = (Key)(ptr - data_);
+                const Size len = size_ - i;
+                value.set(data_ + i + 1, len - 1);
+                size_ -= len;
+                return true;
+            }
+        #else
+            for (Key i=size_; i > 0; ) {
+                if (data_[--i] == delim) {
+                    Size len = size_ - i;
+                    value.set(data_ + i + 1, len - 1);
+                    size_ -= len;
+                    return true;
+                }
+            }
+        #endif
+            value.set(data_, size_);
+            clear();
+            return true;
+        }
+        value.set();
+        return false;
+    }
+
+    /** Extract next token from string using any of given delimiters.
+     - If a delim is found, the token value up to that delim is extracted
+     - If a delim isn't found, the whole string is extracted
+     - The extracted token is removed from this string, including the delim (if found)
+     - See also: StrTok (and variants)
+     .
+     \tparam  StringT  Output string type to store line (String or SubString), inferred from first parameter
+     \param  value        %Set to next token value, or null if none  [out]
+     \param  found_delim  %Set to delimited found, null if no delim found  [out]
+     \param  delims       Delimiters to search for
+     \param  count        Count of delimiters to search for, must be positive
+     \return              Whether next token was found, false if current string is empty
+    */
+    template<class StringT>
+    bool token_any(StringT& value, Char& found_delim, const char* delims, Size count) {
+        assert( count > 0 );
+        if (size_ > 0) {
+            Size j;
+            for (Key i=0; i < size_; ++i) {
+                for (j=0; j < count; ++j) {
+                    if (data_[i] == delims[j]) {
+                        value.set(data_, i);
+                        found_delim = data_[i];
+                        ++i;
+                        data_ += i;
+                        size_ -= i;
+                        return true;
+                    }
+                }
+            }
+            value.set(data_, size_);
+            found_delim.set();
+            clear();
+            return true;
+        }
+        value.set();
+        found_delim.set();
+        return false;
+    }
+
+    /** Extract next token from string in reverse (from end of string) using any of given delimiters.
+     - If a delim is found, the token value up to that delim is extracted
+     - If a delim isn't found, the whole string is extracted
+     - The extracted token is removed from this string, including the delim (if found)
+     - See also: StrTokR (and variants)
+     .
+     \tparam  StringT  Output string type to store line (String or SubString), inferred from first parameter
+     \param  value        %Set to next token value, or null if none  [out]
+     \param  found_delim  %Set to delimited found, null if no delim found  [out]
+     \param  delims       Delimiters to search for
+     \param  count        Count of delimiters to search for, must be positive
+     \return              Whether next token was found, false if current string is empty
+    */
+    template<class StringT>
+    bool tokenr_any(StringT& value, Char& found_delim, const char* delims, Size count) {
+        assert( count > 0 );
+        if (size_ > 0) {
+            Size j;
+            for (Key i=size_; i > 0; ) {
+                --i;
+                for (j=0; j < count; ++j) {
+                    if (data_[i] == delims[j]) {
+                        Size len = size_ - i;
+                        value.set(data_ + i + 1, len - 1);
+                        found_delim = data_[i];
+                        size_ -= len;
+                        return true;
+                    }
+                }
+            }
+            value.set(data_, size_);
+            found_delim.set();
+            clear();
+            return true;
+        }
+        value.set();
+        found_delim.set();
+        return false;
+    }
+
+    /** Extract next line from string.
+     - The extracted line is removed from this string, along with the ending newline
+     - This recognizes all the main newlines types, see \ref Newline
+     .
+     \tparam  StringT  Output string type to store line (String or SubString), inferred from parameter
+     \param  line  %Set to extracted line (newline removed), null if no line extracted
+     \return       Whether line extracted, false if this is empty
+    */
+    template<class StringT>
+    bool token_line(StringT& line) {
+        const char* NEWLINE_CHARS = "\n\r";
+        Size i = findany(NEWLINE_CHARS, 2);
+        if (i == END) {
+            if (size_ > 0) {
+                line.set(data_, size_);
+                setempty();
+                return true;
+            }
+            line.set();
+            return false;
+        }
+        line.set(data_, i);
+
+        if (++i < size_) {
+            char ch1 = data_[i - 1];
+            char ch2 = data_[i];
+            if ((ch1 == '\n' && ch2 == '\r') || (ch1 == '\r' && ch2 == '\n'))
+                ++i;
+        }
+        data_ += i;
+        size_ -= i;
+        return true;
+    }
+
+    /** Extract next line from string in reverse (from end of string).
+     - The extracted line is removed from this string, along with the ending newline
+     - This recognizes all the main newlines types, see \ref Newline
+     .
+     \tparam  StringT  Output string type to store line (String or SubString), inferred from parameter
+     \param  line  %Set to extracted line (newline removed), null if no line extracted
+     \return       Whether line extracted, false if this is empty
+    */
+    template<class StringT>
+    bool tokenr_line(StringT& line) {
+        const char* NEWLINE_CHARS = "\n\r";
+        Size i = findanyr(NEWLINE_CHARS, 2);
+        if (i == END) {
+            if (size_ > 0) {
+                line.set(data_, size_);
+                setempty();
+                return true;
+            }
+            line.set();
+            return false;
+        }
+        line.set(data_ + i + 1, size_ - i - 1);
+
+        if (i > 1) {
+            char ch1 = data_[i - 1];
+            char ch2 = data_[i];
+            if ((ch1 == '\n' && ch2 == '\r') || (ch1 == '\r' && ch2 == '\n'))
+                --i;
+        }
+        size_ = i;
+        return true;
+    }
 
     // INFO
 
@@ -1304,6 +1694,64 @@ public:
         { return ListType::ends(ch); }
 
     // FIND
+
+    /** Get iterator at first item (const).
+     - This allows compatibility with range-based for loops and other libraries, otherwise use container Iter directly
+     .
+     \return  Iterator at first item, or at end position if empty
+     \see Iter, cend(), begin(), end()
+    */
+    Iter cbegin() const
+        { return Iter(*this); }
+
+    /** Get iterator at end (const).
+     - This allows compatibility with range-based for loops and other libraries, otherwise use container Iter directly
+     - This really just creates an empty iterator
+     .
+     \return  Iterator at end position
+     \see Iter, cbegin(), begin(), end()
+    */
+    Iter cend() const
+        { return Iter(); }
+
+    /** Get iterator at first item (mutable).
+     - This allows compatibility with range-based for loops and other libraries, otherwise use container Iter directly
+     - cbegin() is more efficient, since this effectively calls unshare() to make chars mutable
+     .
+     \return  Iterator at first item, or at end position if empty
+     \see IterM, end(), cbegin(), cend()
+    */
+    IterM begin()
+        { return IterM(*this); }
+
+    /** Get iterator at first item (const).
+     - This allows compatibility with range-based for loops and other libraries, otherwise use container Iter directly
+     .
+     \return  Iterator at first item, or at end position if empty
+     \see end() const, cbegin()
+    */
+    Iter begin() const
+        { return Iter(*this); }
+
+    /** Get iterator at end.
+     - This allows compatibility with range-based for loops and other libraries, otherwise use container Iter directly
+     - This really just creates an empty iterator
+     .
+     \return  Iterator at end position
+     \see IterM, begin(), cbegin(), cend()
+    */
+    IterM end()
+        { return IterM(); }
+
+    /** Get iterator at end.
+     - This allows compatibility with range-based for loops and other libraries, otherwise use container Iter directly
+     - This really just creates an empty iterator
+     .
+     \return  Iterator at end position
+     \see begin() const, cend()
+    */
+    Iter end() const
+        { return Iter(); }
 
     /** Find first occurrence of character with forward search.
      \param  ch  Character to find
@@ -1585,14 +2033,14 @@ public:
     }
 
     /** Find first occurrence of any given characters with forward search.
-    - This searches for any one of the given characters
-    - Search stops before reaching end index or end of string
-    - Character at end index is not checked
-    .
-    \param  chars  Characters to search for, must not contain multi-byte chars
-    \param  start  Starting index for search
-    \param  end    End index for search, END for end of list
-    \return        Found character index, NONE if not found or if `chars` is empty
+     - This searches for any one of the given characters
+     - Search stops before reaching end index or end of string
+     - Character at end index is not checked
+     .
+     \param  chars  Characters to search for, must not contain multi-byte chars
+     \param  start  Starting index for search
+     \param  end    End index for search, END for end of list
+     \return        Found character index, NONE if not found or if `chars` is empty
     */
     Key findany(const StringBase& chars, Key start=0, Key end=END) const
         { return findany(chars.data_, chars.size_, start, end); }
@@ -1713,6 +2161,80 @@ public:
     */
     Key findanybutr(const StringBase& chars, Key start=0, Key end=END) const
         { return findanybutr(chars.data_, chars.size_, start, end); }
+
+    /** Find first word character.
+     - A word character is a letter, number, or underscore -- see \link cbtWORD\endlink
+     .
+     \param  start  Starting index for search
+     \param  end    End index for search, END for end of list
+     \return        Found character index, NONE if not found
+    */
+    Key findword(Key start=0, Key end=END) const {
+        if (start < size_ && start < end) {
+            if (end > size_)
+                end = size_;
+            for (; start < end; ++start)
+                if (ascii_breaktype(data_[start]) == cbtWORD)
+                    return start;
+        }
+        return NONE;
+    }
+
+    /** Find last word character with reverse search.
+     - A word character is a letter, number, or underscore -- see \link cbtWORD\endlink
+     .
+     \param  start  Starting index for search range -- last character checked in reverse search
+     \param  end    End index for search range (reverse search starting point), END for end of list
+     \return        Found character index, NONE if not found
+    */
+    Key findwordr(Key start=0, Key end=END) const {
+        if (start < size_ && start < end) {
+            if (end > size_)
+                end = size_;
+            while (end > start)
+                if (ascii_breaktype(data_[--end]) == cbtWORD)
+                    return end;
+        }
+        return NONE;
+    }
+
+    /** Find first non-word word character.
+     - This finds the first character that is NOT a word character
+     - A word character is a letter, number, or underscore -- see \link cbtWORD\endlink
+     .
+     \param  start  Starting index for search
+     \param  end    End index for search, END for end of list
+     \return        Found character index, NONE if not found
+    */
+    Key findnonword(Key start=0, Key end=END) const {
+        if (start < size_ && start < end) {
+            if (end > size_)
+                end = size_;
+            for (; start < end; ++start)
+                if (ascii_breaktype(data_[start]) != cbtWORD)
+                    return start;
+        }
+        return NONE;
+    }
+
+    /** Find last non-word character with reverse search.
+     - This finds the last character that is NOT a word character (with reverse search)
+     - A word character is a letter, number, or underscore -- see \link cbtWORD\endlink
+     .
+     \param  start  Starting index for search range -- last character checked in reverse search
+     \param  end    End index for search range (reverse search starting point), END for end of list
+     \return        Found character index, NONE if not found
+    */
+    Key findnonwordr(Key start=0, Key end=END) const {
+        if (start < size_ && start < end) {
+            if (end > size_)
+                end = size_;
+            while (end > start)
+                if (ascii_breaktype(data_[--end]) != cbtWORD)
+                    return end;
+        }
+        return NONE;
+    }
 
     /** Check whether this contains given character.
      \param  ch  Character to check for
@@ -1885,7 +2407,8 @@ public:
     // TRIM/STRIP
 
     /** Strip left (beginning) and right (ending) whitespace (spaces and tabs).
-     - This non-destructively removes whitespace so data isn't modified -- see slice()
+     - This non-destructively removes whitespace so data isn't modified -- see \ref Slicing
+     - This doesn't strip newlines -- see strip2()
      .
      \return  This
     */
@@ -1901,7 +2424,7 @@ public:
     }
 
     /** Strip left (beginning) and right (ending) occurences of character.
-     - This non-destructively removes characters so data isn't modified -- see slice()
+     - This non-destructively removes characters so data isn't modified -- see \ref Slicing
      .
      \param  ch  Character to strip
      \return     This
@@ -1917,7 +2440,8 @@ public:
     }
 
     /** Strip left (beginning) whitespace (spaces and tabs).
-     - This non-destructively removes whitespace so data isn't modified -- see slice()
+     - This non-destructively removes whitespace so data isn't modified -- see \ref Slicing
+     - This doesn't strip newlines -- see stripl2()
      .
      \return  This
     */
@@ -1931,7 +2455,7 @@ public:
     }
 
     /** Strip left (beginning) occurrences of character.
-     - This non-destructively removes characters so data isn't modified -- see slice()
+     - This non-destructively removes characters so data isn't modified -- see \ref Slicing
      .
      \param  ch   Character to strip
      \param  max  Max count to strip, ALL for all
@@ -1946,7 +2470,7 @@ public:
     }
 
     /** Strip left (beginning) occurrences of string.
-     - This non-destructively removes characters so data isn't modified -- see slice()
+     - This non-destructively removes characters so data isn't modified -- see \ref Slicing
      .
      \param  str      Pointer to string to strip
      \param  strsize  %String length to strip
@@ -1973,7 +2497,8 @@ public:
     }
 
     /** Strip right (ending) whitespace (spaces and tabs).
-     - This non-destructively removes whitespace so data isn't modified -- see slice()
+     - This non-destructively removes whitespace so data isn't modified -- see \ref Slicing
+     - This doesn't strip newlines -- see stripr2()
      .
      \return  This
     */
@@ -1985,7 +2510,7 @@ public:
     }
 
     /** Strip right (ending) occurences of character.
-     - This non-destructively removes characters so data isn't modified -- see slice()
+     - This non-destructively removes characters so data isn't modified -- see \ref Slicing
      .
      \param  ch   Character to strip
      \param  max  Max count to strip, ALL for all
@@ -1998,7 +2523,7 @@ public:
     }
 
     /** Strip right (ending) occurences of string.
-     - This non-destructively removes characters so data isn't modified -- see slice()
+     - This non-destructively removes characters so data isn't modified -- see \ref Slicing
      .
      \param  str      Pointer to string to strip
      \param  strsize  %String length to strip
@@ -2018,6 +2543,155 @@ public:
             if (count > 0)
                 size_ -= (count * strsize);
         }
+        return *this;
+    }
+
+    /** Strip left (beginning) and right (ending) whitespace from string, including newlines.
+     - This non-destructively removes characters so data isn't modified -- see \ref Slicing
+     - This is CPU-optimized where possible -- see \ref CppCompilers
+     - See also strip()
+     .
+     \return  This
+    */
+    String& strip2() {
+        if (size_ > 0) {
+            const char* end = data_ + size_;
+            data_ = (char*)str_scan_nws(data_, end);
+            size_ = (Size)(str_scan_nws_r(data_, end) - data_);
+        }
+        return *this;
+    }
+
+    /** Strip left (beginning) whitespace from string, including newlines.
+     - This non-destructively removes characters so data isn't modified -- see \ref Slicing
+     - This is CPU-optimized where possible -- see \ref CppCompilers
+     - See also stripl()
+     .
+     \return  This
+    */
+    String& stripl2() {
+        if (size_ > 0) {
+            const char* end = data_ + size_;
+            data_ = (char*)str_scan_nws(data_, end);
+            size_ = (Size)(end - data_);
+        }
+        return *this;
+    }
+
+    /** Strip right (ending) whitespace (including newlines) from string.
+     - This non-destructively removes characters so data isn't modified -- see \ref Slicing
+     - This is CPU-optimized where possible -- see \ref CppCompilers
+     - See also stripr()
+     .
+     \return  This
+    */
+    String& stripr2() {
+        if (size_ > 0) {
+            const char* end = data_ + size_;
+            size_ = (Size)(str_scan_nws_r(data_, end) - data_);
+        }
+        return *this;
+    }
+
+    /** Strip all left (beginning) newlines from string.
+     - This non-destructively removes characters so data isn't modified -- see \ref Slicing
+     - This removes all beginning newline chars (CR and LF) so this effectively recognizes all the main newlines types, see \ref Newline
+     .
+     \return  This
+    */
+    String& stripl_newlines() {
+        char ch;
+        Size count = 0;
+        while ( count < size_ && ((ch=data_[count]) == '\n' || ch == '\r') )
+            ++count;
+        if (count > 0) {
+            size_ -= count;
+            data_ += count;
+        }
+        return *this;
+    }
+
+    /** Strip left (beginning) newlines from string.
+     - This non-destructively removes characters so data isn't modified -- see \ref Slicing
+     - This recognizes all the main newlines types, see \ref Newline
+     - Note that a single newline may be 2 characters, so a `max` of 1 may remove 2 characters, and so on
+     .
+     \param  max  Max number of newlines to strip, ALL for all
+     \return      This
+    */
+    String& stripl_newlines(Size max) {
+        char ch;
+        Size count = 0;
+        for (; count < size_ && max > 0; --max) {
+            ch = data_[count];
+            if (ch == '\n') {
+                if (count + 1 < size_ && data_[count + 1] == '\r') {
+                    count += 2;
+                    continue;
+                }
+            } else if (ch == '\r') {
+                if (count + 1 < size_ && data_[count + 1] == '\n') {
+                    count += 2;
+                    continue;
+                }
+            } else
+                break;
+            ++count;
+        }
+        triml(count);
+        return *this;
+    }
+
+    /** Strip all right (ending) newlines from string.
+     - This non-destructively removes characters so data isn't modified -- see \ref Slicing
+     - This removes all ending newline chars (CR and LF) so this effectively recognizes all the main newlines types, see \ref Newline
+     .
+     \return  This
+    */
+    String& stripr_newlines() {
+        char ch;
+        while ( size_ > 0 && ((ch=data_[size_-1]) == '\n' || ch == '\r') )
+            --size_;
+        return *this;
+    }
+
+    /** Strip right (ending) newlines from string.
+     - This non-destructively removes characters so data isn't modified -- see \ref Slicing
+     - This recognizes all the main newlines types, see \ref Newline
+     .
+     \param  max  Max number of newlines to strip, ALL for all
+     \return      This
+    */
+    String& stripr_newlines(Size max) {
+        char ch;
+        for (; size_ > 0 && max > 0; --max) {
+            ch = data_[size_ - 1];
+            if (ch == '\n') {
+                if (size_ > 1 && data_[size_ - 2] == '\r') {
+                    size_ -= 2;
+                    continue;
+                }
+            } else if (ch == '\r') {
+                if (size_ > 1 && data_[size_ - 2] == '\n') {
+                    size_ -= 2;
+                    continue;
+                }
+            } else
+                break;
+            --size_;
+        }
+        return *this;
+    }
+
+    /** Strip left (beginning) and right (ending) newlines from string.
+     - This non-destructively removes characters so data isn't modified -- see \ref Slicing
+     - This removes all beginning and ending newline chars (CR and LF) so this effectively recognizes all the main newlines types, see \ref Newline
+     .
+     \return  This
+    */
+    String& strip_newlines() {
+        stripl_newlines();
+        stripr_newlines();
         return *this;
     }
 
@@ -2471,6 +3145,64 @@ public:
     String& operator<<(const FmtChar& fmt)
         { add(fmt.ch, fmt.count); return *this; }
 
+    /** Append operator to append formatted string field.
+     \param  fmt  %String formatting info
+     \return      This
+    */
+    String& operator<<(const FmtString& fmt)
+        { writefmtstr(fmt.str.data_, fmt.str.size_, fmt.fmt); return *this; }
+
+    /** Append operator to append formatted wrapped string column.
+     \param  fmt  %String formatting info
+     \return      This
+    */
+    String& operator<<(const FmtStringWrap& fmt) {
+        const char* newline_str = fmt.newline.getnewline();
+        const uint newline_size = fmt.newline.getnewlinesize();
+
+        const Size EST_LINES = (fmt.width > 0 ? fmt.str.size_ / fmt.width : 1) + 1;
+        reserve(fmt.str.size_ + ((fmt.indent + newline_size + 1) * EST_LINES));
+
+        String str(fmt.str.data_, fmt.str.size_), line, substr;
+        for (uint notfirst=0; str.token_line(line); ) {
+            for (;;) {
+                if (line.empty()) {
+                    add(newline_str, newline_size);
+                } else {
+                    if (notfirst == 0)
+                        ++notfirst;
+                    else if (fmt.indent > 0)
+                        add(' ', fmt.indent);
+                    if (fmt.width > 1 && line.size() > (Size)fmt.width) {
+                        // line too long, try to find a word break
+                        Size i = line.findnonwordr(0, (Size)fmt.width + 1);
+                        if (i == NONE) {
+                            i = (Size)fmt.width;
+                        } else {
+                            while (i > 0 && ascii_breaktype(line[i]) == cbtBEGIN)
+                                --i;
+                            if (i < (Size)fmt.width)
+                                ++i;
+                        }
+
+                        substr.set(line.data(), i).stripr();
+                        if (!substr.empty()) {
+                            add(substr);
+                            add(newline_str, newline_size);
+                        }
+
+                        line.triml(i).stripl();
+                        continue;
+                    }
+                    add(line);
+                    add(newline_str, newline_size);
+                }
+                break;
+            }
+        }
+        return *this;
+    }
+
     /** Append operator to append formatted number field.
      \param  fmt  Number info
      \return      This
@@ -2517,6 +3249,13 @@ public:
     /** \copydoc operator<<(const FmtShort&) */
     String& operator<<(const FmtFloatL& fmt)
         { writefmtnumf(fmt.num, fmt.fmt); return *this; }
+
+    /** Append operator to append formatted pointer field.
+     \param  fmtptr  Pointer info
+     \return         This
+    */
+    String& operator<<(const FmtPtr& fmtptr)
+        { writefmtnumu((size_t)fmtptr.ptr, fmtptr.fmt); return *this; }
 
     /** Append operator to append data dump.
      \param  fmt  Dump info
@@ -3134,7 +3873,7 @@ public:
      \param  str    Replacement string to copy
      \return        This
     */
-    String& replace(Key index, Size rsize, const String& str)
+    String& replace(Key index, Size rsize, const StringBase& str)
         { ListType::replace(index, rsize, str.data_, str.size_); return *this; }
 
     /** Replace characters with string (modifier).
@@ -3155,6 +3894,83 @@ public:
     */
     String& replace(Key index, Size rsize, const char* str)
         { ListType::replace(index, rsize, str, str?(Size)strlen(str):0); return *this; }
+
+    /** Find character and replace with string (modifier).
+     \param  ch    Character to find
+     \param  str   Replacement string pointer
+     \param  size  Replacement string size
+     \param  max   Max occurrences to find and replace, ALL for all
+     \return       Number of replacements made, 0 if none
+    */
+    Size findreplace(char ch, const char* str, Size size, Size max=ALL) {
+        uint startmax = max;
+        for (Size i = 0; max > 0; --max) {
+            i = find(ch, i);
+            if (i == NONE)
+                break;
+            ListType::replace(i, 1, str, size);
+            i += size;
+        }
+        return startmax - max;
+    }
+
+    /** Find character and replace with string (modifier).
+     \param  ch    Character to find
+     \param  str   Replacement string
+     \param  max   Max occurrences to find and replace, ALL for all
+     \return       Number of replacements made, 0 if none
+    */
+    Size findreplace(char ch, const StringBase& str, Size max=ALL)
+        { return findreplace(ch, str.data_, str.size_, max); }
+
+    /** Find string and replace with string (modifier).
+     \param  fstr   Pointer to string to find and replace
+     \param  fsize  %String size to find and replace
+     \param  str    Replacement string pointer
+     \param  size   Replacement string size
+     \param  max    Max occurrences to find and replace, ALL for all
+     \return        Number of replacements made, 0 if none
+    */
+    Size findreplace(const char* fstr, Size fsize, const char* str, Size size, Size max=ALL) {
+        uint startmax = max;
+        for (Size i = 0; max > 0; --max) {
+            i = find(fstr, fsize, i);
+            if (i == NONE)
+                break;
+            ListType::replace(i, fsize, str, size);
+            i += size;
+        }
+        return startmax - max;
+    }
+
+    /** Find string and replace with string (modifier).
+     \param  fstr   Pointer to string to find and replace
+     \param  fsize  %String size to find and replace
+     \param  str    Replacement string
+     \param  max    Max occurrences to find and replace, ALL for all
+     \return        Number of replacements made, 0 if none
+    */
+    Size findreplace(const char* fstr, Size fsize, const StringBase& str, Size max=ALL)
+        { return findreplace(fstr, fsize, str.data_, str.size_, max); }
+
+    /** Find string and replace with string (modifier).
+     \param  fstr   %String to find and replace
+     \param  str    Replacement string
+     \param  max    Max occurrences to find and replace, ALL for all
+     \return        Number of replacements made, 0 if none
+    */
+    Size findreplace(const StringBase& fstr, const StringBase& str, Size max=ALL)
+        { return findreplace(fstr.data_, fstr.size_, str.data_, str.size_, max); }
+
+    /** Find string and replace with string (modifier).
+     \param  fstr   %String to find and replace
+     \param  str    Replacement string pointer
+     \param  size   Replacement string size
+     \param  max    Max occurrences to find and replace, ALL for all
+     \return        Number of replacements made, 0 if none
+    */
+    Size findreplace(const StringBase& fstr, const char* str, Size size, Size max=ALL)
+        { return findreplace(fstr.data_, fstr.size_, str, size, max); }
 
     // GETBOOL
 
@@ -3425,6 +4241,18 @@ public:
     Out& write_out()
         { return *this; }
 
+    /** Write (append) repeat character as text output to string.
+     - This is the same as add(char,Size)
+     .
+     \param  ch     Character to write
+     \param  count  Character count to write, must be positive
+     \return        Size actually written (same as count)
+    */
+    Size writechar(char ch, Size count=1) {
+        add(ch, count);
+        return count;
+    }
+
     /** Write (append) text output to string.
      - This is the same as add(const char*,Size)
      .
@@ -3435,6 +4263,61 @@ public:
     Size writetext(const char* buf, Size size) {
         add(buf, size);
         return size;
+    }
+
+    /** Write (append) quoted output to string.
+     - Newlines and unprintable characters are written as-is
+     - This uses Smart Quoting -- see \ref SmartQuoting
+     .
+     \param  buf       Data to quote and write
+     \param  size      Data size to write
+     \param  delim     Delimiter for next field to escape via quoting
+     \param  optional  Whether quoting is optional, true to avoid quoting if possible
+     \return           Size actually written, 0 on error (unquotable text)
+    */
+    Size writequoted(const char* buf, Size size, char delim, bool optional=false) {
+        bool quote_optional = false;
+        const StrQuoting::Type type = StrQuoting::get(quote_optional, buf, size, delim);
+        switch (type) {
+            case StrQuoting::tSINGLE:
+                if (quote_optional && optional) {
+                    add(buf, size);
+                    return size;
+                }
+            case StrQuoting::tDOUBLE:
+            case StrQuoting::tBACKTICK: {
+                const char ch = "'\"`"[(uint)type];
+                const Size result = size + 2;
+                reserve(result);
+                add(ch, 1);
+                add(buf, size);
+                add(ch, 1);
+                return result;
+            }
+            case StrQuoting::tSINGLE3:
+            case StrQuoting::tDOUBLE3:
+            case StrQuoting::tBACKTICK3: {
+                const char* str = &"'''\"\"\"```"[(uint(type) - 3) * 3];
+                const Size result = size + 6;
+                reserve(result);
+                add(str, 3);
+                add(buf, size);
+                add(str, 3);
+                return result;
+            }
+            case StrQuoting::tBACKTICK_DEL: {
+                const char* str = "`\x7F";
+                const Size result = size + 4;
+                reserve(result);
+                add(str, 2);
+                add(buf, size);
+                add(str, 2);
+                return result;
+            }
+            case StrQuoting::tERROR:
+                break;
+        }
+        return 0;
     }
 
     /** Get pointer for writing directly to buffer to append data.
@@ -3570,6 +4453,7 @@ public:
     bool writefmtchar(char ch, Size count, const FmtSetField& field) {
         const Size index = size_;
         if (field.width >= 0 && (Size)field.width > count) {
+            const int fillchar = (int)(field.fill != 0 ? (uchar)field.fill : (uchar)' ');
             const uint padding = field.width - count;
             ListType::advAdd(count + padding);
 
@@ -3579,25 +4463,25 @@ public:
                 case fLEFT:
                     memset(p, (int)(uchar)ch, count);
                     if (padding > 0)
-                        memset(p + count, (int)(uchar)field.fill, padding);
+                        memset(p + count, fillchar, padding);
                     break;
                 case fCENTER: {
                     const uint padleft = (padding / 2);
                     if (padleft > 0) {
-                        memset(p, (int)(uchar)field.fill, padleft);
+                        memset(p, fillchar, padleft);
                         p += padleft;
                     }
                     memset(p, (int)(uchar)ch, count);
                     const uint padright = (padding - padleft);
                     if (padright > 0) {
                         p += count;
-                        memset(p, (int)(uchar)field.fill, padright);
+                        memset(p, fillchar, padright);
                     }
                     break;
                 }
                 case fRIGHT:
                     if (padding > 0) {
-                        memset(p, (int)(uchar)field.fill, padding);
+                        memset(p, fillchar, padding);
                         p += padding;
                     }
                     memset(p, (int)(uchar)ch, count);
@@ -3619,6 +4503,7 @@ public:
     bool writefmtstr(const char* str, Size size, const FmtSetField& field) {
         const Size index = size_;
         if (field.width >= 0 && (Size)field.width > size) {
+            const int fillchar = (int)(field.fill != 0 ? (uchar)field.fill : (uchar)' ');
             const uint padding = field.width - size;
             ListType::advAdd(size + padding);
 
@@ -3628,25 +4513,25 @@ public:
                 case fLEFT:
                     memcpy(p, str, size);
                     if (padding > 0)
-                        memset(p + size, (int)(uchar)field.fill, padding);
+                        memset(p + size, fillchar, padding);
                     break;
                 case fCENTER: {
                     const uint padleft = (padding / 2);
                     if (padleft > 0) {
-                        memset(p, (int)(uchar)field.fill, padleft);
+                        memset(p, fillchar, padleft);
                         p += padleft;
                     }
                     memcpy(p, str, size);
                     const uint padright = (padding - padleft);
                     if (padright > 0) {
                         p += size;
-                        memset(p, (int)(uchar)field.fill, padright);
+                        memset(p, fillchar, padright);
                     }
                     break;
                 }
                 case fRIGHT:
                     if (padding > 0) {
-                        memset(p, (int)(uchar)field.fill, padding);
+                        memset(p, fillchar, padding);
                         p += padding;
                     }
                     memcpy(p, str, size);
@@ -3856,6 +4741,8 @@ public:
 
     /** %Convert string to value of given type.
      - Advanced: Custom conversions can be defined by specializing a template instance of Convert -- see \ref StringCustomConversion "Custom String Conversion/Formatting"
+     .
+     \tparam  C  Type to convert to
      \return  Converted value
      */
     template<class C> C convert() const
@@ -3864,6 +4751,8 @@ public:
 
     /** %Convert value to string, replacing current string.
      - Advanced: Custom conversions can be defined by specializing a template instance of Convert -- see \ref StringCustomConversion "Custom String Conversion/Formatting"
+     .
+     \tparam  C  Type to convert from, inferred from argument
      \param  value  Value to convert
     */
     template<class C> String& convert_set(C value)
@@ -3872,6 +4761,8 @@ public:
 
     /** %Convert value to string, appending to current string.
      - Advanced: Custom conversions can be defined by specializing a template instance of Convert -- see \ref StringCustomConversion "Custom String Conversion/Formatting"
+     .
+     \tparam  C  Type to convert from, inferred from argument
      \param  value  Value to convert
     */
     template<class C> String& convert_add(C value)
@@ -3880,12 +4771,15 @@ public:
 
     /** %Convert value to string with quoting as needed, appending to current string.
      - Advanced: Custom conversions can be defined by specializing a template instance of Convert -- see \ref StringCustomConversion "Custom String Conversion/Formatting"
+     .
+     \tparam  C  Type to convert from, inferred from argument
      \param  value  Value to convert
      \param  delim  Delimiter to use to determine quoting needed -- this is not added to string
+     \return        Whether successful, false if input is a string and is not quotable (invalid text)
     */
-    template<class C> String& convert_addq(C value, char delim=',')
+    template<class C> bool convert_addq(C value, char delim=',')
         // An "undefined reference" compiler error pointing here means the given conversion isn't implemented/supported
-        { Convert<String,C>::addq(*this, value, delim); return *this; }
+        { return Convert<String,C>::addq(*this, value, delim); }
 
     /** Join list items into delimited string.
      - This adds each item to string with delimiters, effectively using convert_add() for conversion
@@ -4280,8 +5174,8 @@ template<class T> struct Convert_StringToIntBase {
         { dest.setn(value); }
     template<class V> static void add(String& dest, V value)
         { dest.addn(value); }
-    template<class V> static void addq(String& dest, V value, char)
-        { dest.addn(value); }
+    template<class V> static bool addq(String& dest, V value, char)
+        { dest.addn(value); return true; }
     static T value(const String& src)
         { return src.getnum<T>(); }
 };
@@ -4290,8 +5184,8 @@ template<class T> struct Convert_StringToFltBase {
         { dest.setn(value); }
     template<class V> static void add(String& dest, V value)
         { dest.addn(value); }
-    template<class V> static void addq(String& dest, V value, char)
-        { dest.addn(value); }
+    template<class V> static bool addq(String& dest, V value, char)
+        { dest.addn(value); return true; }
     static T value(const String& src)
         { return src.getnumf<T>(); }
 };
@@ -4300,8 +5194,8 @@ template<class T> struct Convert_StringToCIntBase {
         { if (value.valid()) dest.setn(*value); }
     template<class V> static void add(String& dest, const V& value)
         { if (value.valid()) dest.addn(*value); }
-    template<class V> static void addq(String& dest, const V& value, char)
-        { if (value.valid()) dest.addn(*value); }
+    template<class V> static bool addq(String& dest, const V& value, char)
+        { if (value.valid()) dest.addn(*value); return true; }
     static T value(const String& src)
         { return src.getnum<T>(); }
 };
@@ -4310,8 +5204,8 @@ template<class T> struct Convert_StringToCFltBase {
         { if (value.valid()) dest.setn(*value); }
     template<class V> static void add(String& dest, const V& value)
         { if (value.valid()) dest.addn(*value); }
-    template<class V> static void addq(String& dest, const V& value, char)
-        { if (value.valid()) dest.addn(*value); }
+    template<class V> static bool addq(String& dest, const V& value, char)
+        { if (value.valid()) dest.addn(*value); return true; }
     static T value(const String& src)
         { return src.getnumf<T>(); }
 };
@@ -4337,8 +5231,8 @@ template<> struct Convert<String,String> {
         { dest.set(value); }
     static void add(String& dest, const String& value)
         { dest.add(value); }
-    static void addq(String& dest, const String& value, char delim)
-        { StrQuoting::addq(dest, value, delim); }
+    static bool addq(String& dest, const String& value, char delim)
+        { return (value.size() == 0 || dest.writequoted(value.data(), value.size(), delim, true) > 0); }
     static const String& value(const String& src)
         { return src; }
 };
@@ -4347,8 +5241,10 @@ template<> struct Convert<String,const char*> {
         { dest.set(value); }
     static void add(String& dest, const char* value)
         { dest.add(value); }
-    static void addq(String& dest, const char* value, char delim)
-        { StrQuoting::addq(dest, String::StringBase(value, (String::Size)strlen(value)), delim); }
+    static bool addq(String& dest, const char* value, char delim) {
+        const StrSizeT len = (StrSizeT)strlen(value);
+        return (len == 0 || dest.writequoted(value, (StrSizeT)strlen(value), delim, true) > 0);
+    }
     // Unsafe: Converting String to const char*
     //template<class U> static const char* value(U&)
 };
@@ -4357,8 +5253,10 @@ template<> struct Convert<String,char*> {
         { dest.set(value); }
     static void add(String& dest, const char* value)
         { dest.add(value); }
-    static void addq(String& dest, const char* value, char delim)
-        { StrQuoting::addq(dest, String::StringBase(value), delim); }
+    static bool addq(String& dest, const char* value, char delim) {
+        const StrSizeT len = (StrSizeT)strlen(value);
+        return (len == 0 || dest.writequoted(value, (StrSizeT)strlen(value), delim, true) > 0);
+    }
     // Unsafe: Converting String to char*
     //template<class U> static const char* value(U&)
 };
@@ -4371,9 +5269,10 @@ template<> struct Convert<String,bool> {
         if (value) dest.add("true", 4);
         else       dest.add("false", 5);
     }
-    static void addq(String& dest, bool value, char) {
+    static bool addq(String& dest, bool value, char) {
         if (value) dest.add("true", 4);
         else       dest.add("false", 5);
+        return true;
     }
     static bool value(const String& src)
         { return src.getbool<bool>(); }
@@ -4401,26 +5300,27 @@ template<> struct Convert<String,Bool> {
             else        dest.add("false", 5);
         }
     }
-    static void addq(String& dest, Bool value, char) {
+    static bool addq(String& dest, Bool value, char) {
         if (value.valid()) {
             if (*value) dest.add("true", 4);
             else        dest.add("false", 5);
         }
+        return true;
     }
     static Bool value(const String& src)
         { return src.getbool<Bool>(); }
 };
-template<> struct Convert<String,Short>  : public Convert_StringToCIntBase<Short>     { };
+template<> struct Convert<String,Short>  : public Convert_StringToCIntBase<Short>   { };
 template<> struct Convert<String,Int>    : public Convert_StringToCIntBase<Int>     { };
-template<> struct Convert<String,Long>   : public Convert_StringToCIntBase<Long>     { };
-template<> struct Convert<String,LongL>  : public Convert_StringToCIntBase<LongL>     { };
-template<> struct Convert<String,UShort> : public Convert_StringToCIntBase<UShort>     { };
+template<> struct Convert<String,Long>   : public Convert_StringToCIntBase<Long>    { };
+template<> struct Convert<String,LongL>  : public Convert_StringToCIntBase<LongL>   { };
+template<> struct Convert<String,UShort> : public Convert_StringToCIntBase<UShort>  { };
 template<> struct Convert<String,UInt>   : public Convert_StringToCIntBase<UInt>    { };
 template<> struct Convert<String,ULong>  : public Convert_StringToCIntBase<ULong>   { };
 template<> struct Convert<String,ULongL> : public Convert_StringToCIntBase<ULongL>  { };
 template<> struct Convert<String,Float>  : public Convert_StringToCFltBase<Float>   { };
 template<> struct Convert<String,FloatD> : public Convert_StringToCFltBase<FloatD>  { };
-template<> struct Convert<String,FloatL> : public Convert_StringToCFltBase<FloatL>     { };
+template<> struct Convert<String,FloatL> : public Convert_StringToCFltBase<FloatL>  { };
 
 /** \endcond */
 

@@ -1,5 +1,5 @@
 // Evo C++ Library
-/* Copyright 2018 Justin Crowell
+/* Copyright 2019 Justin Crowell
 Distributed under the BSD 2-Clause License -- see included file LICENSE.txt for details.
 */
 ///////////////////////////////////////////////////////////////////////////////
@@ -17,16 +17,6 @@ Distributed under the BSD 2-Clause License -- see included file LICENSE.txt for 
 #if defined(_WIN32)
     // Windows
     #include <io.h>
-#else
-    // Linux/Unix
-    #include <dirent.h>
-    #if !defined(EVO_USE_READDIR_R)
-        #if (defined(__GNUC__) && __GNUC__ >= 6) || (defined(__clang_major__) && __clang_major__ >= 4)
-            #define EVO_USE_READDIR_R 0     // Use thread-safe readdir()
-        #else
-            #define EVO_USE_READDIR_R 1     // Use thread-safe variation readdir_r() up until deprecated by glibc 2.24+
-        #endif
-    #endif
 #endif
 
 // Disable certain MSVC warnings for this file
@@ -205,7 +195,7 @@ enum Open {
     oREAD_APPEND_NEW = O_RDWR | O_APPEND | O_CREAT | O_TRUNC,   ///< Read and write/append, create/replace
     oWRITE           = O_WRONLY,                                ///< Write only
     oWRITE_NEW       = O_WRONLY | O_CREAT | O_TRUNC,            ///< Write only, create/replace
-    oAPPEND          = O_WRONLY | O_APPEND,                     ///< Write/append only
+    oAPPEND          = O_WRONLY | O_CREAT | O_APPEND,           ///< Write/append only, created if needed
     oAPPEND_NEW      = O_WRONLY | O_APPEND | O_CREAT | O_TRUNC  ///< Write/append only, create/replace
 };
 
@@ -228,7 +218,7 @@ inline bool open_readable(Open open)
  \return       Whether mode is writable
 */
 inline bool open_writable(Open open)
-    { return (open & (O_RDWR | O_WRONLY | O_APPEND)); }
+    { return ((open & (O_RDWR | O_WRONLY | O_APPEND)) != 0); }
 
 ///////////////////////////////////////////////////////////////////////////////
 
@@ -261,7 +251,7 @@ public:
 
     /** Write output data to device.
      - On success at least 1 byte is written but may be less than requested size
-     - If not open/writable, returns EInval error
+     - If not open/writable, returns ENotImpl error
      .
      \param  err         Stores ENone on success, error code on error [out]
      \param  buf         Buffer to write from
@@ -270,186 +260,7 @@ public:
      \return             Size actually written in bytes, 0 on error (check err)
     */
     ulong write(Error& err, const void* buf, ulong size, ulong timeout_ms=0)
-        { err = EInval; return 0; }
-};
-
-///////////////////////////////////////////////////////////////////////////////
-
-/** System directory reader (used internally).
- - Implementation is OS specific and handle is public
-*/
-struct SysDir {
-#if defined(_WIN32)
-    // Windows
-    typedef intptr_t Handle;
-
-    struct _finddata_t context;
-    char*              filepath;
-    const char*        firstfile;
-
-    SysDir() {
-        handle    = -1;
-        filepath  = NULL;
-        firstfile = NULL;
-    }
-
-    ~SysDir()
-        { close(); }
-
-    Error open(const char* path) {
-        close();
-        if (path != NULL) { // NULL used by seek() to re-open same filepath
-            // Append wildcard to path, save in case of seek()
-            const size_t pathlen = strlen(path);
-            filepath = (char*)::malloc(pathlen+3);
-            memcpy(filepath, path, pathlen);
-            memcpy(filepath+pathlen, "\\*", 3);
-        }
-
-        handle = _findfirst(filepath, &context);
-        Error err;
-        if (handle == -1) {
-            switch (errno) {
-                case ENOENT:  err = ENotFound; break;
-                default:      err = EFail;     break;
-            }
-            firstfile = NULL;
-        } else {
-            err       = ENone;
-            firstfile = context.name;
-        }
-        return err;
-    }
-
-    void close() {
-        if (handle != -1) {
-            _findclose(handle);
-            handle = -1;
-        }
-        if (filepath != NULL) {
-            ::free(filepath);
-            filepath = NULL;
-        }
-        firstfile = NULL;
-    }
-
-    void seek() {
-        if (handle != -1) {
-            _findclose(handle);
-            handle = -1;
-        }
-        firstfile = NULL;
-        open(NULL);
-    }
-
-    bool read(SubString& entry) {
-        if (handle != -1) {
-            if (firstfile != NULL) {
-                entry.set(firstfile);
-                firstfile = NULL;
-                return true;
-            } else {
-                for (;;) {
-                    if (_findnext(handle, &context) != 0) {
-                        close();
-                        break;
-                    }
-                    if (context.name[0] == '.' &&
-                         (context.name[1] == '\0' ||
-                           (context.name[1] == '.' && context.name[2] == '\0')
-                         )
-                       )
-                        continue; // skip current/parent dir
-                    entry.set(context.name);
-                    return true;
-                }
-            }
-        }
-        entry.set();
-        return false;
-    }
-
-#else
-    // Linux/Unix
-    typedef DIR* Handle;
-
-    SysDir() {
-    #if EVO_USE_READDIR_R
-        buffer = NULL;
-    #endif
-        handle = NULL;
-    }
-
-    ~SysDir()
-        { close(); }
-
-    Error open(const char* path) {
-        close();
-        handle = ::opendir(path);
-        Error err;
-        if (handle == NULL) {
-            switch (errno) {
-                case EACCES:  err = EAccess;   break;
-                case ENOTDIR: // fallthrough
-                case ENOENT:  err = ENotFound; break;
-                default:      err = EFail;     break;
-            }
-        } else {
-            err = ENone;
-        #if EVO_USE_READDIR_R
-            // See readdir_r() manpage for size calculation
-            buffer = (char*)::malloc(offsetof(struct dirent, d_name) + pathconf(path, _PC_NAME_MAX) + 1);
-        #endif
-        }
-        return err;
-    }
-
-    void close() {
-    #if EVO_USE_READDIR_R
-        if (buffer != NULL) {
-            ::free(buffer);
-            buffer = NULL;
-        }
-    #endif
-        if (handle) {
-            ::closedir(handle);
-            handle = NULL;
-        }
-    }
-
-    void seek()
-        { if (handle) ::rewinddir(handle); }
-
-    bool read(SubString& entry) {
-        if (handle) {
-        #if EVO_USE_READDIR_R
-            assert( buffer != NULL );
-            struct dirent* result = NULL;
-            if (::readdir_r(handle, (struct dirent*)buffer, &result) == 0 && result != NULL) {
-                entry = result->d_name;
-                return true;
-            }
-        #else
-            struct dirent* result = ::readdir(handle);
-            if (result != NULL) {
-                entry = result->d_name;
-                return true;
-            }
-        #endif
-        }
-        entry.set();
-        return false;
-    }
-
-private:
-#if EVO_USE_READDIR_R
-    char* buffer;
-#endif
-
-public:
-#endif
-
-    Handle handle;        ///< System directory handle
+        { err = ENotImpl; return 0; }
 };
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -1233,9 +1044,9 @@ struct IoWriter : public RawBuffer {
     }
 
     /** Initialize and open for output (writing).
-    - This creates the write buffer, if needed
-    .
-    \param  flushlines_val  Whether to flush on each newline
+     - This creates the write buffer, if needed
+     .
+     \param  flushlines_val  Whether to flush on each newline
     */
     void open(bool flushlines_val=false) {
         used = 0;
@@ -1556,6 +1367,7 @@ struct IoWriter : public RawBuffer {
             if (size-used < (uint)field.width && (err=flush(out)) != ENone)
                 return err;
 
+            const int fillchar = (int)(field.fill != 0 ? (uchar)field.fill : (uchar)' ');
             const uint padding = (uint)field.width - count;
             char* p = data + used;
             switch (field.align) {
@@ -1563,25 +1375,25 @@ struct IoWriter : public RawBuffer {
                 case fLEFT:
                     memset(p, (int)(uchar)ch, count);
                     if (padding > 0)
-                        memset(p + count, (int)(uchar)field.fill, padding);
+                        memset(p + count, fillchar, padding);
                     break;
                 case fCENTER: {
                     const uint padleft = (padding / 2);
                     if (padleft > 0) {
-                        memset(p, (int)(uchar)field.fill, padleft);
+                        memset(p, fillchar, padleft);
                         p += padleft;
                     }
                     memset(p, (int)(uchar)ch, count);
                     const uint padright = (padding - padleft);
                     if (padright > 0) {
                         p += count;
-                        memset(p, (int)(uchar)field.fill, padright);
+                        memset(p, fillchar, padright);
                     }
                     break;
                 }
                 case fRIGHT:
                     if (padding > 0) {
-                        memset(p, (int)(uchar)field.fill, padding);
+                        memset(p, fillchar, padding);
                         p += padding;
                     }
                     memset(p, (int)(uchar)ch, count);
@@ -1623,6 +1435,7 @@ struct IoWriter : public RawBuffer {
             return err;
 
         if (field.width >= 0 && (ulong)field.width > strsize) {
+            const int fillchar = (int)(field.fill != 0 ? (uchar)field.fill : (uchar)' ');
             const uint padding = field.width - strsize;
             char* p = data + used;
             used += strsize + padding;
@@ -1632,25 +1445,25 @@ struct IoWriter : public RawBuffer {
                 case fLEFT:
                     memcpy(p, str, strsize);
                     if (padding > 0)
-                        memset(p + strsize, (int)(uchar)field.fill, padding);
+                        memset(p + strsize, fillchar, padding);
                     break;
                 case fCENTER: {
                     const uint padleft = (padding / 2);
                     if (padleft > 0) {
-                        memset(p, (int)(uchar)field.fill, padleft);
+                        memset(p, fillchar, padleft);
                         p += padleft;
                     }
                     memcpy(p, str, strsize);
                     const uint padright = (padding - padleft);
                     if (padright > 0) {
                         p += strsize;
-                        memset(p, (int)(uchar)field.fill, padright);
+                        memset(p, fillchar, padright);
                     }
                     break;
                 }
                 case fRIGHT:
                     if (padding > 0) {
-                        memset(p, (int)(uchar)field.fill, padding);
+                        memset(p, fillchar, padding);
                         p += padding;
                     }
                     memcpy(p, str, strsize);
@@ -1729,7 +1542,7 @@ struct IoWriter : public RawBuffer {
         assert( used <= size );
         const uint len = IntegerT<TNum>::digits(num,base);
         if (size < len)
-            return EInval;
+            return EBufSize;
         Error err;
         if (size-used < len && (err=flush(out)) != ENone)
             return err;
@@ -1755,7 +1568,7 @@ struct IoWriter : public RawBuffer {
         assert( used <= size );
         const uint len = IntegerT<TNum>::digits(num,base);
         if (size < len)
-            return EInval;
+            return EBufSize;
         Error err;
         if (size-used < len && (err=flush(out)) != ENone)
             return err;
@@ -1784,7 +1597,7 @@ struct IoWriter : public RawBuffer {
             num    = FloatT<TNum>::fexp10(exp, num);
             maxlen = (uint)FloatT<TNum>::MAXDIGITS_AUTO;
             if (size < maxlen)
-                return EInval;
+                return EBufSize;
             if (size-used < maxlen && (err=flush(out)) != ENone)
                 return err;
             used += impl::fnumfe(data+used, num, exp, false);
@@ -1792,7 +1605,7 @@ struct IoWriter : public RawBuffer {
             num    = FloatT<TNum>::fexp10(exp, impl::fnumf_weight(num, precision));
             maxlen = (uint)FloatT<TNum>::maxdigits_prec(exp, precision);
             if (size < maxlen)
-                return EInval;
+                return EBufSize;
             if (size-used < maxlen && (err=flush(out)) != ENone)
                 return err;
             used += impl::fnumf(data+used, num, exp, precision);
@@ -1823,7 +1636,7 @@ struct IoWriter : public RawBuffer {
             const uint len          = width + align_padding;
 
             if (size < len)
-                return EInval;
+                return EBufSize;
             Error err;
             if (size-used < len && (err=flush(out)) != ENone)
                 return err;
@@ -1864,7 +1677,7 @@ struct IoWriter : public RawBuffer {
         const uint len          = full_width + align_padding;
 
         if (size < len)
-            return EInval;
+            return EBufSize;
         Error err;
         if (size-used < len && (err=flush(out)) != ENone)
             return err;
@@ -1917,7 +1730,7 @@ struct IoWriter : public RawBuffer {
         fmt.impl_info(num, exp, maxlen, align_width);   // sets maxlen
 
         if (size < (uint)maxlen)
-            return EInval;
+            return EBufSize;
         Error err;
         if (size-used < (uint)maxlen && (err=flush(out)) != ENone)
             return err;

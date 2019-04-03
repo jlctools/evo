@@ -1,5 +1,5 @@
 // Evo C++ Library
-/* Copyright 2018 Justin Crowell
+/* Copyright 2019 Justin Crowell
 Distributed under the BSD 2-Clause License -- see included file LICENSE.txt for details.
 */
 ///////////////////////////////////////////////////////////////////////////////
@@ -30,7 +30,7 @@ namespace evo {
 
 \par Features
 
- - Similar to STL vector
+ - Similar to STL `vector`
  - Items are stored sequentially in memory as a dynamic array -- random access uses constant time
  - Preallocates extra memory when buffer grows -- see capacity(), resize(), capacity(Size)
  - No memory allocated by new empty list
@@ -43,6 +43,20 @@ namespace evo {
  - \ref Sharing "Sharing" and \ref Slicing "Slicing" make for simple and efficient copying/splitting
  - \b Caution: Copying from a raw pointer will use \ref UnsafePtrRef "Unsafe Pointer Referencing"
  .
+
+C++11:
+ - Range-based for loop -- see \ref StlCompatibility
+   \code
+    List<int> list;
+    for (auto num : list.asconst()) {
+    }
+   \endcode
+ - Initialization lists
+   \code
+    List<int> list = {1, 2, 3};
+    List<String> strlist = {"foo", "bar"};
+   \endcode
+ - Move semantics
 
 \par Iterators
 
@@ -59,10 +73,13 @@ namespace evo {
  - List(const ListBaseType&,Key,Key)
  - List(const Item*,Size)
  - List(const PtrBase<Item>&,Size)
+ - List(std::initializer_list<T>) [C++11]
+ - List(ListType&&) [C++11]
  .
 
 \par Read Access
 
+ - asconst()
  - size()
    - null(), empty()
    - capacity()
@@ -79,6 +96,8 @@ namespace evo {
    - starts(const Item*,Size) const
    - ends(ItemVal) const
    - ends(const Item*,Size) const
+ - cbegin(), cend()
+   - begin() const, end() const
  - find()
    - findr()
    - findany()
@@ -107,6 +126,8 @@ namespace evo {
  - dataM()
    - itemM()
    - operator()()
+   - firstM(), lastM()
+ - begin(), end()
  - resize()
    - reserve(), compact()
    - capacity(Size)
@@ -122,6 +143,7 @@ namespace evo {
    - setempty()
    - clear()
    - operator=(const ListType& data)
+   - operator=(ListType&&) [C++11]
    - operator=(const ValNull&)
    - operator=(const ValEmpty&)
    - copy(const ListBaseType&)
@@ -130,7 +152,7 @@ namespace evo {
  - add(const Item&)
    - add(const ListBaseType&)
    - add(const Item*,Size)
-   - addnew()
+   - addnew(), addmin()
    - operator<<(const Item&)
    - operator<<(const ListBaseType&)
    - operator<<(const ValNull&)
@@ -158,6 +180,7 @@ namespace evo {
 \par Advanced
 
  - advItem(Key)
+   - advFirst(), advLast()
  - advResize()
  - advBuffer(Size)
    - advBuffer()
@@ -230,6 +253,15 @@ public:
     typedef List<T,Size>        ThisType;           ///< This list type
     typedef List<T,Size>        ListType;           ///< %List type for parameters
     typedef ListBase<T,Size>    ListBaseType;       ///< %List base type for any Evo list
+
+    // Iterator support types
+    /** \cond impl */
+    typedef Key IterKey;
+    typedef T   IterItem;
+    /** \endcond */
+
+    typedef typename IteratorRa<ThisType>::Const Iter;      ///< Iterator (const) - IteratorRa
+    typedef IteratorRa<ThisType>                 IterM;     ///< Iterator (mutable) - IteratorRa
 
     /** %Edit buffer for advEdit().
      - This holds buffer state during an edit operation
@@ -435,6 +467,48 @@ public:
         #endif
         if (data.ptr_ != NULL)
             copy(data.ptr_, size);
+    }
+
+#if defined(EVO_CPP11)
+    /** Sequence constructor (C++11).
+     \param  init  Initializer list, passed as comma-separated values in braces `{ }`
+    */
+    List(std::initializer_list<T> init) : List() {
+        assert( init.size() < IntegerT<Size>::MAX );
+        modAppend(NULL, (Size)init.size());
+        T* item = data_;
+        for (auto& val : init)
+            new(item++) T(val);
+    }
+
+    /** Move constructor (C++11).
+     \param  src  Source to move
+    */
+    List(ListType&& src) {
+        ::memcpy(this, &src, sizeof(ListType));
+        ::memset(&src, 0, sizeof(ListType));
+    }
+
+    /** Move assignment operator (C++11).
+     \param  src  Source to move
+     \return      This
+    */
+    ListType& operator=(ListType&& src) {
+        clear();
+        capacity(0);
+        ::memcpy(this, &src, sizeof(ListType));
+        ::memset(&src, 0, sizeof(ListType));
+        return *this;
+    }
+#endif
+
+    /** Explicitly use a const reference to this.
+     - This is useful to force using this as const without casting
+     .
+     \return  This
+    */
+    const ListType& asconst() const {
+        return *this;
     }
 
     // SET
@@ -867,6 +941,64 @@ public:
         { return (items.size_ > 0 && size_ >= items.size_ && DataEqual<T>::equal(data_+(size_-items.size_), items.data_, items.size_)); }
 
     // FIND
+
+    /** Get iterator at first item (const).
+     - This allows compatibility with range-based for loops and other libraries, otherwise use container Iter directly
+     .
+     \return  Iterator at first item, or at end position if empty
+     \see Iter, cend(), begin(), end()
+    */
+    Iter cbegin() const
+        { return Iter(*this); }
+
+    /** Get iterator at end (const).
+     - This allows compatibility with range-based for loops and other libraries, otherwise use container Iter directly
+     - This really just creates an empty iterator
+     .
+     \return  Iterator at end position
+     \see Iter, cbegin(), begin(), end()
+    */
+    Iter cend() const
+        { return Iter(); }
+
+    /** Get iterator at first item (mutable).
+     - This allows compatibility with range-based for loops and other libraries, otherwise use container Iter directly
+     - cbegin() is more efficient, since this effectively calls unshare() to make items mutable
+     .
+     \return  Iterator at first item, or at end position if empty
+     \see IterM, end(), cbegin(), cend()
+    */
+    IterM begin()
+        { return IterM(*this); }
+
+    /** Get iterator at first item (const).
+     - This allows compatibility with range-based for loops and other libraries, otherwise use container Iter directly
+     .
+     \return  Iterator at first item, or at end position if empty
+     \see end() const, cbegin()
+    */
+    Iter begin() const
+        { return Iter(*this); }
+
+    /** Get iterator at end.
+     - This allows compatibility with range-based for loops and other libraries, otherwise use container Iter directly
+     - This really just creates an empty iterator
+     .
+     \return  Iterator at end position
+     \see IterM, begin(), cbegin(), cend()
+    */
+    IterM end()
+        { return IterM(); }
+
+    /** Get iterator at end (const).
+     - This allows compatibility with range-based for loops and other libraries, otherwise use container Iter directly
+     - This really just creates an empty iterator
+     .
+     \return  Iterator at end position
+     \see begin() const, cend()
+    */
+    Iter end() const
+        { return Iter(); }
 
     /** Find first occurrence of item with forward search.
      - This searches for given item, using item %operator==() for comparisons
@@ -1354,6 +1486,22 @@ public:
     */
     T& itemM(Key index)
         { assert( index < size_ ); unshare(); return data_[index]; }
+
+    /** Get first item (mutable).
+     - Calls unshare(), use advFirst() to skip this
+     .
+     \return  First item pointer, NULL if empty
+    */
+    Item* firstM()
+        { unshare(); return (size_ > 0 ? data_ : NULL); }
+
+    /** Get last item (mutable).
+     - Calls unshare(), use advLast() to skip this
+     .
+     \return  Last item pointer, NULL if empty
+    */
+    Item* lastM()
+        { unshare(); return (size_ > 0 ? data_+size_-1 : NULL); }
 
     /** %Set new capacity (modifier).
      - Consider using reserve() instead to allocate additional capacity in advance
@@ -1847,6 +1995,18 @@ public:
     */
     ListType& addnew(Size size=1)
         { modAppend(EVO_PDEFAULT, size); return *this; }
+
+    /** Append new items up to a given minimum size (modifier).
+     - This calls addnew() to add items as needed to reach given minimum size
+     .
+     \param  minsize  Minimum list size
+     \return          This
+    */
+    ListType& addmin(Size minsize) {
+        if (minsize > size_)
+            modAppend(EVO_PDEFAULT, minsize - size_);
+        return *this;
+    }
 
     /** Append new items copied from data pointer (modifier).
      - Effectively calls unshare()
@@ -2638,6 +2798,22 @@ public:
         return data_[index];
     }
 
+    /** Advanced: Get first item (modifier).
+     - \b Caution: This does _not_ call unshare() -- results are undefined if in a shared state
+     .
+     \return  First item pointer, NULL if empty
+    */
+    T* advFirst()
+        { return (size_ > 0 ? data_ : NULL); }
+
+    /** Advanced: Get last item (modifier).
+     - \b Caution: This does _not_ call unshare() -- results are undefined if in a shared state
+     .
+     \return  Last item pointer, NULL if empty
+    */
+    T* advLast()
+        { return (size_ > 0 ? data_+size_-1 : NULL); }
+
     /** Advanced: Append new items without initializing (constructing) them.
      - \b Caution: Data must be unique (not shared) or results are undefined
      - \b Caution: The new items must be initialized with DataInit::init_safe() or removed with advRemove() before items are accessed, modified, or list is destroyed
@@ -2695,17 +2871,6 @@ public:
         memcpy(data_+index1, data_+index2, sizeof(T));
         memcpy(data_+index2, buf, sizeof(T));
     }
-
-    // ITERATORS
-
-    // Iterator support types
-    /** \cond impl */
-    typedef Key IterKey;
-    typedef T   IterItem;
-    /** \endcond */
-
-    typedef typename IteratorRa<ThisType>::Const Iter;    ///< Iterator (const) - IteratorRa
-    typedef IteratorRa<ThisType>                 IterM;    ///< Iterator (mutable) - IteratorRa
 
     // INTERNAL
 
@@ -3162,7 +3327,7 @@ private:
         if (offset > 0) {
             DataInit<T>::uninit(buf_.ptr, offset);
             if (size > 0)
-                memmove(buf_.ptr, buf_.ptr+offset, size*sizeof(T));
+                memmove((void*)buf_.ptr, (void*)(buf_.ptr+offset), size*sizeof(T));
             data_ = buf_.ptr;
             buf_.header->used -= offset;
         }
@@ -3220,7 +3385,7 @@ private:
                         Header* newheader;
                         T* newbuf = buf_.memalloc(newbufsize, newused, newheader);
                         if (size_ > 0)
-                            memcpy(newbuf, data_, sizeof(T)*size_);
+                            memcpy((void*)newbuf, (void*)data_, sizeof(T)*size_);
                         if (offset > 0)
                             DataInit<T>::uninit(buf_.ptr, offset);
                         buf_.memfree();
@@ -3230,7 +3395,7 @@ private:
                     } else if (offset > 0 && size > buf_.header->size-buf_.header->used) {
                         // Shift to make room at end
                         DataInit<T>::uninit(buf_.ptr, offset);
-                        memmove(buf_.ptr, data_, sizeof(T)*size_);
+                        memmove((void*)buf_.ptr, (void*)data_, sizeof(T)*size_);
                         buf_.header->used = newused;
                         data_             = buf_.ptr;
                     } else {
@@ -3318,7 +3483,7 @@ private:
                             Header* newheader;
                             T* newbuf = buf_.memalloc(newbufsize, newused, newheader);
                             if (size_ > 0)
-                                memcpy(newbuf+size, data_, sizeof(T)*size_);
+                                memcpy((void*)(newbuf+size), (void*)data_, sizeof(T)*size_);
                             if (offset > 0)
                                 DataInit<T>::uninit(buf_.ptr, offset);
                             buf_.memfree();
@@ -3329,7 +3494,7 @@ private:
                             // Shift to make room at beginning
                             if (offset > 0)
                                 DataInit<T>::uninit(buf_.ptr, offset);
-                            memmove(buf_.ptr+size, data_, sizeof(T)*size_);
+                            memmove((void*)(buf_.ptr+size), (void*)data_, sizeof(T)*size_);
                             buf_.header->used = newused;
                             data_             = buf_.ptr;
                         }
@@ -3435,8 +3600,8 @@ private:
                             newbufsize = newused + 1; // Leave extra space
                         Header* newheader;
                         T* newbuf = buf_.memalloc(newbufsize, newused, newheader);
-                        memcpy(newbuf, data_, sizeof(T)*index);
-                        memcpy(newbuf+index+size, data_+index, sizeof(T)*(size_-index));
+                        memcpy((void*)newbuf, (void*)data_, sizeof(T)*index);
+                        memcpy((void*)(newbuf+index+size), (void*)(data_+index), sizeof(T)*(size_-index));
                         if (offset > 0)
                             DataInit<T>::uninit(buf_.ptr, offset);
                         buf_.memfree();
@@ -3448,17 +3613,17 @@ private:
                             // Shift beginning and end to make room
                             if (offset > 0) {
                                 DataInit<T>::uninit(buf_.ptr, offset);
-                                memmove(buf_.ptr, data_, sizeof(T)*index);
+                                memmove((void*)buf_.ptr, (void*)data_, sizeof(T)*index);
                                 data_ = buf_.ptr;
                             }
-                            memmove(data_+index+size, data_+index+offset, sizeof(T)*(size_-index));
+                            memmove((void*)(data_+index+size), (void*)(data_+index+offset), sizeof(T)*(size_-index));
                             buf_.header->used = newused;
                         } else {
                             // Shift beginning to make room
                             const Size newoffset = offset - size;
                             data_ = buf_.ptr + newoffset;
                             DataInit<T>::uninit(buf_.ptr, offset-newoffset);
-                            memmove(data_, buf_.ptr+offset, sizeof(T)*index);
+                            memmove((void*)data_, (void*)(buf_.ptr+offset), sizeof(T)*index);
                         }
                     }
                     size_ = newused;
@@ -3591,7 +3756,7 @@ private:
                             DataInit<T>::uninit(data_+index, size);
                         const Size nextindex = index + size;
                         if (nextindex < size_)
-                            memmove(data_+index, data_+nextindex, sizeof(T)*(size_-nextindex));
+                            memmove((void*)(data_+index), (void*)(data_+nextindex), sizeof(T)*(size_-nextindex));
                         buf_.header->used -= size;
                         size_              = newsize;
                         return size;

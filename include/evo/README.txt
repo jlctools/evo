@@ -1,6 +1,6 @@
 Evo C++ Library
 ---------------
-Version: 0.4
+Version: 0.5
 
 Evo is a modern high performance C++ library designed to make writing efficient and portable code easy. It covers:
 

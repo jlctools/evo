@@ -1,5 +1,5 @@
 // Evo C++ Library
-/* Copyright 2018 Justin Crowell
+/* Copyright 2019 Justin Crowell
 Distributed under the BSD 2-Clause License -- see included file LICENSE.txt for details.
 */
 ///////////////////////////////////////////////////////////////////////////////
@@ -37,7 +37,7 @@ template<int N>  struct StaticAssertTestSize { };
 #define IMPL_EVO_STATIC_JOIN2(A,B) A##B
 /** \endcond */
 
-#if defined(EVO_CPP11) || defined(DOXYGEN)
+#if defined(EVO_CPP11)
     /** Assert compile-time expression is true or trigger compiler error.
      - This uses some template magic to cause a custom compiler error if given expression is false
      - With C++11 this just calls static_assert()
@@ -57,7 +57,7 @@ template<int N>  struct StaticAssertTestSize { };
         EVO_STATIC_JOIN(TOKEN, __LINE__) EVO_ATTRIB_UNUSED
 #endif
 
-#if defined(EVO_CPP11) || defined(DOXYGEN)
+#if defined(EVO_CPP11)
     /** Assert a function is unused at compile-time.
      - This marks a function so that compiling will fail if the function is used (called)
      - This replaces the function implementation -- see example below
@@ -577,6 +577,58 @@ public:
     typedef IsEvoContainer<T> Type;    ///< This type
     static const bool value = (!IsPodType<T>::value && (sizeof(Test<T>(0)) == sizeof(char) || EvoContainer<T>::value)); ///< Result value
 };
+
+///////////////////////////////////////////////////////////////////////////////
+
+/** Check if type is nullable.
+ - `value` member holds result
+ - Recognized nullable types include: 
+   - Any type inheriting Nullable
+   - Any EvoContainer type, see: \ref PrimitivesContainers
+*/
+template<class T> class IsNullable {
+    template<class U> struct SFINAE { };
+    template<class U> static char Test(SFINAE<typename U::EvoNullableType>*);
+    template<class U> static long Test(...);
+public:
+    typedef IsNullable<T> Type;    ///< This type
+    static const bool value = (!IsPodType<T>::value && sizeof(Test<T>(0)) == sizeof(char)) || IsEvoContainer<T>::value; ///< Result value
+};
+
+/** \cond impl */
+namespace impl {
+    template<class T, bool P=IsPointer<T>::value, bool N=IsNullable<T>::value>
+    struct IsNull {
+        static bool check(const T&)
+            { return false; }
+    };
+    template<class T> struct IsNull<T,true,false> {
+        static bool check(const T val)
+            { return (val == NULL); }
+    };
+    template<class T> struct IsNull<T,false,true> {
+        static bool check(const T& val)
+            { return val.null(); }
+    };
+}
+/** \endcond */
+
+/** Check whether object or value is null.
+ - \#include <evo/meta.h>
+ - This works with any type, non-nullable types always return false
+ - Recognized nullable types include:
+   - Any type inheriting Nullable
+   - Any EvoContainer type, see: \ref PrimitivesContainers
+   - Any managed pointer type, see: \ref ManagedPtr
+   - Any raw pointer, where `0` or `NULL` is considered null
+ .
+ \tparam  T  Type to check, inferred from argument
+ \param  val  Object or value to check if null
+ \return      Whether object or value is null
+*/
+template<class T>
+inline bool is_null(const T& val)
+    { return impl::IsNull<T>::check(val); }
 
 ///////////////////////////////////////////////////////////////////////////////
 

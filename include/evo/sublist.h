@@ -1,5 +1,5 @@
 // Evo C++ Library
-/* Copyright 2018 Justin Crowell
+/* Copyright 2019 Justin Crowell
 Distributed under the BSD 2-Clause License -- see included file LICENSE.txt for details.
 */
 ///////////////////////////////////////////////////////////////////////////////
@@ -32,6 +32,15 @@ namespace evo {
  - \b Caution: SubList can be unsafe since it references a pointer, which must remain valid
  .
 
+C++11:
+ - Range-based for loop
+   \code
+    SubList<int> list;
+    for (auto num : list) {
+    }
+   \endcode
+ - Move semantics
+
 \par Iterators
 
  - SubList<>::Iter -- Read-Only Iterator (IteratorRa)
@@ -45,6 +54,7 @@ namespace evo {
  - SubList(const ListBaseType*)
  - SubList(const Item*,Size)
  - SubList(const Item*,ValNull,ItemVal)
+ - SubList(ThisType&&) [C++11]
  .
 
 \par Read Access
@@ -63,6 +73,8 @@ namespace evo {
    - starts(const Item*,Size) const
    - ends(ItemVal) const
    - ends(const Item*,Size) const
+ - cbegin(), cend()
+   - begin(), end()
  - find()
    - findr()
    - findany()
@@ -83,6 +95,8 @@ namespace evo {
    - setempty()
    - clear()
    - operator=(const ListBaseType&)
+   - operator=(const ThisType&)
+   - operator=(ThisType&&) [C++11]
    - operator=(const ValNull&)
    - operator=(const ValEmpty&)
  - splitat_setl(Key), splitat_setl(Key,T2&)
@@ -128,8 +142,7 @@ Item: 3
 \endcode
 */
 template<class T,class TSize=SizeT>
-struct SubList : public ListBase<T,TSize>
-{
+struct SubList : public ListBase<T,TSize> {
     using ListBase<T,TSize>::data_;
     using ListBase<T,TSize>::size_;
 
@@ -143,6 +156,14 @@ struct SubList : public ListBase<T,TSize>
     typedef SubList<T,Size>     ThisType;           ///< This list type
     typedef SubList<T,Size>     SubListType;        ///< %SubList base type
     typedef ListBase<T,Size>    ListBaseType;       ///< %List base type for any Evo list
+
+    // Iterator support types
+    /** \cond impl */
+    typedef Key IterKey;
+    typedef T   IterItem;
+    /** \endcond */
+
+    typedef typename IteratorRa<ThisType>::Const Iter;  ///< Iterator (const) - IteratorRa
 
     /** Default constructor sets as null. */
     SubList() {
@@ -170,6 +191,27 @@ struct SubList : public ListBase<T,TSize>
     SubList(const ListBaseType& data) {
         data_ = data.data_;
         size_ = data.size_;
+    }
+
+    /** Copy constructor to reference source data.
+     - This will reference the same pointer as given data
+     - \b Caution: Source data pointer must remain valid
+     .
+     \param  data   Data to reference
+     \param  index  Start index of data to reference, END to set as empty
+     \param  size   Size as item count, ALL for all from index
+    */
+    SubList(const ListBaseType& data, Key index, Size size=ALL) {
+        if (data.data_ == NULL) {
+            data_ = NULL;
+            size_ = 0;
+        } else {
+            if (index > data.size_)
+                index = data.size_;
+            const Size max_size = data.size_ - index;
+            data_ = (Item*)data.data_ + index;
+            size_ = (size > max_size ? max_size : size);
+        }
     }
 
     /** Copy constructor to reference source data from pointer.
@@ -220,7 +262,43 @@ struct SubList : public ListBase<T,TSize>
                 ++size_;
     }
 
+#if defined(EVO_CPP11)
+    /** Move constructor (C++11).
+     \param  src  Source to move
+    */
+    SubList(ThisType&& src) {
+        ::memcpy(this, &src, sizeof(ThisType));
+    }
+
+    /** Move assignment operator (C++11).
+     \param  src  Source to move
+     \return      This
+    */
+    ThisType& operator=(ThisType&& src) {
+        ::memcpy(this, &src, sizeof(ThisType));
+        return *this;
+    }
+#endif
+
+    /** Explicitly use a const reference to this.
+     - This is useful to force using this as const without casting
+     .
+     \return  This
+    */
+    const ThisType& asconst() const {
+        return *this;
+    }
+
     // SET
+
+    /** Assignment operator.
+     \param  src  Source to copy
+     \return      This
+    */
+    ThisType& operator=(const ThisType& src) {
+        ::memcpy(this, &src, sizeof(ThisType));
+        return *this;
+    }
 
     /** Assignment operator sets as null.
      \param  val  vNULL
@@ -526,6 +604,44 @@ struct SubList : public ListBase<T,TSize>
 
     // FIND
 
+    /** Get iterator at first item (const).
+     - This allows compatibility with range-based for loops and other libraries, otherwise use container Iter directly
+     .
+     \return  Iterator at first item, or at end position if empty
+     \see Iter, cend(), begin(), end()
+    */
+    Iter cbegin() const
+        { return Iter(*this); }
+
+    /** Get iterator at end (const).
+     - This allows compatibility with range-based for loops and other libraries, otherwise use container Iter directly
+     - This really just creates an empty iterator
+     .
+     \return  Iterator at end position
+     \see Iter, cbegin(), begin(), end()
+    */
+    Iter cend() const
+        { return Iter(); }
+
+    /** Get iterator at first item (const).
+     - This allows compatibility with range-based for loops and other libraries, otherwise use container Iter directly
+     .
+     \return  Iterator at first item, or at end position if empty
+     \see end(), cbegin()
+    */
+    Iter begin() const
+        { return Iter(*this); }
+
+    /** Get iterator at end (const).
+     - This allows compatibility with range-based for loops and other libraries, otherwise use container Iter directly
+     - This really just creates an empty iterator
+     .
+     \return  Iterator at end position
+     \see begin(), cend()
+    */
+    Iter end() const
+        { return Iter(); }
+
     /** \copydoc evo::List::find(ItemVal,Key,Key) const */
     Key find(ItemVal item, Key start=0, Key end=END) const {
         if (end > size_)
@@ -808,16 +924,6 @@ struct SubList : public ListBase<T,TSize>
     */
     void swap(ThisType& list)
         { EVO_IMPL_CONTAINER_SWAP(this, &list, ThisType); }
-
-    // ITERATORS
-
-    // Iterator support types
-    /** \cond impl */
-    typedef Key IterKey;
-    typedef T   IterItem;
-    /** \endcond */
-
-    typedef typename IteratorRa<ThisType>::Const Iter;  ///< Iterator (const) - IteratorRa
 
     // INTERNAL
 

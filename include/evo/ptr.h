@@ -1,5 +1,5 @@
 // Evo C++ Library
-/* Copyright 2018 Justin Crowell
+/* Copyright 2019 Justin Crowell
 Distributed under the BSD 2-Clause License -- see included file LICENSE.txt for details.
 */
 ///////////////////////////////////////////////////////////////////////////////
@@ -30,6 +30,9 @@ SmartPtr<T[]> is specialized for arrays so the pointer is freed with delete[].
 However an array SmartPtr<T[]> cannot be copied (array size isn't known) so that specialization isn't usable in containers, use List or Array instead.
 
 See \ref ManagedPtr "Managed Pointers"
+
+C++11:
+ - Move semantics
 
 \tparam  T  Type to use pointer to (not the raw pointer type)
 
@@ -97,8 +100,9 @@ public:
     /** Constructor.
      \param  ptr  Pointer to set, NULL for none
     */
-    SmartPtr(T* ptr=NULL)
-        { ptr_ = ptr; }
+    SmartPtr(T* ptr=NULL) {
+        ptr_ = ptr;
+    }
 
     /** Copy constructor.
      - This makes a copy of source object using T copy constructor
@@ -106,12 +110,14 @@ public:
      .
      \param  src  Source pointer
     */
-    SmartPtr(const This& src)
-        { ptr_ = new T(*src.ptr_); }
+    SmartPtr(const This& src) {
+        ptr_ = new T(*src.ptr_);
+    }
 
     /** Destructor. */
-    ~SmartPtr()
-        { free(); }
+    ~SmartPtr() {
+        free();
+    }
 
     /** Copy/Assignment operator.
      - This makes a copy of source object using T copy constructor
@@ -120,27 +126,60 @@ public:
      \param  src  Source pointer
      \return      This
     */
-    This& operator=(const This& src)
-        { free(); ptr_ = new T(*src.ptr_); return *this; }
+    This& operator=(const This& src) {
+        free();
+        ptr_ = new T(*src.ptr_);
+        return *this;
+    }
 
     /** Assignment operator for new pointer.
      \param  ptr  Pointer to set
      \return      This
     */
-    This& operator=(T* ptr)
-        { free(); ptr_ = ptr; return *this; }
+    This& operator=(T* ptr) {
+        free();
+        ptr_ = ptr;
+        return *this;
+    }
+
+#if defined(EVO_CPP11)
+    /** Move constructor (C++11).
+     \param  src  Source to move
+    */
+    SmartPtr(This&& src) {
+        ptr_ = src.ptr_;
+        src.ptr_ = NULL;
+    }
+
+    /** Move assignment operator (C++11).
+     \param  src  Source to move
+     \return      This
+    */
+    This& operator=(This&& src) {
+        free();
+        ptr_ = src.ptr_;
+        src.ptr_ = NULL;
+        return *this;
+    }
+#endif
 
     /** Clear (free) pointer and set as null.
      \return  This
     */
-    This& clear()
-        { free(); ptr_ = NULL; return *this; }
+    This& clear() {
+        free();
+        ptr_ = NULL;
+        return *this;
+    }
     
     /** %Set as null -- same as clear().
      \return  This
     */
-    This& set()
-        { free(); ptr_ = NULL; return *this; }
+    This& set() {
+        free();
+        ptr_ = NULL;
+        return *this;
+    }
 
     /** Detach and return pointer.
      - This returns current pointer and sets to null, releasing ownership
@@ -171,6 +210,9 @@ protected:
  .
 
 See \ref ManagedPtr "Managed Pointers"
+
+C++11:
+ - Move semantics
 
 \tparam  T  Type to use pointer to with array suffix, ex: int[]
 
@@ -205,31 +247,63 @@ public:
     /** Constructor.
      \param  ptr  Pointer to set, NULL for none
     */
-    SmartPtr(T* ptr=NULL)
-        { ptr_ = ptr; }
+    SmartPtr(T* ptr=NULL) {
+        ptr_ = ptr;
+    }
 
     /** Destructor. */
-    ~SmartPtr()
-        { free(); }
+    ~SmartPtr() {
+        free();
+    }
 
     /** Assignment operator for new pointer.
      \param  ptr  Pointer to set
      \return      This
     */
-    This& operator=(T* ptr)
-        { free(); ptr_ = ptr; return *this; }
+    This& operator=(T* ptr) {
+        free();
+        ptr_ = ptr;
+        return *this;
+    }
+
+#if defined(EVO_CPP11)
+    /** Move constructor (C++11).
+     \param  src  Source to move
+    */
+    SmartPtr(This&& src) {
+        ptr_ = src.ptr_;
+        src.ptr_ = NULL;
+    }
+
+    /** Move assignment operator (C++11).
+     \param  src  Source to move
+     \return      This
+    */
+    This& operator=(This&& src) {
+        free();
+        ptr_ = src.ptr_;
+        src.ptr_ = NULL;
+        return *this;
+    }
+#endif
 
     /** Clear (free) pointer and set as null.
      \return  This
     */
-    This& clear()
-        { free(); ptr_ = NULL; return *this; }
+    This& clear() {
+        free();
+        ptr_ = NULL;
+        return *this;
+    }
 
     /** %Set as null -- same as clear().
      \return  This
     */
-    This& set()
-        { free(); ptr_ = NULL; return *this; }
+    This& set() {
+        free();
+        ptr_ = NULL;
+        return *this;
+    }
 
     /** Detach and return pointer.
      - This returns current pointer and sets to null, releasing ownership
@@ -250,8 +324,8 @@ protected:
 
 private:
     // Disable copying
-    explicit SmartPtr(const This&);
-    This& operator=(const This&);
+    explicit SmartPtr(const This&) EVO_ONCPP11(= delete);
+    This& operator=(const This&) EVO_ONCPP11(= delete);
 };
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -271,6 +345,9 @@ private:
 \link SharedPtr<T[],TSize> SharedPtr<T[]>\endlink is specialized for arrays so the pointer is freed with delete[]. However an array \link SharedPtr<T[],TSize> SharedPtr<T[]>\endlink doesn't support unshare() (array size isn't known).
 
 See \ref ManagedPtr "Managed Pointers"
+
+C++11:
+ - Move semantics
 
 \tparam  T  Type to use pointer to (not the raw pointer type)
 
@@ -390,6 +467,31 @@ public:
         return *this;
     }
 
+#if defined(EVO_CPP11)
+    /** Move constructor (C++11).
+     \param  src  Source to move
+    */
+    SharedPtr(This&& src) {
+        ptr_ = src.ptr_;
+        refs_ = src.refs_;
+        src.ptr_ = NULL;
+        src.refs_ = NULL;
+    }
+
+    /** Move assignment operator (C++11).
+     \param  src  Source to move
+     \return      This
+    */
+    This& operator=(This&& src) {
+        free();
+        ptr_ = src.ptr_;
+        refs_ = src.refs_;
+        src.ptr_ = NULL;
+        src.refs_ = NULL;
+        return *this;
+    }
+#endif
+
     /** Release pointer and set as null.
      - This will decrement the reference count, and free the pointer if not shared
      .
@@ -458,6 +560,9 @@ protected:
  .
 
 See \ref ManagedPtr "Managed Pointers"
+
+C++11:
+ - Move semantics
 
 \tparam  T  Type to use pointer to with array suffix, ex: int[]
 
@@ -572,6 +677,31 @@ public:
         return *this;
     }
 
+#if defined(EVO_CPP11)
+    /** Move constructor (C++11).
+     \param  src  Source to move
+    */
+    SharedPtr(This&& src) {
+        ptr_ = src.ptr_;
+        refs_ = src.refs_;
+        src.ptr_ = NULL;
+        src.refs_ = NULL;
+    }
+
+    /** Move assignment operator (C++11).
+     \param  src  Source to move
+     \return      This
+    */
+    This& operator=(This&& src) {
+        free();
+        ptr_ = src.ptr_;
+        refs_ = src.refs_;
+        src.ptr_ = NULL;
+        src.refs_ = NULL;
+        return *this;
+    }
+#endif
+
     /** Release pointer and set as null.
      - This will decrement the reference count, and free the pointer if not shared
      .
@@ -630,6 +760,9 @@ private:
  .
 
 See \ref ManagedPtr "Managed Pointers"
+
+C++11:
+ - Move semantics
 
 \tparam  T  Type to use pointer to (not the raw pointer type)
 
@@ -697,41 +830,73 @@ public:
      \param  src  Source pointer
      \return      This
     */
-    This& operator=(const This& src)
-        { ptr_ = src.ptr_; return *this; }
+    This& operator=(const This& src) {
+        ptr_ = src.ptr_;
+        return *this;
+    }
 
     /** Assignment operator to reference pointer.
      \param  src  Source pointer
      \return      This
     */
-    This& operator=(const Base& src)
-        { ptr_ = src.ptr_; return *this; }
+    This& operator=(const Base& src) {
+        ptr_ = src.ptr_;
+        return *this;
+    }
 
     /** Assignment operator for raw pointer.
      \param  ptr  Pointer to set
      \return      This
     */
-    This& operator=(T* ptr)
-        { ptr_ = ptr; return *this; }
+    This& operator=(T* ptr) {
+        ptr_ = ptr;
+        return *this;
+    }
 
     /** Assignment operator for raw pointer.
      \param  ptr  Pointer to set
      \return      This
     */
-    This& operator=(const T* ptr)
-        { ptr_ = (T*)ptr; return *this; }
+    This& operator=(const T* ptr) {
+        ptr_ = (T*)ptr;
+        return *this;
+    }
+
+#if defined(EVO_CPP11)
+    /** Move constructor (C++11).
+     \param  src  Source to move
+    */
+    Ptr(This&& src) {
+        ptr_ = src.ptr_;
+        src.ptr_ = NULL;
+    }
+
+    /** Move assignment operator (C++11).
+     \param  src  Source to move
+     \return      This
+    */
+    This& operator=(This&& src) {
+        ptr_ = src.ptr_;
+        src.ptr_ = NULL;
+        return *this;
+    }
+#endif
 
     /** Clear pointer, setting as null.
      \return  This
     */
-    This& clear()
-        { ptr_ = NULL; return *this; }
+    This& clear() {
+        ptr_ = NULL;
+        return *this;
+    }
 
     /** %Set as null -- same as clear().
      \return  This
     */
-    This& set()
-        { ptr_ = NULL; return *this; }
+    This& set() {
+        ptr_ = NULL;
+        return *this;
+    }
 
     /** Detach and return pointer.
      - This returns current pointer and sets to null
@@ -757,6 +922,9 @@ public:
  .
 
 See \ref ManagedPtr "Managed Pointers"
+
+C++11:
+- Move semantics
 
 \tparam  T  Type to use pointer to with array suffix, ex: int[]
 
@@ -849,6 +1017,26 @@ public:
     */
     This& operator=(const T* ptr)
         { ptr_ = (T*)ptr; return *this; }
+
+#if defined(EVO_CPP11)
+    /** Move constructor (C++11).
+     \param  src  Source to move
+    */
+    Ptr(This&& src) {
+        ptr_ = src.ptr_;
+        src.ptr_ = NULL;
+    }
+
+    /** Move assignment operator (C++11).
+     \param  src  Source to move
+     \return      This
+    */
+    This& operator=(This&& src) {
+        ptr_ = src.ptr_;
+        src.ptr_ = NULL;
+        return *this;
+    }
+#endif
 
     /** Clear pointer, setting as null.
      \return  This

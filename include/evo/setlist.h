@@ -1,5 +1,5 @@
 // Evo C++ Library
-/* Copyright 2018 Justin Crowell
+/* Copyright 2019 Justin Crowell
 Distributed under the BSD 2-Clause License -- see included file LICENSE.txt for details.
 */
 ///////////////////////////////////////////////////////////////////////////////
@@ -36,6 +36,20 @@ namespace evo {
    - See List features
  .
 
+C++11:
+ - Range-based for loop -- see \ref StlCompatibility
+   \code
+    SetList<int> list;
+    for (auto num : list.asconst()) {
+    }
+   \endcode
+ - Initialization lists
+   \code
+    SetList<int> list = {3, 1, 2};
+    SetList<String> strlist = {"foo", "bar"};
+   \endcode
+ - Move semantics
+
 \par Comparison
 
 You can leave the default comparison type (Compare) or specify an alternative.
@@ -48,14 +62,23 @@ See: \ref PrimitivesContainers "Primitives & Containers"
 
 \par Iterators
 
- - Set::Iter -- Read-Only Iterator (IteratorRa)
- - Set::IterM -- Mutable Iterator (IteratorRa)
+ - SetList::Iter -- Read-Only Iterator (IteratorRa)
+ - SetList::IterM -- Mutable Iterator (IteratorRa)
  .
 
 \b Caution: Modifying or resizing a set will shift or invalidate existing iterators using it.
 
+\par Constructors
+
+ - SetList()
+ - SetList(const SetBaseType&)
+ - SetList(const ThisType&)
+ - SetList(std::initializer_list<Value>) [C++11]
+ - SetList(ThisType&&) [C++11]
+
 \par Read Access
 
+ - asconst()
  - size()
    - null(), empty()
    - capacity()
@@ -64,9 +87,10 @@ See: \ref PrimitivesContainers "Primitives & Containers"
    - get_compare() const
  - contains()
    - item()
+ - cbegin(), cend()
+   - begin() const, end() const
  - iter()
    - iter_lower(), iter_upper()
-   - cbegin(), cend()
  - operator==()
    - operator!=()
  .
@@ -79,16 +103,19 @@ See: \ref PrimitivesContainers "Primitives & Containers"
    - unshare()
    - compact()
    - get_compare()
+ - begin(), end()
  - iterM()
    - iter_lowerM(), iter_upperM()
-   - begin(), end()
  - set()
+   - set(const SetBaseType&)
    - set(const ThisType&)
    - setempty()
    - clear()
-   - operator=()
+   - operator=(const SetBaseType&)
+   - operator=(const ThisType&)
+   - operator=(ThisType&&) [C++11]
  - get()
- - add(const Value&,bool)
+ - add()
    - addfrom()
    - addsplit()
  - remove(const Value&)
@@ -271,6 +298,42 @@ public:
     ~SetList()
         { }
 
+#if defined(EVO_CPP11)
+    /** Sequence constructor (C++11).
+     \param  init  Initializer list, passed as comma-separated values in braces `{ }`
+    */
+    SetList(std::initializer_list<Value> init) : SetList() {
+        assert( init.size() < IntegerT<Size>::MAX );
+        capacitymin((Size)init.size());
+        for (const auto& val : init)
+            add(val);
+    }
+
+    /** Move constructor (C++11).
+     \param  src  Source to move
+    */
+    SetList(ThisType&& src) : data_(std::move(src.data_)) {
+        SetBaseType::size_ = src.SetBaseType::size_;
+        src.SetBaseType::size_ = 0;
+    }
+
+    /** Move assignment operator (C++11).
+     \param  src  Source to move
+     \return      This
+    */
+    ThisType& operator=(ThisType&& src) {
+        data_ = std::move(src.data_);
+        SetBaseType::size_ = src.SetBaseType::size_;
+        src.SetBaseType::size_ = 0;
+        return *this;
+    }
+#endif
+
+    /** \copydoc List::asconst() */
+    const ThisType& asconst() const {
+        return *this;
+    }
+
     // SET
 
     /** \copydoc Set::operator=(const SetBaseType& src) */
@@ -287,6 +350,7 @@ public:
         return *this;
     }
 
+    /** \copydoc Set::set(const SetBaseType& src) */
     ThisType& set(const SetBaseType& src) {
         clear();
         for (typename SetBaseType::Iter iter(src); iter; ++iter)
@@ -354,6 +418,30 @@ public:
         { return (this != &set && data_.items != set.data_.items); }
 
     // FIND
+
+    /** \copydoc List::cbegin() */
+    Iter cbegin() const
+        { return Iter(*this); }
+
+    /** \copydoc List::cend() */
+    Iter cend() const
+        { return Iter(); }
+
+    /** \copydoc List::begin() */
+    IterM begin()
+        { return IterM(*this); }
+
+    /** \copydoc List::begin() const */
+    Iter begin() const
+        { return Iter(*this); }
+
+    /** \copydoc List::end() */
+    IterM end()
+        { return IterM(); }
+
+    /** \copydoc List::end() const */
+    Iter end() const
+        { return Iter(); }
 
     bool contains(const Value& value) const
         { Size i = 0; return (search(i, value) != NULL); }
@@ -478,6 +566,10 @@ public:
 
     ThisType& capacitymin(Size min)
         { data_.items.capacitymin(min); return *this; }
+
+    /** \copydoc Set::reserve() */
+    ThisType& reserve(Size size)
+        { data_.items.reserve(size); return *this; }
 
     ThisType& compact()
         { data_.items.compact(); return *this; }
@@ -644,10 +736,18 @@ private:
 
         Data()
             { }
-        Data(const TCompare& compare) : TCompare(compare)
-            { }
         Data(const Data& data) : TCompare(data), items(data.items)
             { }
+    #if defined(EVO_CPP11)
+        Data(Data&& data) : TCompare(std::move(data)), items(std::move(data.items))
+            { }
+
+        Data& operator=(Data&& data) {
+            ((TCompare&)*this) = std::move((TCompare&)data);
+            items = std::move(data.items);
+            return *this;
+        }
+    #endif
     };
 
     Data data_;

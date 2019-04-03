@@ -1,5 +1,5 @@
 // Evo C++ Library
-/* Copyright 2018 Justin Crowell
+/* Copyright 2019 Justin Crowell
 Distributed under the BSD 2-Clause License -- see included file LICENSE.txt for details.
 */
 ///////////////////////////////////////////////////////////////////////////////
@@ -10,15 +10,18 @@ Distributed under the BSD 2-Clause License -- see included file LICENSE.txt for 
 
 #include "sys.h"
 
-#if !defined(_WIN32)
+#if defined(_WIN32)
+    // Windows
+    #include "systime.h"
+#else
     // Linux/Unix
     #include <pthread.h>
     #if defined(__linux) && !defined(__CYGWIN__)
         #include <sys/syscall.h>
         #include <linux/version.h>
-		#if defined(LINUX_VERSION_CODE) && LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,0)
-			#define EVO_LINUX_NPTL 1 // Linux 2.6+ uses native pthreads (NPTL)
-		#endif
+        #if defined(LINUX_VERSION_CODE) && LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,0)
+            #define EVO_LINUX_NPTL 1 // Linux 2.6+ uses native pthreads (NPTL)
+        #endif
     #endif
 #endif
 
@@ -74,6 +77,7 @@ struct SysThread {
     bool join() {
         if (handle != NULL) {
             const bool done = (WaitForSingleObject(handle, INFINITE) == WAIT_OBJECT_0);
+            assert( done );
             CloseHandle(handle);
             handle = NULL;
             return done;
@@ -125,9 +129,9 @@ struct SysThread {
     static void yield() {
         #if defined(__APPLE__)
             pthread_yield_np();
-		#elif defined(__CYGWIN__)
-			__gthread_yield();
-		#else
+        #elif defined(__CYGWIN__)
+            __gthread_yield();
+        #else
             pthread_yield();
         #endif
     }
@@ -172,6 +176,23 @@ struct SysMutex {
     bool trylock()
         { return (TryEnterCriticalSection(&handle) != 0); }
 
+    bool trylock(ulong timeout_ms) {
+        if (TryEnterCriticalSection(&handle) != 0)
+            return true;
+        // Spin wait -- Windows doesn't support timeout with critical section
+        SysTimestamp timeout_ts, ts;
+        timeout_ts.set_wall_timer();
+        timeout_ts.add_msec(timeout_ms);
+        for (;;) {
+            if (TryEnterCriticalSection(&handle) != 0)
+                return true;
+            ts.set_wall_timer();
+            if (ts.compare(timeout_ts) >= 0)
+                break;
+        }
+        return false;
+    }
+
     void lock()
         { EnterCriticalSection(&handle); }
 
@@ -203,7 +224,54 @@ struct SysMutex {
         const int result = pthread_mutex_trylock(&handle);
         if (result == 0)
             return true;
-        assert(result == EBUSY);
+        assert( result == EBUSY );
+        return false;
+    }
+
+    /** Try to lock mutex with a timeout.
+     - This allows polling for a lock until timeout
+     - If current thread already has a lock, whether this succeeds is platform dependent -- some platforms (Windows) allow nested locks, others don't
+     - Windows: This does a spin wait (which consumes CPU) since Windows doesn't support timeout on Critical Section lock
+       - \b Caution: This can starve (never lock) in Windows under load (constant locks)
+     .
+     \param  timeout_ms  Timeout in milliseconds
+     \return             Whether successful, false on timeout
+    */
+    bool trylock(ulong timeout_ms) {
+        struct timespec ts;
+    #if defined(__APPLE__)
+        int result = pthread_mutex_trylock(&handle);
+        if (result == EBUSY) {
+            // Spin wait -- OSX doesn't have pthread_mutex_timedlock()
+            struct timespec timeout_ts;
+            SysLinux::set_timespec_now(timeout_ts);
+            SysLinux::add_timespec_ms(timeout_ts, timeout_ms);
+            for (;;) {
+                result = pthread_mutex_trylock(&handle);
+                if (result != EBUSY)
+                    break;
+                SysLinux::set_timespec_now(ts);
+                if (SysLinux::compare_timespec(ts, timeout_ts) >= 0)
+                    return false;
+            }
+        }
+    #else
+        // Always use CLOCK_REALTIME with pthread_mutex_timedlock()
+        #if defined(_POSIX_TIMERS) && defined(CLOCK_REALTIME) && !defined(EVO_USE_GETTIMEOFDAY)
+            ::clock_gettime(CLOCK_REALTIME, &ts);
+        #else
+        {
+            struct timeval tv;
+            ::gettimeofday(&tv, NULL);
+            SysLinux::set_timespec_tv(ts, tv);
+        }
+        #endif
+        SysLinux::add_timespec_ms(ts, timeout_ms);
+        const int result = pthread_mutex_timedlock(&handle, &ts);
+    #endif
+        if (result == 0)
+            return true;
+        assert( result == ETIMEDOUT );
         return false;
     }
 

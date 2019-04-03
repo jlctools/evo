@@ -1,9 +1,9 @@
 // Evo C++ Library
-/* Copyright 2018 Justin Crowell
+/* Copyright 2019 Justin Crowell
 Distributed under the BSD 2-Clause License -- see included file LICENSE.txt for details.
 */
 ///////////////////////////////////////////////////////////////////////////////
-/** \file pair.h Evo Pair. */
+/** \file pair.h Evo Pair class. */
 #pragma once
 #ifndef INCL_evo_pair_h
 #define INCL_evo_pair_h
@@ -21,8 +21,12 @@ namespace evo {
  - Access first item directly, or with a() or key()
  - Access second item directly, or with b() or value()
  .
- \tparam  TA  First (key) type
- \tparam  TB  Second (value) type
+
+C++11:
+ - Move semantics
+
+\tparam  TA  First (key) type
+\tparam  TB  Second (value) type
 */
 template<class TA, class TB>
 struct Pair {
@@ -73,6 +77,24 @@ struct Pair {
         second = src.second;
         return *this;
     }
+
+#if defined(EVO_CPP11)
+    /** Move constructor (C++11).
+     \param  src  Source to move
+    */
+    Pair(This&& src) : first(std::move(src.first)), second(std::move(src.second)) {
+    }
+
+    /** Move assignment operator (C++11).
+     \param  src  Source to move
+     \return      This
+    */
+    This& operator=(This&& src) {
+        first = std::move(src.first);
+        second = std::move(src.second);
+        return *this;
+    }
+#endif
 
     /** Get first value (const).
      \return  First value

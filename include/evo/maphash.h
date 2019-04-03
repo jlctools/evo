@@ -1,5 +1,5 @@
 // Evo C++ Library
-/* Copyright 2018 Justin Crowell
+/* Copyright 2019 Justin Crowell
 Distributed under the BSD 2-Clause License -- see included file LICENSE.txt for details.
 */
 ///////////////////////////////////////////////////////////////////////////////
@@ -38,7 +38,42 @@ namespace evo {
 \tparam  TKey    %Map key type
 \tparam  TValue  %Map value type
 \tparam  THash   %Hash type to use -- default: CompareHash
-\tparam  TSize   %Size type to use for size values (must be unsigned integer) -- default: SizeT
+\tparam  TSize   %Size type to use for size values (must be unsigned integer) -- default: `SizeT`
+
+\par Features
+
+ - Similar to STL `unordered_map`, implemented with a hash table
+ - Values are always unique (no duplicate keys)
+ - Items are each stored as a Pair
+ - This uses PtrList internally
+   - No memory allocated by new empty map
+   - \ref Sharing "Sharing" makes copying efficient
+ .
+
+C++11:
+ - Range-based for loop -- see \ref StlCompatibility
+   \code
+    MapHash<int,int> map;
+    for (auto& item : map.asconst()) {
+        item.key();
+        item.value();
+    }
+   \endcode
+ - Initialization lists
+   \code
+    MapHash<int,int> map = {{3, 300}, {1, 100}, {2, 200}};
+    MapHash<String,String> strmap = {{"key1", "foo"}, {"key2", "bar"}};
+   \endcode
+ - Move semantics
+
+\par Comparison/Hash
+
+This type is used for both hashing and comparing keys. You can leave the default comparison/hash type (CompareHash) or specify an alternative.
+
+ - CompareHash
+ .
+
+See: \ref PrimitivesContainers "Primitives & Containers"
 
 \par Iterators
 
@@ -48,15 +83,25 @@ namespace evo {
 
 \b Caution: Modifying or resizing a map will shift or invalidate existing iterators using it.
 
+\par Constructor
+
+ - MapHash()
+ - MapHash(const MapBaseType&)
+ - MapHash(const ThisType&)
+ - MapHash(const std::initializer_list<InitPair>&) [C++11]
+ - MapHash(ThisType&&) [C++11]
+
 \par Read Access
 
+ - asconst()
  - size()
    - null(), empty()
    - capacity()
    - shared()
    - ordered()
  - contains(const Key&) const
-   - contains(const Key&, const Value&) const
+ - cbegin(), cend()
+   - begin() const, end() const
  - find()
    - iter()
  - operator==()
@@ -70,8 +115,9 @@ namespace evo {
    - capacity(Size)
    - capacitymin()
    - unshare()
+ - begin(), end()
+ - iterM()
  - findM()
-   - iterM()
    - getitem()
    - get()
    - operator[]()
@@ -82,11 +128,18 @@ namespace evo {
    - clear()
    - operator=(const MapBaseType&)
    - operator=(const ThisType&)
+   - operator=(ThisType&&) [C++11]
  - add(const Key&,const Value&,bool)
    - add(const Item&,bool)
    - add(const MapBaseType&,bool)
  - remove(const Key&)
    - remove(typename MapBaseType::IterM&,IteratorDir)
+ .
+
+\par Helpers
+
+ - map_contains()
+ - lookupsub()
  .
 
 \par Example
@@ -196,8 +249,48 @@ public:
     /** Copy constructor.
      \param  src  Source to copy
     */
-    MapHash(const ThisType& src) : Map<TKey,TValue,TSize>(false)
-        { set(src); }
+    MapHash(const ThisType& src) : Map<TKey,TValue,TSize>(false), buckets_(src.buckets_), data_(src.data_) {
+        size_ = src.size_;
+    }
+
+#if defined(EVO_CPP11)
+    using typename MapBaseType::InitPair;   ///< Used with initializer_list constructor (C++11)
+
+    /** Sequence constructor (C++11).
+     \param  init  Initializer list, passed as comma-separated values in braces `{ }`
+    */
+    MapHash(const std::initializer_list<InitPair>& init) : MapHash() {
+        assert( init.size() < IntegerT<Size>::MAX );
+        capacitymin((Size)init.size());
+        for (const auto& item : init)
+            add(item.key, item.value);
+    }
+
+    /** Move constructor (C++11).
+     \param  src  Source to move
+    */
+    MapHash(ThisType&& src) : Map<TKey,TValue,TSize>(false), buckets_(std::move(src.buckets_)), data_(std::move(src.data_)) {
+        MapBaseType::size_ = src.MapBaseType::size_;
+        src.MapBaseType::size_ = 0;
+    }
+
+    /** Move assignment operator (C++11).
+     \param  src  Source to move
+     \return      This
+    */
+    ThisType& operator=(ThisType&& src) {
+        buckets_ = std::move(src.buckets_);
+        data_ = std::move(src.data_);
+        MapBaseType::size_ = src.MapBaseType::size_;
+        src.MapBaseType::size_ = 0;
+        return *this;
+    }
+#endif
+
+    /** \copydoc List::asconst() */
+    const ThisType& asconst() const {
+        return *this;
+    }
 
     // SET
 
@@ -255,13 +348,32 @@ public:
 
     // FIND
 
+    /** \copydoc List::cbegin() */
+    Iter cbegin() const
+        { return Iter(*this); }
+
+    /** \copydoc List::cend() */
+    Iter cend() const
+        { return Iter(); }
+
+    /** \copydoc List::begin() */
+    IterM begin()
+        { return IterM(*this); }
+
+    /** \copydoc List::begin() const */
+    Iter begin() const
+        { return Iter(*this); }
+
+    /** \copydoc List::end() */
+    IterM end()
+        { return IterM(); }
+
+    /** \copydoc List::end() const */
+    Iter end() const
+        { return Iter(); }
+
     bool contains(const Key& key) const
         { return (find(key) != NULL); }
-
-    bool contains(const Key& key, const Value& value) const {
-        const Value* item_value = find(key);
-        return (item_value != NULL && *item_value == value);
-    }
 
     const Value* find(const Key& key) const {
         if (size_ > 0) {
@@ -553,38 +665,6 @@ public:
         return *this;
     }
 
-    // MOVE
-
-    using MapBaseType::move;
-
-    /** Move given item from another map.
-     - This has the same effect as doing an add() then remove() on src map
-     .
-     \param  src  Source iterator in other map to move from
-     \param  dir  Direction to move src iterator to next item, iterNONE for end position
-     \return      This
-    */
-    ThisType& move(IterM& src, IteratorDir dir=iterNONE) {
-        if (src) {
-            ThisType& srcparent = src.getParent();
-            if (&srcparent != this) {
-                add((Item&)*src);
-                srcparent.remove(src, dir);
-            }
-        }
-        return *this;
-    }
-
-    /** Move given item from another map.
-     - This has the same effect as doing an add() then remove() on src map
-     - Note: Though src iterator as passed as const reference, it's still set to end position to maintain data integrity
-     .
-     \param  src  Source iterator in other map to move from
-     \return      This
-    */
-    ThisType& move(const IterM& src)
-        { return move((IterM&)src, iterNONE); }
-
     // REMOVE
 
     bool remove(const Key& key) {
@@ -772,15 +852,9 @@ private:
         Item        first;
         Array<Item> others;
 
-        Bucket()
-            { }
-        Bucket(const Bucket& src) : first(src.first), others(src.others)
-            { }
-
-        Bucket& operator=(const Bucket& src) {
-            first  = src.first;
-            others = src.others;
-            return *this;
+        Bucket() {
+        }
+        Bucket(const Bucket& src) : first(src.first), others(src.others) {
         }
 
         // Search "others" for key, using compare, set index (insertion point if not found)
@@ -803,6 +877,10 @@ private:
             index = left;
             return NULL;
         }
+
+    private:
+        // Copying is done via copy constructor
+        Bucket& operator=(const Bucket&) EVO_ONCPP11(= delete);
     };
 
     typedef PtrList<Bucket,Size> Buckets;
@@ -814,12 +892,31 @@ private:
         Size sizemask;
         Size threshold;
 
-        Data() : sizemask(0), threshold(0)
-            { }
-        Data(const THash& hash) : THash(hash), sizemask(0), threshold(0)
-            { }
-        Data(const Data& data) : Hash(data), sizemask(data.sizemask), threshold(data.threshold)
-            { }
+        Data() : sizemask(0), threshold(0) {
+        }
+        Data(const Data& data) : Hash(data), sizemask(data.sizemask), threshold(data.threshold) {
+        }
+        Data& operator=(const Data& data) {
+            THash::operator=(data);
+            sizemask = data.sizemask;
+            threshold = data.threshold;
+            return *this;
+        }
+
+    #if defined(EVO_CPP11)
+        Data(Data&& data) : THash(std::move((THash&&)data)), sizemask(data.sizemask), threshold(data.threshold) {
+            data.sizemask = 0;
+            data.threshold = 0;
+        }
+        Data& operator=(Data&& data) {
+            THash::operator=(std::move((THash&&)data));
+            sizemask = data.sizemask;
+            threshold = data.threshold;
+            data.sizemask = 0;
+            data.threshold = 0;
+            return *this;
+        }
+    #endif
     };
 
     Data data_;

@@ -1,5 +1,5 @@
 // Evo C++ Library
-/* Copyright 2018 Justin Crowell
+/* Copyright 2019 Justin Crowell
 Distributed under the BSD 2-Clause License -- see included file LICENSE.txt for details.
 */
 ///////////////////////////////////////////////////////////////////////////////
@@ -9,31 +9,15 @@ Distributed under the BSD 2-Clause License -- see included file LICENSE.txt for 
 #define INCL_evo_thread_h
 
 #include "impl/systhread.h"
+#include "thread_inert.h"
 #include "atomic.h"
 #include "lock.h"
+#include "type.h"
 #if defined(EVO_CPP11)
     #include <functional>
 #endif
 
 ///////////////////////////////////////////////////////////////////////////////
-
-/** Mark a variable for thread-local storage.
- - With C++11 this is the same as the "thread_local" keyword, but this also works on older compilers
- - Older compilers may only support POD or basic types as thread-local, depending on compiler version
- .
-
-\par Example
-\code
-EVO_THREAD_LOCAL static int var;
-\endcode
-*/
-#if defined(EVO_CPP11) || defined(DOXYGEN)
-    #define EVO_THREAD_LOCAL thread_local
-#elif defined(EVO_MSVC_YEAR)
-    #define EVO_THREAD_LOCAL __declspec(thread)
-#else
-    #define EVO_THREAD_LOCAL __thread
-#endif
 
 // Disable certain MSVC warnings for this file, if !EVO_CPP11
 #if defined(_MSC_VER) && !defined(EVO_CPP11)
@@ -49,8 +33,18 @@ Evo threads and atomics
 
 ///////////////////////////////////////////////////////////////////////////////
 
+/** Get current thread ID from system.
+ - \#include <evo/thread.h>
+ .
+ \return  Current thread ID
+*/
+inline ulong get_tid()
+    { return SysThread::id(); }
+
+///////////////////////////////////////////////////////////////////////////////
+
 /** Spin-lock for thread synchronization.
- - This works like Mutex but doesn't sleep while waiting for a lock (busy wait)
+ - This works like Mutex but does a busy wait (no sleep) while waiting for a lock
  - This consumes CPU and can be more efficient than Mutex under certain conditions, where wasting CPU is acceptable
    - This also supports a less busy wait with SpinLock::SleepLock
  - %Thread safe
@@ -102,9 +96,10 @@ private:
  - This is a low-level interface with public members
  - %Thread safe
  - Linking:
-   - Linux/Unix: -pthread
-   - Cygwin: -lpthread
-   - Windows: Usually multithreaded by default -- MSVC project settings: C/C++ -> Code Generation -> Runtime Library
+   - Linux/Unix: `-pthread`
+   - Cygwin: `-lpthread`
+   - Windows: Usually multithreaded by default -- MSVC project settings: `C/C++ -> Code Generation -> Runtime Library`
+ - See also: MutexInert
 */
 struct Mutex : public SysMutex {
     typedef SmartLock<Mutex> Lock;      ///< Lock object type -- see SmartLock
@@ -130,9 +125,9 @@ private:
    .
  - %Thread safe
  - Linking:
-   - Linux/Unix: -pthread
-   - Cygwin: -lpthread
-   - Windows: Usually multithreaded by default -- MSVC project settings: C/C++ -> Code Generation -> Runtime Library
+   - Linux/Unix: `-pthread`
+   - Cygwin: `-lpthread`
+   - Windows: Usually multithreaded by default -- MSVC project settings: `C/C++ -> Code Generation -> Runtime Library`
 */
 struct MutexRW {
     typedef SmartLock<MutexRW>     Lock;          ///< Write Lock object type, general Mutex interface (Mutex::Lock will also work) -- see SmartLock
@@ -151,12 +146,25 @@ struct MutexRW {
     /** Try to Write-Lock mutex without blocking.
      - This allows polling for a write-lock without blocking
      - If current thread already has a lock, whether this succeeds is platform dependent -- some platforms (Windows) allow nested locks, others don't
-     - \b Caution: Polling with this can starve (never lock) under load (constant read/write locks)
+     - \b Caution: Polling with this can starve (never lock) under high load (constant read/write locks)
      .
      \return  Whether successful, false if write-lock not available
     */
     bool trylock()
         { return write_mutex_.trylock(); }
+
+    /** Try to Write-Lock mutex with a timeout.
+     - This allows polling for a write-lock until timeout
+     - If current thread already has a lock, whether this succeeds is platform dependent -- some platforms (Windows) allow nested locks, others don't
+     - OSX: This does a spin wait (which consumes CPU) since OSX doesn't support timeout on pthread mutex lock
+     - Windows: This does a spin wait (which consumes CPU) since Windows doesn't support timeout on Critical Section lock
+     - \b Caution: This can starve (never lock) in Windows or OSX under high load (constant locks)
+     .
+     \param  timeout_ms  Timeout in milliseconds
+     \return             Whether successful, false on timeout
+    */
+    bool trylock(ulong timeout_ms)
+        { return write_mutex_.trylock(timeout_ms); }
 
     /** Write-Lock mutex.
      - Must call unlock() after each lock(), otherwise results are undefined
@@ -174,7 +182,7 @@ struct MutexRW {
     /** Try to Read-Lock mutex without blocking.
      - This allows polling for a read-lock without blocking
      - If current thread already has a lock, whether this succeeds is platform dependent -- some platforms (Windows) allow nested locks, others don't
-     - \b Caution: Polling with this can starve (never lock) under load (constant read/write locks)
+     - \b Caution: Polling with this can starve (never lock) under high load (constant read/write locks)
      .
      \return  Whether successful, false if read-lock not available
     */
@@ -222,63 +230,15 @@ private:
 
 ///////////////////////////////////////////////////////////////////////////////
 
-/** Inert mutex used to disable thread synchronization.
- - Replace a mutex type with this to disable thread synchronization
- - This is useful with mutex type template parameters (policy based design)
- - Not thread safe -- All methods are no-ops
-*/
-struct MutexInert {
-    typedef SmartLockInert<MutexInert> Lock;            ///< Lock object type (inert) -- see SmartLockInert
-    typedef SmartLockInert<MutexInert> LockWrite;       ///< Write %Lock object type (inert) -- see SmartLockInert
-    typedef SmartLockInert<MutexInert> LockRead;        ///< Read %Lock object type (inert) -- see SmartLockInert
-    typedef SmartLockInert<MutexInert> SleepLock;       ///< Sleep-Lock object type (inert) -- see SmartLockInert
-
-    /** Try to lock (no-op).
-     \return  Always succeeds (returns true)
-    */
-    bool trylock()
-        { return true; }
-
-    /** %Lock object (no-op). */
-    void lock()
-        { }
-    
-    /** %Lock object (no-op).
-     - Arg is ignored
-    */
-    void sleeplock(ulong)
-        { }
-
-    /** Unlock object (no-op). */
-    void unlock()
-        { }
-
-    /** Try to read-lock (no-op).
-     \return  Always succeeds (returns true)
-    */
-    bool trylock_read()
-        { return true; }
-
-    /** Read-lock object (no-op). */
-    void lock_read()
-        { }
-
-    /** Un-read-lock object (no-op). */
-    void unlock_read()
-        { }
-};
-
-///////////////////////////////////////////////////////////////////////////////
-
 /** %Condition object for thread synchronization.
  - Used to make one or more threads sleep until a notification is signalled
  - This works with an associated mutex, which is created if needed
  - This is a low-level interface with public members
  - %Thread safe
  - Linking:
-   - Linux/Unix: -pthread
-   - Cygwin: -lpthread
-   - Windows: Usually multithreaded by default -- MSVC project settings: C/C++ -> Code Generation -> Runtime Library
+   - Linux/Unix: `-pthread`
+   - Cygwin: `-lpthread`
+   - Windows: Usually multithreaded by default -- MSVC project settings: `C/C++ -> Code Generation -> Runtime Library`
 */
 struct Condition {
     typedef SmartLock<Condition> Lock;      ///< Lock object type -- see SmartLock
@@ -300,8 +260,12 @@ struct Condition {
         { InitializeConditionVariable(&handle); }
 
     bool wait(ulong timeout_ms=Condition::INF, bool locked=true) {
-        if (!locked)
-            mutex->lock();
+        if (!locked) {
+            if (timeout_ms >= Condition::INF)
+                mutex->lock();
+            else
+                mutex->trylock(timeout_ms);
+        }
         return (SleepConditionVariableCS(&handle, &mutex->handle, timeout_ms) != 0);
     }
 
@@ -321,7 +285,7 @@ struct Condition {
      - This creates (and owns) a new default mutex to use
     */
     Condition() {
-        pthread_cond_init(&handle, NULL);
+        init();
         owned = false;
         mutex = new Mutex;
         owned = true;
@@ -333,39 +297,85 @@ struct Condition {
      .
      \param  mutex  Mutex to associate with
     */
-    Condition(Mutex& mutex) : mutex(&mutex), owned(false)
-        { pthread_cond_init(&handle, NULL); }
+    Condition(Mutex& mutex) : mutex(&mutex), owned(false) {
+        init();
+    }
 
     /** Wait for notification or timeout.
      - Either the associated mutex must already be locked, or set locked to false to lock here
      - Associated mutex is atomically unlocked during wait, and will be locked again when this returns
      - This may wake up early for no apparent reason, so actual state should be tracked with another variable
      - Waiting forever is usually not ideal, threads should wake periodically to check if cancelled
+     - When `locked=false`:
+       - This will try to lock with `timeout_ms`
+       - Windows & OSX: Trying to lock does a spin wait (which consumes CPU) -- to avoid this lock first then pass `locked=true`
      .
      \param  timeout_ms  Wait timeout in milliseconds, 0 for immediate (no wait), INF for indefinitely
      \param  locked      Whether to assume associated mutex is locked, false to lock it here
      \return             Whether condition was notified, false on error (timed out)
     */
     bool wait(ulong timeout_ms=Condition::INF, bool locked=true) {
-        if (!locked)
-            mutex->lock();
         if (timeout_ms >= Condition::INF) {
+            if (!locked)
+                mutex->lock();
             return (pthread_cond_wait(&handle, &mutex->handle) == 0);
         } else {
-            struct timespec tm;
-            SysLinux::set_timespec_ms(tm, timeout_ms);
-            return (pthread_cond_timedwait(&handle, &mutex->handle, &tm) == 0);
+            if (!locked)
+                mutex->trylock(timeout_ms);
+            // Clock choice should be consistent with init() below
+            struct timespec ts;
+            #if defined(_POSIX_TIMERS) && defined(CLOCK_REALTIME) && !defined(EVO_USE_GETTIMEOFDAY)
+                #if defined(CLOCK_MONOTONIC) && !defined(__APPLE__)
+                    ::clock_gettime(CLOCK_MONOTONIC, &ts);
+                #else
+                    ::clock_gettime(CLOCK_REALTIME, &ts);
+                #endif
+            #else
+            {
+                struct timeval tv;
+                ::gettimeofday(&tv, NULL);
+                SysLinux::set_timespec_tv(ts, tv);
+            }
+            #endif
+            SysLinux::add_timespec_ms(ts, timeout_ms);
+            return (pthread_cond_timedwait(&handle, &mutex->handle, &ts) == 0);
         }
     }
 
-    /** Notify and wake a waiting thread. */
+    /** Notify and wake a waiting thread.
+     - Mutex lock is not required, but ideally mutex should be locked for most consistent/predictable behavior
+     - See lock_notify()
+    */
     void notify()
         { pthread_cond_signal(&handle); }
 
-    /** Notify and wake all waiting threads. */
+    /** Notify and wake all waiting threads.
+     - Mutex lock is not required, but ideally mutex should be locked for most consistent/predictable behavior
+     - See lock_notify_all()
+    */
     void notify_all()
         { pthread_cond_broadcast(&handle); }
 
+private:
+    void init() {
+        // Clock choice should be consistent with wait() above
+    #if defined(_POSIX_TIMERS) && defined(CLOCK_REALTIME) && !defined(EVO_USE_GETTIMEOFDAY) && !defined(__APPLE__)
+        clockid_t id;
+        #if defined(CLOCK_MONOTONIC)
+            id = CLOCK_MONOTONIC;
+        #else
+            id = CLOCK_REALTIME;
+        #endif
+        pthread_condattr_t attr;
+        pthread_condattr_init(&attr);
+        pthread_condattr_setclock(&attr, id);
+        pthread_cond_init(&handle, &attr);
+    #else
+        pthread_cond_init(&handle, NULL);
+    #endif
+    }
+
+public:
 #endif
 
     /** Destructor. */
@@ -373,6 +383,40 @@ struct Condition {
         if (owned)
             delete mutex;
     }
+
+    /** Wait for notification.
+     - This calls wait() with `INF` timeout
+     - See notes for wait()
+     .
+     \param  locked  Whether to assume associated mutex is locked, false to lock it here
+     \return         Whether condition was notified, false on error (timed out)
+    */
+    bool wait_inf(bool locked=true) {
+        bool result = wait(Condition::INF, locked);
+        assert( result ); // should never timeout
+        return result;
+    }
+
+    /** Try to lock associated mutex, fail if already locked (non-blocking).
+     - On success, must call unlock() to unlock mutex
+     - Results are undefined if already locked by current thread
+     .
+     \return  Whether successful, false if lock failed because mutex is already locked
+    */
+    bool trylock()
+        { return mutex->trylock(); }
+
+    /** Try to lock associated mutex with a timeout.
+     - On success, must call unlock() to unlock mutex
+     - Results are undefined if already locked by current thread
+     - OSX: This does a spin wait (which consumes CPU) since OSX doesn't support timeout on pthread mutex lock
+     - Windows: This does a spin wait (which consumes CPU) since Windows doesn't support timeout on Critical Section lock
+     .
+     \param  timeout_ms  Timeout in milliseconds
+     \return             Whether successful, false on timeout
+    */
+    bool trylock(ulong timeout_ms)
+        { return mutex->trylock(timeout_ms); }
 
     /** Lock associated mutex.
      - Must call unlock() after each lock(), otherwise results are undefined
@@ -460,9 +504,9 @@ namespace impl {
    - Note that this (Thread) is the real base class for *all* Evo threads, while ThreadClass is the base class for class-based threads
  - See also ThreadScope<Thread> for creating a simple scoped thread, and ThreadGroup for creating a group of threads
  - Linking:
-   - Linux/Unix: -pthread
-   - Cygwin: -lpthread
-   - Windows: Usually multithreaded by default -- MSVC project settings: C/C++ -> Code Generation -> Runtime Library
+   - Linux/Unix: `-pthread`
+   - Cygwin: `-lpthread`
+   - Windows: Usually multithreaded by default -- MSVC project settings: `C/C++ -> Code Generation -> Runtime Library`
 
 \par Example
 
@@ -483,7 +527,7 @@ int main() {
 \endcode
 */
 struct Thread {
-#if defined(EVO_CPP11) || defined(DOXYGEN)
+#if defined(EVO_CPP11)
     typedef std::function<void (void*)> Func;   ///< %Thread function type -- with C++11 supports lambda/functor, otherwise just function pointer
 #else
     typedef void (*Func)(void*);                ///< %Thread function pointer
@@ -537,7 +581,9 @@ struct Thread {
         { return thread_impl_.handle; }
 
     /** Get whether thread is active (running).
-     \return  Whether active
+     - This gets whether the thread was started but hasn't been joined yet -- the thread may have terminated though
+     .
+     \return  Whether active, true if thread has started and hasn't been joined yet
     */
     bool thread_active() const
         { return thread_active_; }
@@ -628,9 +674,9 @@ private:
  - See Thread for function-based thread
  - See also ThreadScope for creating a simple scoped thread, and ThreadGroup for creating a group of threads
  - Linking:
-   - Linux/Unix: -pthread
-   - Cygwin: -lpthread
-   - Windows: Usually multithreaded by default -- MSVC project settings: C/C++ -> Code Generation -> Runtime Library
+   - Linux/Unix: `-pthread`
+   - Cygwin: `-lpthread`
+   - Windows: Usually multithreaded by default -- MSVC project settings: `C/C++ -> Code Generation -> Runtime Library`
 
 \par Example
 
@@ -670,7 +716,7 @@ struct ThreadClass : public Thread {
     */
     virtual ~ThreadClass() {
         if (thread_active_)
-            abort();    // Thread must be stopped first!
+            abort();    // Thread must be stopped/joined first!
     }
 
     /** %Set cancel flag to signal thread to stop, and wake thread via condition object.
@@ -748,9 +794,9 @@ private:
    - Supports a cancellation mechanism -- though the thread may ignore the cancel flag
    .
  - Linking:
-   - Linux/Unix: -pthread
-   - Cygwin: -lpthread
-   - Windows: Usually multithreaded by default -- MSVC project settings: C/C++ -> Code Generation -> Runtime Library
+   - Linux/Unix: `-pthread`
+   - Cygwin: `-lpthread`
+   - Windows: Usually multithreaded by default -- MSVC project settings: `C/C++ -> Code Generation -> Runtime Library`
  .
  \tparam  T  %Thread type: Thread for function-based thread (default), or type derived from ThreadClass for class-based thread
 
@@ -778,7 +824,7 @@ int main() {
 */
 template<class T=Thread>
 struct ThreadScope : public T {
-    typedef ThreadScope<T> This;
+    typedef ThreadScope<T> This;    ///< Current ThreadScope
 
     /** Constructor starts thread. */
     ThreadScope()
@@ -850,9 +896,9 @@ private:
    - May be detached to run in the background
    .
  - Linking:
-   - Linux/Unix: -pthread
-   - Cygwin: -lpthread
-   - Windows: Usually multithreaded by default -- MSVC project settings: C/C++ -> Code Generation -> Runtime Library
+   - Linux/Unix: `-pthread`
+   - Cygwin: `-lpthread`
+   - Windows: Usually multithreaded by default -- MSVC project settings: `C/C++ -> Code Generation -> Runtime Library`
  .
 
 \par Example -- Function-Based Thread
@@ -991,9 +1037,9 @@ namespace impl {
     .
  - %Thread safety depends on mutex type (M) -- default is MutexInert (not thread safe) as this isn't usually shared between threads
  - Linking:
-   - Linux/Unix: -pthread
-   - Cygwin: -lpthread
-   - Windows: Usually multithreaded by default -- MSVC project settings: C/C++ -> Code Generation -> Runtime Library
+   - Linux/Unix: `-pthread`
+   - Cygwin: `-lpthread`
+   - Windows: Usually multithreaded by default -- MSVC project settings: `C/C++ -> Code Generation -> Runtime Library`
  .
  \tparam  T  %Thread type to use, Thread (function-based thread) or class derived from ThreadClass (class-based thread)
  \tparam  S  Shared state type to use, usually contains a Mutex or Condition for synchronization, defaults to T::SharedState

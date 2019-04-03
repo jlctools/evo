@@ -1,5 +1,5 @@
 // Evo C++ Library
-/* Copyright 2018 Justin Crowell
+/* Copyright 2019 Justin Crowell
 Distributed under the BSD 2-Clause License -- see included file LICENSE.txt for details.
 */
 ///////////////////////////////////////////////////////////////////////////////
@@ -9,7 +9,9 @@ Distributed under the BSD 2-Clause License -- see included file LICENSE.txt for 
 #define INCL_evo_alg_h
 
 namespace evo {
-/** \addtogroup EvoAlgs */
+/** \addtogroup EvoAlgs
+Evo general algorithm helpers
+*/
 //@{
 
 ///////////////////////////////////////////////////////////////////////////////

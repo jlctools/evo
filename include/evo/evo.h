@@ -1,5 +1,5 @@
 // Evo C++ Library
-/* Copyright 2018 Justin Crowell
+/* Copyright 2019 Justin Crowell
 Distributed under the BSD 2-Clause License -- see included file LICENSE.txt for details.
 */
 ///////////////////////////////////////////////////////////////////////////////
@@ -26,8 +26,10 @@ It covers:
  - core types, strings, and containers
  - string tokenization and parsing
  - file/pipe/socket streams and formatting
+ - async I/O and server tools
+ - logging and command-line tools
  - threads and atomics
- - C++03 and C++11 (and newer)
+ - C++03, C++11, and newer
  .
 
 Inspired by modern languages like [Python](https://www.python.org) and [D](https://dlang.org), Evo is the result of many years of lessons learned from writing (and rewriting) high-performance,
@@ -36,7 +38,7 @@ object oriented C++ server code. Evo aims to make C++ easier and more powerful w
  - \ref WhatsNew "What's New?"
  - \ref DesignGoals "Design Goals"
  - \ref LicenseCredits "License and Credits"
- - \ref CppCompilers "C++ Compilers"
+ - \ref CppCompilers "C++ Compilers & Optimization"
  .
 
 <table border="0"><tr><td valign="top">
@@ -51,8 +53,10 @@ object oriented C++ server code. Evo aims to make C++ easier and more powerful w
  - \ref PrimitivesContainers "Primitives & Containers"
  - \ref EnumConversion "Enum Conversion"
  - \ref Streams "I/O Streams & Sockets"
+ - \ref Async "Asynchronous I/O" (_Alpha_)
  - \ref Threads "Threads"
- - \ref Metaprogramming "Metaprogramming"
+ - \ref Metaprogramming "Metaprogramming & Macros"
+ - \ref SmartQuoting "Smart Quoting"
  - \ref Unicode "Unicode"
  - \ref StlCompatibility "STL Compatibility"
  .
@@ -68,7 +72,28 @@ object oriented C++ server code. Evo aims to make C++ easier and more powerful w
  - \ref StringCustomConversion "Advanced: Custom String Conversion/Formatting"
  - \ref StringStreamCommon "Advanced: Common Stream/String Interface"
  .
+ - \ref FullServer "Full Server Example"
+ .
 </td><td valign="top">
+
+\par Tools
+
+ - \link CommandLineT CommandLine\endlink
+ - Logger, LoggerConsole, LoggerPtr
+   - EVO_LOG_ALERT(), EVO_LOG_ERROR(), EVO_LOG_WARN()
+   - EVO_LOG_INFO(), EVO_LOG_DEBUG(), EVO_LOG_DEBUG_LOW()
+ - FilePath
+ - Directory
+ - Signal
+ - Benchmark
+ .
+ - get_pid(), get_tid()
+ - get_cwd(), get_abspath(), set_cwd()
+ - daemonize()
+ .
+ - Cortex, ModuleBase
+ .
+
 </td></tr><tr><td valign="top">
 
 \par Primitives
@@ -87,6 +112,7 @@ object oriented C++ server code. Evo aims to make C++ easier and more powerful w
  - Pair
  - SafeBool
  - StringInt, StringFlt
+ - \link ValNull\endlink
  .
 
 </td><td valign="top">
@@ -94,7 +120,7 @@ object oriented C++ server code. Evo aims to make C++ easier and more powerful w
 \par Containers
 
  - Array, List, SubList
-   - \link BitArray\endlink, \link BitArraySubset\endlink
+   - \link BitArrayT BitArray\endlink, \link BitArraySubsetT BitArraySubset\endlink
    - PtrList
  - String, SubString, \link evo::StringBase StringBase\endlink
    - UnicodeString
@@ -105,21 +131,28 @@ object oriented C++ server code. Evo aims to make C++ easier and more powerful w
  - Map
    - MapList, \link StrMapList\endlink
    - MapHash, \link StrHash\endlink
-   - lookupsub()
+   - lookupsub(), map_contains()
+   - EVO_MAP_FIELDS(), EVO_MAP_FIELDS_KEY()
    .
+ - Var
+ - BufferQueue
  .
 
  - Compare, CompareR, CompareI, CompareIR
  - CompareHash
  - fixed_array_size(), EVO_FIXED_ARRAY_SIZE()
+ - is_null()
  .
 
 </td><td valign="top">
 
 \par Enum Helpers
 
- - EVO_ENUM_MAP(), EVO_ENUM_CLASS_MAP()
- - EVO_ENUM_MAP_PREFIXED()
+ - EVO_ENUM_MAP(), EVO_ENUM_MAP_PREFIXED()
+   - EVO_ENUM_REMAP(), EVO_ENUM_REMAP_PREFIXED()
+ - EVO_ENUM_CLASS_MAP()
+   - EVO_ENUM_CLASS_REMAP()
+ - EnumIterator, EnumMapIterator
  .
 
 \par String Tokenizers
@@ -163,8 +196,11 @@ object oriented C++ server code. Evo aims to make C++ easier and more powerful w
 
 \par Asynchronous I/O
 
-Coming soon...
+_Alpha: Work In Progress_
 
+ - \link async::MemcachedClient MemcachedClient\endlink, \link async::MemcachedServerHandlerBase MemcachedServerHandlerBase\endlink
+ - AsyncClient, AsyncServer
+ .
 </td></tr><tr><td valign="top">
 
 \par Threads
@@ -180,12 +216,22 @@ Coming soon...
  - Atomic
    - AtomicFlag
    - AtomicPtr
+   - AtomicBufferQueue
  .
  </td><td valign="top">
 
-\par Time
+\par Events
 
- - Timer
+ - EventQueue, Event, EventLambda
+ - EventThreadPool
+ .
+
+\par Date/Time
+
+ - DateTime
+ - Date, TimeOfDay
+ .
+ - \link Timer\endlink, \link TimerCpu\endlink
  - sleepms(), sleepus(), sleepns()
  .
 </td><td valign="top">
@@ -205,6 +251,7 @@ Coming soon...
  - EVO_THROW()
    - EVO_THROW_ERR(), EVO_THROW_ERR_CHECK()
  - EVO_CATCH(), EVO_CATCH_MT()
+ - \ref EVO_NOEXCEPT
  .
 
 </td></tr></table>
@@ -213,7 +260,7 @@ Coming soon...
 
 BSD 2-Clause License
 
-Copyright 2018 Justin Crowell
+Copyright 2019 Justin Crowell
 
 Redistribution and use in source and binary forms, with or without modification, are permitted provided that the
 following conditions are met:
@@ -239,6 +286,65 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 Evo change history.
 
+\par Version 0.5 - Apr 2019
+ - Async I/O:
+   - Add \link async::MemcachedClient MemcachedClient\endlink, \link async::MemcachedServerHandlerBase MemcachedServerHandlerBase\endlink
+   - Add AsyncClient, AsyncServer
+   - Add EventThreadPool, EventQueue, Event
+ - Tools:
+   - Add \link CommandLineT CommandLine\endlink processing
+   - Add Cortex and ModuleBase
+   - Add Logger, LoggerConsole, LoggerPtr
+   - Add FilePath and Directory classes
+     - Add get_cwd(), get_abspath(), set_cwd()
+     - Move File class to `file.h`
+   - Add Signal, daemonize()
+ - Date/Time:
+   - Add DateTime, Date, TimeOfDay, TimeZoneOffset classes
+   - Add \link TimerCpu\endlink, Benchmark
+     - \link Timer\endlink internal refactoring to support nanosecond precision and CPU time
+     - Update \link Timer\endlink to use monotonic clock when available
+ - Strings:
+   - Add FmtString and FmtStringWrap string/stream formatting
+   - Add `token*()`, `findany*()`, `find*word*()` methods to String and SubString
+   - Add String `findreplace()` methods
+   - Add `strip2*()` and `strip*_newlines()` methods to String and SubString
+   - Add `addnew()` and `add()` methods to StringInt
+ - Misc containers:
+   - Add Var class for general variable types and structures
+   - Add `asconst()`, `begin()`, `end()`, `cbegin()`, `cend()` to Evo containers
+   - Add IsNullable and is_null()
+   - Add List methods: `addmin()`, `firstM()`, `lastM()`, `advFirst()`, `advLast()`
+   - Add mutable `value()` and `operator*()` methods in Nullable
+ - Synchronization:
+   - Add Mutex::trylock() with timeout
+   - Add Condition::trylock()
+   - Condition::wait() now uses trylock() with timeout to lock
+ - Enum Conversion:
+   - Add enum helpers for unsorted enum values: EVO_ENUM_REMAP(), EVO_ENUM_REMAP_PREFIXED(), EVO_ENUM_CLASS_REMAP()
+   - Add EnumIterator and `Iter` type to types created by helpers like EVO_ENUM_MAP()
+   - Add enum int conversion methods
+   - Moved enum macros from substring.h to enum.h
+   - See \ref EnumConversion
+ - C++11:
+   - Add C++11 features to Evo containers: range-based for loop, initializer lists, move semantics
+   - Add C++11 UTF-16 string iteral (`u` prefix) support to UnicodeString
+ .
+ - Add SSE optimizations, see \ref CppCompilers
+   - StrTok and related tokenizer refinements and optimizations, especially with \ref SmartQuoting
+ - Add ConsoleNotMT
+ .
+ - Add advanced macros, see \ref Metaprogramming
+   - Add Compiler Helpers in \ref Metaprogramming
+ - Add \ref EVO_NOEXCEPT and \ref EVO_VERSION_STRING
+ - Add NewlineValue for recognizing and storing default vs specific newline types
+ .
+ - Updated MSVC compiler detection for MSVC 2017 15.9
+ - Bug fix: BitArrayT::Iter doesn't find first bit with small array size
+ - Bug fix: BitArrayT edge case in: `store()`, `setbits()`, `countbits()`, `checkall()`, `checkany()`, `toggle_multi()`
+ - Fix maphash.h compiler errors in GCC 4.8
+ - Many documentation updates
+
 \par Version 0.4 - Oct 2018
  - Now using <a href="https://opensource.org/licenses/BSD-2-Clause">BSD 2-Clause License</a>
  - Add initial \ref Unicode support to String, add UnicodeString
@@ -246,7 +352,7 @@ Evo change history.
    - Replaced PREC_AUTO constant with \ref fPREC_AUTO
    - Stream interface tweaks, using void* instead of char*
  - Add String and SubString `find*()` methods for string searching
- - Add ConsoleMT and support for thread-safe (syncrhonized) I/O
+ - Add ConsoleMT and support for thread-safe (synchronized) I/O
  - Add \ref Threads and atomics support
  - Add Socket streams
  - Add Pair, now used with Map types
@@ -295,56 +401,82 @@ General design goals:
  - Advanced operations are supported, like writing directly to a string buffer
  - High performance, especially for critical systems like servers and game engines
  - Simple interfaces that are easy to understand and use, differentiate basic and advanced features
- - Headers-only library that's easy to integrate with projects
- - Good documentation and extensive unit test coverage
+ - Header-only library that's easy to integrate with projects
+ - Good and thorough documentation with examples
  - Structured naming to make related things naturally sort together -- ex: MapList, MapHash, \link evo::String::split split()\endlink, \link evo::String::splitr splitr()\endlink, \link evo::String::splitat splitat()\endlink
  - Support multiple platforms: Linux, Unix, MacOS, Windows, Cygwin
+ - Support C++03, C++11, and newer
+ - Tested with at least 99% code coverage
  .
-
 */
 
 ///////////////////////////////////////////////////////////////////////////////
 
 // NOTE: Compilers copied to README.txt (bottom)
-/** \page CppCompilers C++ Compilers
+/** \page CppCompilers C++ Compilers & Optimization
 
 Evo at least requires a C++03 (ideally C++11) compliant compiler. Without C++11, Evo uses some compiler specific features, most notably with threads and atomic operations.
 
+\par Optimization
+
+Evo uses optimizations that take advantage of SSE 4.2 and SSE 2 CPU instructions (via compiler intrinsics). These are mainly used for string scanning/parsing and bit manipulation.
+
+ - Most compilers enable at least SSE 2 instructions by default, which is supported by all x64 CPUs
+ - Evo follows the compiler options by default (using macros set by compiler) -- defaults are generally preferred, but you may fine-tune for more specific hardware
+   - Note that Evo uses SSE 4.2 by default when AVX or AVX2 is enabled with the compiler
+ - When fine tuning for best performance, testing and benchmarking is recommended as results may vary
+
+Notes for best performance:
+ - GCC & Clang
+   - Compile with `-msse4.2` to enable optimizations for SSE 4.2 instructions (if requiring a CPU with SSE 4.2 support is acceptable)
+   - You can also optimize further for current or specific hardware with `-march=` and `-tune=`
+   - See: https://gcc.gnu.org/onlinedocs/gcc/x86-Options.html
+   - Tools like valgrind may have issues with SSE 4.2 instructions, with errors like: Unknown instruction/opcode
+ - MSVC:
+   - `Code Generation` is configured under `C/C++` configuration for project, or with `/arch` option
+     - MSVC doesn't have an option to enable SSE 4.2 -- if needed enable this by defining `EVO_USE_SSE42` (before including Evo headers) (if requiring a CPU with SSE 4.2 support is acceptable)
+     - You can also enable Evo SSE 4.2 use by enabling AVX code generation (if requiring a CPU with AVX support is acceptable)
+   - See: https://docs.microsoft.com/en-us/cpp/build/reference/arch-minimum-cpu-architecture?view=vs-2017
+ .
+
+\par Testing
+
 Tested on the following systems and compilers:
 
-\par Ubuntu
+Ubuntu
  - 18.04: gcc 7.3.0, clang 6.0.0, valgrind 3.13.0 -- VM
  - 16.04: gcc 5.4.0, clang 3.8.0, valgrind 3.11.0 -- Intel Core i7
  - 14.04: gcc 4.8.4, clang 3.4.0, valgrind 3.10.1 -- VM
    - Also: gcc 4.6.4, gcc 4.7.3
 
-\par CentOS -- VM
- - 7.3: gcc 4.8.5, clang 3.4.2, valgrind 3.13.0
+CentOS -- VM
+ - 7.6: gcc 4.8.5, clang 3.4.2, valgrind 3.13.0
  - 6.10: gcc 4.4.7, clang 3.4.2
 
-\par FreeBSD -- VM
- - 11.1: clang 6.0.0 valgrind 3.10.1
+FreeBSD -- VM
+ - 12.0: clang 6.0.1 valgrind 3.10.1
 
-\par MacOS -- Intel Core i5
- - 10.13.6: Apple LLVM 10.0.0 (clang 1000-11.45.2)
+MacOS -- Intel Core i5
+ - 10.13.6: Apple LLVM 10.0.0 (clang 1000-10.44.4)
 
-\par Windows 10 -- Intel Core i7
- - <a href="https://www.visualstudio.com/vs/cplusplus/">MSVC</a> 2017 Community 15.8.5
+Windows 10 -- Intel Core i7
+ - <a href="https://www.visualstudio.com/vs/cplusplus/">MSVC</a> 2017 Community 15.9.7
  - MSVC 2015 Community, Update 3
 
-\par Windows 7 SP1 32-bit -- VM
+Windows 7 SP1 32-bit -- VM
  - MSVC 2013 Community, Update 5
  - <a href="https://www.cygwin.com/">cygwin 2.11.0</a>: gcc 7.3.0
 
 \par Notes
+
  - All tested systems are 64-bit, unless otherwise noted
  - Microsoft Visual C++:
    - Before 2015: <a href="https://msdn.microsoft.com/en-us/library/hh567368.aspx">Static var initialization is not thread-safe ("magic statics")</a>
    - 2013: Atomic or AtomicPtr with const template param causes release build compiler error
-   - Before 2012: <a href="https://msdn.microsoft.com/en-us/library/hh874894(v=vs.110).aspx">Atomics not supported</a>, but Evo will emulate atomics with a mutex
+   - Before 2012: <a href="https://msdn.microsoft.com/en-us/library/hh874894(v=vs.110).aspx">Atomics not supported</a>, but Evo will try to emulate atomics with a mutex (this may not work well)
  - Cygwin:
    - For C++11 (or newer), enable with the `gnu++` option variant to avoid compile errors, ex: `g++ -std=gnu++11`
- - With old GCC versions (such as 4.4), use option `-fno-strict-aliasing` to prevent lots of warnings and stability issues with release builds
+ - Older compilers (like gcc 4.4 or clang 3.4) should use `-fno-strict-aliasing` to avoid warnings and stability issues
 */
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -488,7 +620,7 @@ Containers like List and String use sharing:
    - `shared()` -- Get whether shared
    - `unshare()` -- If shared then make unshared, allocating a new buffer if needed -- calls unslice() (if present)
      - _Some containers only reference (i.e. don't own) data_ (ex: SubString), for these `unshare()` is a no-op and `shared()` always returns false
-   - Modifier methods end with an uppercase 'M' to distinguish them, call `unshare()` to make the internal buffer unshared and writable
+   - Modifier methods end with an uppercase 'M' to distinguish them, these effectively call `unshare()` to make the internal buffer unshared and writable
    .
  - Sharing is automatic, though being mindful of how "modifier" methods are used will improve performance
  - \b Caution: Sharing can impact thread safety, always make full (unshared) copies across separate threads
@@ -695,6 +827,8 @@ Primitives:
 Related:
  - SafeBool
  - StringInt, StringFlt
+ - \link ValNull\endlink
+ - is_null()
  .
 
 \par Containers
@@ -714,6 +848,7 @@ Evo containers:
  .
 
 All Evo containers implement these methods:
+ - `const This& asconst() const`
  - `bool null() const`
  - `bool empty() const`
  - `Size size() const`
@@ -723,6 +858,11 @@ All Evo containers implement these methods:
  - `This& unshare()`
  - `ulong hash(ulong seed=0) const`
  .
+
+Evo containers support C++11 features:
+ - Range-based for loops
+ - Initializer lists
+ - Move semantics and `std::move()`
 
 Types:
  - Array, List, SubList
@@ -737,6 +877,7 @@ Types:
    - MapList, \link StrMapList\endlink
    - MapHash, \link StrHash\endlink
    .
+ - Var
  .
 
 Related:
@@ -744,9 +885,10 @@ Related:
  - Pair
  - SubStringMapList
  - \link BitArraySubset\endlink
+ - is_null()
  .
 
-<i>Notes for item classes used with containers:</i> 
+<i>Notes for item classes used with containers:</i>
  - <b>%Exception Safety</b>
    - Item *destructor* must *never throw an exception*
    - Item *default constructor* and *copy constructor* must *never throw an exception*
@@ -786,10 +928,10 @@ Containers with ordering or sorting do comparisons with a comparison type that i
  - can hold state for advanced use, such as tracking stats
  - interface:
    - `int operator()(PassItem a, PassItem b) const`
- . 
+ .
 
 Standard comparison types:
- 
+
  - Compare, CompareR
  - CompareI, CompareIR
  .
@@ -801,7 +943,7 @@ otherwise collisions won't be handled correctly. Hashing types:
 
  - are specified via template param, and the compiler can optimize out (inline) the hash/comparison calls
  - implement `operator()()` to compare 2 items (`a` & `b`) in case of collisions and return an int: 0 if `a == b`, positive if `a > b`, negative if `a < b`
- - implement `hash()` method to hash a key/value, with a seed for chaining a previous hash method
+ - implement `hash()` method to compute a hash value for a key, with a seed for chaining a previous hash method
  - define a `PassItem` type (inheriting CompareBase) used for passing items to hash/compare
  - can hold state for advanced use, such as tracking stats
  - interface:
@@ -821,9 +963,9 @@ Standard hashing types:
 
 Evo has helpers for efficiently converting between strings and enums.
  - Enum string list is built at compile-time -- doesn't allocate memory
- - Lookups are fast -- binary search is used to find the enum string in an ordered list
- - This is done using EVO_ENUM_MAP_PREFIXED() or EVO_ENUM_CLASS_MAP() or SubStringMapList
- - \b Caution: This requires string values to be _pre-sorted_, and _no gaps_ in enum values
+ - Lookups are fast -- binary search is used to find the enum string in a pre-sorted list with SubStringMapList
+ - This is done using EVO_ENUM_MAP_PREFIXED() or EVO_ENUM_CLASS_MAP(), or a related variant
+ - \b Caution: This requires string values to be _pre-sorted_, and _no gaps_ between enum values
  .
 
 This example defines an enum, then uses the EVO_ENUM_MAP_PREFIXED() helper to create string mappings.
@@ -852,15 +994,59 @@ EVO_ENUM_MAP_PREFIXED(Color, c,
 );
 
 int main() {
-    Color     color_val = ColorEnum::get_enum("green");     // set to cGREEN
-    SubString color_str = ColorEnum::get_string(cGREEN);    // set to "green"
+    Color     color_val1 = ColorEnum::get_enum("green");    // set to cGREEN
+    Color     color_val2 = ColorEnum::get_enum(2);          // set to cGREEN
+    SubString color_str  = ColorEnum::get_string(cGREEN);   // set to "green"
+    int       color_num  = ColorEnum::get_int(cGREEN);      // set to 2
+    return 0;
+}
+\endcode
+
+\par Unsorted Enum Values
+
+This example is similar but uses an enum with unsorted values, which must be "remapped" to match the sorted string values.
+ - This is useful when the enum values must be in a specific order that doesn't match the pre-sorted strings
+ .
+
+\code
+#include <evo/substring.h>
+using namespace evo;
+
+enum Color {
+    cUNKNOWN = 0,   // Must be first
+    // Unsorted values
+    cRED,
+    cBLUE,
+    cGREEN,
+    cENUM_END       // Must be last
+};
+
+static const Color COLOR_REMAP[] = {
+    // Must match string order below
+    cBLUE,
+    cGREEN,
+    cRED
+};
+
+EVO_ENUM_REMAP_PREFIXED(Color, c, COLOR_REMAP,
+    // Must be sorted, and must match "remapped" enum values
+    "blue",
+    "green",
+    "red"
+);
+
+int main() {
+    Color     color_val1 = ColorEnum::get_enum("green");    // set to cGREEN
+    Color     color_val2 = ColorEnum::get_enum(2);          // set to cBLUE
+    SubString color_str  = ColorEnum::get_string(cGREEN);   // set to "green"
+    int       color_num  = ColorEnum::get_int(cGREEN);      // set to 3
     return 0;
 }
 \endcode
 
 \par Enum Class (C++11)
 
-This is simplied further with C++11 enum class, as long as the enum has the expected first/last guard values (`UNKNOWN`, `ENUM_END`).
+This is simplied further with C++11 enum class and EVO_ENUM_CLASS_MAP(), as long as the enum has the expected first/last guard values (`UNKNOWN`, `ENUM_END`).
 
 \code
 #include <evo/substring.h>
@@ -883,8 +1069,52 @@ EVO_ENUM_CLASS_MAP(Color,
 );
 
 int main() {
-    Color     color_val = ColorEnum::get_enum("green");         // set to Color::GREEN
-    SubString color_str = ColorEnum::get_string(Color::GREEN);  // set to "green"
+    Color     color_val1 = ColorEnum::get_enum("green");        // set to Color::GREEN
+    Color     color_val2 = ColorEnum::get_enum(2);              // set to Color::GREEN
+    SubString color_str  = ColorEnum::get_string(Color::GREEN); // set to "green"
+    int       color_num  = ColorEnum::get_int(Color::GREEN);    // set to 2
+    return 0;
+}
+\endcode
+
+\par Unsorted Enum Class Values (C++11)
+
+This example is similar but uses an enum class with unsorted values, which must be "remapped" to match the sorted string values.
+ - This is useful when the enum values must be in a specific order that doesn't match the pre-sorted strings
+ .
+
+\code
+#include <evo/substring.h>
+using namespace evo;
+
+enum class Color {
+    UNKNOWN = 0,    // Must be first
+    // Unsorted values
+    RED,
+    BLUE,
+    GREEN,
+    ENUM_END        // Must be last
+};
+
+static const Color COLOR_REMAP[] = {
+    // Must match string order below
+    Color::BLUE,
+    Color::GREEN,
+    Color::RED
+};
+
+EVO_ENUM_CLASS_REMAP(Color, COLOR_REMAP,
+    // Must be sorted, and must match "remapped" enum values
+    "blue",
+    "green",
+    "red"
+);
+
+int main() {
+    Color     color_val1 = ColorEnum::get_enum("green");        // set to Color::GREEN
+    Color     color_val2 = ColorEnum::get_enum(2);              // set to Color::BLUE
+    SubString color_str  = ColorEnum::get_string(Color::GREEN); // set to "green"
+    int       color_num  = ColorEnum::get_int(Color::GREEN);    // set to 3
     return 0;
 }
 \endcode
@@ -902,7 +1132,7 @@ Evo supports various types of I/O streams:
    - \link PipeInMT\endlink, \link PipeOutMT\endlink
  - Socket, SocketCast
 
-_Note: Streams use synchronous I/O_
+_Note: Streams use synchronous I/O_ -- see also: \ref Async "Asynchronous I/O"
 
 Base class for all stream exceptions: ExceptionStream
 
@@ -1015,6 +1245,503 @@ IoReader, IoWriter, and IoFilterChain use RawBuffer for low-level memory buffers
 
 ///////////////////////////////////////////////////////////////////////////////
 
+/** \page Async Asynchronous I/O
+
+Evo supports asynchronous I/O for high performance clients and servers:
+ - AsyncClient
+ - AsyncServer
+
+See also: \ref Streams "I/O Streams & Sockets"
+
+Evo async client and server classes are under namespace \ref async
+
+_Alpha: Evo Async I/O classes should be considerd a Work In Progress_
+
+\par Dependencies
+
+Evo async I/O requires libevent 2.0 or newer:
+ - Linux/Unix/Cygwin: Link with `-levent_core` or `-levent`
+   - To use libevent in multiple threads `#``define EVO_ASYNC_MULTI_THREAD 1` (before evo includes) and also link with `-levent_pthreads` -- _otherwise libevent is not thread safe, even with separate instances_
+ - Windows/MSVC: Link with `libevent_core.lib` in project configuration:
+   - `Configuration -> VC++ Directories -> Include Directories`
+   - `Configuration -> VC++ Directories -> Library Directories`
+   - `Configuration -> Linker -> Input -> Additional Dependencies`
+   - To use libevent in multiple threads `#``define EVO_ASYNC_MULTI_THREAD 1` (before evo includes) -- _otherwise libevent is not thread safe, even with separate instances_
+ .
+
+Near the beginning of a program using sockets, call Socket::sysinit() for best portability (required in Windows).
+
+\par Supported Protocols
+
+Evo async I/O is designed to support clients and servers using different protocol implementations.
+
+ - %Memcached: \link async::MemcachedClient MemcachedClient\endlink, \link async::MemcachedServer MemcachedServer\endlink
+ - Comming soon: %Redis, %HTTP
+ .
+
+\par Client
+
+The async client classes are named `ProtocolClient`, where `Protocol` is the protocol used.
+ - Create a `ProtocolClient` instance, and setup methods as needed:
+   - Call \link AsyncClient::set_timeout() client.set_timeout()\endlink to set socket timeouts (optional but recommended)
+   - Call \link AsyncClient::set_logger() client.set_logger()\endlink to enable logging
+ - Call a connect method like \link AsyncClient::connect_ip() connect_ip()\endlink -- this starts a new connection and returns immediately (non-blocking)
+ - Call client methods to make requests (methods are protocol specific) -- the requests are queued while the client is connecting (non-blocking)
+ - An event-loop is required to handle async events with one of the following approaches (examples are below):
+   - \b Blocking: Call \link AsyncClient::runlocal() client.runlocal()\endlink to run a local event-loop in the current thread. This blocks until all queued requests are processed and receive responses.
+     - Multiple clients can share the same event-loop, call \link AsyncClient::attach_to() client.attach_to()\endlink to attach client to another client-event loop
+       - When attached, only the root client (the one all others attached to) can run an event-loop
+     - This is useful for pipelining multiple requests then waiting for them to finish, and doing this with multiple clients allows some concurrency (in a single thread)
+     - Not thread safe -- Only one thread may call this at a time
+   - \b Non-blocking \b Background \b %Thread: _Not yet implemented_
+   - \b Non-blocking \b Server \b Back-end: Call \link AsyncClient::attach_to() client.attach_to()\endlink to attach client to a server event-loop
+     - This is done when a server is using the client to call another server -- one or more clients can share the server event-loop
+     - Not to share between threads -- Only safe to use from server callbacks or other clients using the same event-loop, i.e. the same server thread
+     - Works with multi-threaded server, as long as each server thread has it's own separate back-end client
+ .
+
+Client callback types:
+ - \link AsyncClient::OnConnect OnConnect\endlink
+ - \link AsyncClient::OnError OnError\endlink
+ - Some clients may provide `OnEvent`, which combines multiple events
+ - Other callbacks depend on the `Protocol`
+ .
+
+Here's an example using \link async::MemcachedClient MemcachedClient\endlink (Memcached protocol):
+
+\code
+#include <evo/async/memcached_client.h>
+#include <evo/io.h>
+using namespace evo;
+
+struct OnEvent : async::MemcachedClient::OnEvent {
+    void on_connect() {
+        con().out << "on_connect()" << NL;
+    }
+
+    void on_store(const SubString& key, Memcached::StoreResult result) {
+        con().out << "on_store() " << key << ' ' << Memcached::StoreResultEnum::get_string(result) << NL;
+    }
+
+    void on_get(const SubString& key, const SubString& value, uint32 flags) {
+        con().out << "on_get() " << key << " '" << value << "' " << flags << NL;
+    }
+};
+
+int main() {
+    Socket::sysinit();
+
+    const ushort MEMC_PORT = 11211;
+    OnEvent on_event;
+
+    async::MemcachedClient memc;
+    memc.set_on_connect(&on_event);
+    memc.connect_ip("127.0.0.1", MEMC_PORT);
+
+    memc.set("key1", "value1", on_event);
+    memc.set("key2", "value2", on_event);
+    memc.runlocal();
+
+    memc.get("key1", on_event);
+    memc.get("key2", on_event);
+    memc.runlocal();
+
+    return 0;
+}
+\endcode
+
+\par Server
+
+An async server class is created using a template class implementing a `PROTOCOL` and passing it a user-defined `HANDLER` class that implements the protocol event callbacks.
+ - You implement a `HANDLER` class with the event (callback) methods expected by the `PROTOCOL`
+   - `HANDLER` is usually a `struct` (public members) and must:
+     - inherit `ProtocolServerHandler` (where `Protocol` is the `PROTOCOL` name), which itself inherits AsyncServerHandler
+     - optionally define nested struct types: `Global` and/or `Shared` -- if not defined then defaults from AsyncServerHandler are used:
+       - `Global` normally stores configuration info that is read-only from requests, and is shared by all requests and all server threads
+         - This must be thread safe if server is multi-threaded (optional if single-threaded) -- read-only objects usually are thread-safe
+         - Any writable objects here should be lock-free -- any blocking (mutex locks, synchronous I/O, sleep, etc) should be avoided since the server is asynchronous
+         - Note that if you define `Global` then you must also define `Shared` since it references `Global` (see below)
+         - See AsyncServer::get_global() to access this from outside the handler code
+       - `Shared` stores state and back-end client connections, and is shared by all requests in the same thread
+         - This does not need to be thread safe since it's not shared between threads
+         - This is the place to put back-end clients used by request handlers (which must also be asynchronous)
+         - Required methods:
+           - `bool on_init(AsyncBase&, Global&)` -- called during startup before first connection is accepted
+             - Initialize back-end clients here -- they can be attached to the server event-loop here -- see examples below
+           - `void on_uninit()` -- called on shutdown after last connection is handled
+         - For simple cases this can inherit \link AsyncServerHandler::SimpleSharedBase SimpleSharedBase\endlink for a default implementation -- must pass `Global` type via template argument
+         - Note that this is not accessible from outside the handler code
+         - See also methods in AsyncServerHandler::Shared
+     - define a constructor that accepts `Global` and `Shared` references and stores them for request handler access, like this:
+       \code
+        Global& global;     // holds global data -- must be thread safe if server is multi-threaded
+        Shared& shared;     // holds shared data
+
+        HANDLER(Global& global, Shared& shared) : global(global), shared(shared) {
+        }
+       \endcode
+       - Note that you only need to store references you will actually use, so you can ignore any of these arguments if desired (but still must accept them)
+   - The server creates a `HANDLER` instance for each connection, and destroys it when the connection closes
+ - Next, define a server type to use (via typedef) by combining `Protocol` and `HANDLER` using: `ProtocolServer<HANDLER>::Server` (where `Protocol` is the protocol name)
+   - The above is a shortcut, the full definition looks like this: `AsyncServer< ProtocolServer<HANDLER> >` (where `Protocol` is the protocol name)
+ - Create a listener Socket to use with the server
+ - Instantiate the `server` and then:
+   - Call \link AsyncServer::get_global() server.get_global()\endlink and populate configuration info and state, as required
+   - Call \link AsyncServer::set_timeout() server.set_timeout()\endlink to set connection timeouts (optional but recommended)
+   - Call \link AsyncServer::set_logger() server.set_logger()\endlink to enable logging
+   - Call \link AsyncServer::run() server.run()\endlink to run the server event-loop and handle connections -- this won't return until the server is shut down
+   - A handler or another thread may call \link AsyncServer::shutdown() server.shutdown()\endlink to stop the server, causing the `server.run*()` event-loop method used to return
+ - Note that `Shared::on_init()` is the place to start back-end connections
+ .
+
+\dot
+digraph "AsyncServerType" {
+  edge [fontname="Helvetica",fontsize="10",labelfontname="Helvetica",labelfontsize="10"];
+  node [fontname="Helvetica",fontsize="10",shape=record];
+
+  AsyncServer [label="AsyncServer\<T\>" URL="\ref AsyncServer"];
+  ProtocolServer [label="ProtocolServer\<T\>"];
+  HANDLER [style=filled fillcolor=lightgrey];
+  ProtocolServerHandler;
+  AsyncServerHandler [URL="\ref AsyncServerHandler"];
+
+  AsyncServer -> ProtocolServer [style="dashed" label=" T"];
+  ProtocolServer -> HANDLER [style="dashed" label=" T"];
+  HANDLER -> ProtocolServerHandler;
+  ProtocolServerHandler -> AsyncServerHandler;
+
+  label="Async Server Type";
+  labelloc=top;
+}
+\enddot
+
+<center><i>Note: Dashed line shows template parameter type used for member variable, solid line shows inheritance</i></center>
+
+Here's an example using Memcached `PROTOCOL` to create a simple async single-threaded memcached server:
+\code
+#include <evo/async/memcached_server.h>
+#include <evo/maphash.h>
+using namespace evo;
+
+// Define a Handler type to handle memcached server request events
+struct Handler : async::MemcachedServerHandlerBase {
+    struct Shared : SimpleSharedBase<> {
+        StrHash map;
+    };
+
+    Shared& shared;
+
+    Handler(Global& global, Shared& shared) : shared(shared) {
+    }
+
+    StoreResult on_store(StoreParams& params, SubString& value, Command command, uint64 cas_id) {
+        switch(command) {
+            case cSET:
+                shared.map[params.key] = value;
+                break;
+            default:
+                send_error("Not supported");
+                return rtHANDLED;
+        }
+        return Memcached::srSTORED;
+    }
+
+    ResponseType on_get(const SubString& key, GetAdvParams* adv_params) {
+        const String* val = shared.map.find(key);
+        if (val != NULL)
+            send_value(key, *val);
+        return rtHANDLED;
+    }
+};
+
+// Create Memcached Server class using Handler
+typedef async::MemcachedServer<Handler>::Server Server;
+
+int main() {
+    Socket::sysinit();
+
+    const ushort PORT = 11211;
+    const ulong RD_TIMEOUT_MS = 5000;
+    const ulong WR_TIMEOUT_MS = 1000;
+
+    Socket listener;
+    try {
+        listener.listen_ip(PORT);
+    } EVO_CATCH(return 1)
+
+    Server server;
+    server.set_timeout(RD_TIMEOUT_MS, WR_TIMEOUT_MS);
+    server.run(listener);
+
+    return 0;
+}
+\endcode
+
+\par Server - Deferred Response
+
+If a server handler has to wait on something to get a response, this is called a _Deferred Response_.
+
+ - The server handler must not block so it creates a \link evo::AsyncServerHandler::DeferredContextT::ReplyBase ProtocolServer::DeferredReply\endlink and returns `rtDEFERRED` indicating the response will be sent later
+   - Only one `DeferredReply` is allowed per handler event -- for complex event chains you'll need to keep state in the event object and send the response at the end
+ - An instance of \link evo::AsyncServerHandler::DeferredContextT::ReplyBase ProtocolServer::DeferredReply\endlink is created to send this deferred reply, and is inherited by or associated with an external event object
+ - When the wait is over, one of the `DeferredReply::deferred_reply_*()` methods must be called to send a response, then the `DeferredReply` should be destroyed
+ - Example use case: A request requires a back-end server call to send a response (like a proxy server):
+   - Example chain of events:
+     - Server: Receive request 1
+       - Client: Send back-end request for request 1
+     - Client: Back-end response for request 1 (or client error occurred)
+       - Server: Send response for request 1
+ - Deferred responses on the same connection may be "out of order", which the framework handles with a queue so responses are always sent in the right order (matching request order)
+   - Simple example:
+     - Response 1: Deferred
+     - Response 2: Not deferred, sent but queued until response 1 is sent first
+     - Response 1: Sent, and response 2 from queue is then sent too
+ .
+
+Examples when deferred response is required:
+ - Proxy or mid-tier server calling another back-end server (as mentioned above)
+ - Processing in another thread, which may be expensive or use blocking I/O
+ .
+
+Here's a more complex example using Memcached `PROTOCOL` to create a simple async single-threaded memcached proxy server that uses a client to call a back-end memcached server:
+\code
+#include <evo/async/memcached.h>
+using namespace evo;
+
+// Define a Handler type to handle memcached server request events
+struct ServerHandler : public async::MemcachedServerHandlerBase {
+    // Global configuration for all requests
+    struct Global {
+        String proxy_address;
+        ushort proxy_port;
+
+        Global() : proxy_port(0) {
+        }
+    };
+
+    // Shared state per thread
+    struct Shared {
+        async::MemcachedClient client;  // client for calling back-end server
+
+        bool on_init(AsyncBase& server, Global& global) {
+            String tmp;
+            client.attach_to(server); // attach client to server event-loop
+            if (!client.connect_ip(global.proxy_address.cstr(tmp), global.proxy_port))
+                return false;
+            return true;
+        }
+    };
+
+    // Used to make a back-end request via client -- this either gets a response or an error occurs
+    // - After the response (or error) this deletes itself to cleanup
+    struct OnClientEvent : DeferredReply, async::MemcachedClient::OnEvent, async::MemcachedClient::OnError {
+        OnClientEvent(ServerHandler& parent, ulong id) : DeferredReply(parent, id) {
+        }
+
+        void on_store(const SubString& key, Memcached::StoreResult result) {
+            deferred_reply_store(result);
+            delete this; // deferred response complete, delete callback
+        }
+
+        void on_get(const SubString& key, const SubString& value, uint32 flags) {
+            deferred_reply_get(key, value, flags);
+        }
+
+        void on_get_end(const SubString&) {
+            deferred_reply_get_end();
+            delete this; // deferred response complete, delete callback
+        }
+
+        void on_error(AsyncError error) {
+            deferred_reply_error("Backend client error");
+            delete this; // deferred response aborted on error, delete callback
+        }
+    };
+
+    Global& global;
+    Shared& shared;
+
+    ServerHandler(Global& global, Shared& shared) : global(global), shared(shared) {
+    }
+
+    StoreResult on_store(StoreParams& params, SubString& value, Command command, uint64 cas_id) {
+        if (noreply) {
+            // Call back-end via client, no reply expected
+            shared.client.set(params.key, value, params.flags, params.expire);
+            return Memcached::srSTORED;
+        } else {
+            // Call back-end via client, response is deferred until client gets response (or an error occurs)
+            OnClientEvent* on_event = new OnClientEvent(*this, id);
+            if (!shared.client.set(params.key, value, params.flags, params.expire, NULL, on_event, on_event)) {
+                delete on_event;
+                send_error("Error calling back-end");
+                return rtHANDLED; // error sent, not deferred
+            }
+            return rtDEFERRED;
+        }
+    }
+
+    ResponseType on_get(const SubString& key, GetAdvParams* adv_params) {
+        // Call back-end via client, response is deferred until client gets response (or an error occurs)
+        OnClientEvent* on_event = new OnClientEvent(*this, id);
+        if (!shared.client.get(key, *on_event, on_event)) {
+            delete on_event;
+            send_error("Error calling back-end");
+            return rtHANDLED;
+        }
+        return rtDEFERRED;
+    }
+};
+
+// Create Memcached Server class using ServerHandler
+typedef async::MemcachedServer<ServerHandler>::Server Server;
+
+int main() {
+    Socket::sysinit();
+
+    const ushort PORT = 11210;
+    const String BACKEND_ADDRESS = "127.0.0.1";
+    const ushort BACKEND_PORT = 11211;
+    const ulong RD_TIMEOUT_MS = 5000;
+    const ulong WR_TIMEOUT_MS = 1000;
+
+    Socket listener;
+    try {
+        listener.listen_ip(PORT);
+    } EVO_CATCH(return 1)
+
+    Server server;
+    {
+        Server::Global& global = server.get_global();
+        global.proxy_address = BACKEND_ADDRESS;
+        global.proxy_port = BACKEND_PORT;
+    }
+    server.set_timeout(RD_TIMEOUT_MS, WR_TIMEOUT_MS);
+    server.run(listener);
+}
+\endcode
+
+\par Implementation Detail
+
+AsyncClient and AsyncServer both use an AsyncEventLoop to wait for I/O and call the appropriate callbacks.
+
+ - A number of AsyncClient objects can "attach" to an AsyncServer to share the same event-loop
+ - The event-loop itself uses a low-level API (libevent) to wait for I/O and trigger low-level callbacks, which call the appropriate higher-level callbacks
+ .
+
+\dot
+digraph "AsyncClientServer" {
+  edge [fontname="Helvetica",fontsize="10",labelfontname="Helvetica",labelfontsize="10"];
+  node [fontname="Helvetica",fontsize="10",shape=record];
+
+  AsyncClient [URL="\ref AsyncClient"];
+  AsyncServer [URL="\ref AsyncServer"];
+  AsyncBase   [URL="\ref AsyncBase"];
+  AsyncEventLoop [URL="\ref AsyncEventLoop"];
+  AsyncClient -> AsyncBase;
+  AsyncServer -> AsyncBase;
+  AsyncBase -> AsyncEventLoop [style="dashed" label=" evloop_"];
+
+  label="Async Client/Server";
+  labelloc=top;
+}
+\enddot
+
+\par Implementation Detail - Client
+
+Client request internal details:
+ - Sending a request:
+   - Write request to socket buffer
+   - Add request response info to queue (if reply expected)
+ - On socket read-ready (data received):
+   - Pop request response info from queue
+     - If queue is empty this is usually a protocol error and if so close socket (details depend on protocol)
+   - Async wait for more data if needed (continue on next socket read ready)
+   - Read request response from socket buffer
+     - On error, invoke response info `on_error` callback (if not null) then close socket
+   - Invoke client callback for response
+
+\par Implementation Detail - Server
+
+When a server accepts an incoming connection:
+ - An internal `Connection` object is created to represent the client connection, which has:
+   - a `ProtocolServer` instance that receives socket events for this connection and implements the protocol layer:
+     - this has an instance of the server-defined `HANDLER` which implements the protocol events and sends responses back to the connected client
+     - the `HANDLER` has an instance of \link evo::AsyncServerReplyT AsyncServerReply\endlink (via inheritance)
+   - a \link evo::AsyncServerHandler::DeferredContextT HANDLER::DeferredContext\endlink instance for sending deferred responses
+     - this has a pending deferred response reference count and a pointer to the server-defined `HANDLER` for sending deferred responses, which is set to `NULL` when the connection is closed
+     - this is destroyed when the connection is closed and when no more deferred responses are in progress
+     - more on deferred responses below
+   - a `HANDLER` instance with event implementations, which has an \link AsyncServerReply\endlink instance (via inheritance) for sending responses
+     - a `HANDLER` event creates a \link evo::AsyncServerHandler::DeferredContextT::ReplyBase HANDLER::DeferredReply\endlink to make a deferred response (more on this below)
+ - The `Connection` object is destroyed when the connection closes
+
+\dot
+digraph "AsyncServer" {
+  edge [fontname="Helvetica",fontsize="10",labelfontname="Helvetica",labelfontsize="10"];
+  node [fontname="Helvetica",fontsize="10",shape=record];
+
+  AsyncServer [URL="\ref AsyncServer"];
+  Connection;
+  DeferredContext [URL="\ref evo::AsyncServerHandler::DeferredContextT"];
+  ProtocolServer;
+  HANDLER;
+  DeferredReply [URL="\ref evo::AsyncServerReplyT"];
+  AsyncServerReply [URL="\ref evo::AsyncServerReplyT"];
+
+  AsyncServer -> Connection [label=" creates per connection"];
+  Connection -> DeferredContext [label=" creates ptr"];
+  Connection -> ProtocolServer [label=" has"];
+  ProtocolServer -> HANDLER [label=" has"];
+  DeferredContext -> HANDLER [label=" has ptr"];
+  HANDLER -> AsyncServerReply [label=" has"];
+  HANDLER -> DeferredReply [label=" creates"];
+  DeferredReply -> DeferredContext [label=" has ref"];
+
+  label="Async Server";
+  labelloc=top;
+}
+\enddot
+
+Response types:
+ - Normal responses are sent immediately by the `HANDLER` (details depend on the protocol)
+ - Deferred responses are more complex (see diagram below) and are required when the server must wait for a response (without blocking):
+   - The `HANDLER` creates a \link evo::AsyncServerHandler::DeferredContextT::ReplyBase HANDLER::DeferredReply\endlink event/object, starts an async (non-blocking) operation, then returns `rtDEFERRED` result
+   - The server handles other requests and events while the deferred response is in progress
+   - When a response is ready, an async callback uses the \link evo::AsyncServerHandler::DeferredContextT::ReplyBase HANDLER::DeferredReply\endlink object to send the response
+
+<center><b>Deferred Response</b></center>
+\msc
+  hscale="1.5",
+  wordwraparcs="true";
+
+  sock [label="Socket"],
+  proto [label="ProtocolServer"],
+  handler [label="HANDLER"],
+  external [label="ExternalAsync"];
+
+  sock note sock [label="request"];
+  sock  => proto   [label="socket event"];
+  proto => handler [label="request event"];
+  handler => external [label="create DeferredReply, async call"];
+  handler => proto [label="handler returns deferred result"];
+  sock note sock [label="other requests/events are handled"];
+  external => proto [label="async result via DeferredReply"];
+  proto => sock [label="response via AsyncServerReply"];
+\endmsc
+
+The framework handles these scenarios with deferred responses:
+ - Out of order response: Async events don't have a predictable order so responses may happen out of order
+   - The framework accounts for this by sending responses through \link AsyncServerReply\endlink, which queues responses when they're out of order
+   - Ordering is corrected for any mixture of deferred and non-deferred responses, so the response order always matches the request order
+ - Connection closed unexpectedly while deferred responses are pending:
+   - The framework handles this using \link evo::AsyncServerHandler::DeferredContextT DeferredContext\endlink, which is detached from the `Connection` when closed and a deferred response is pending
+   - When the connection is closed the deferred responses for it become no-ops, but still must be cleaned up
+   - After all pending deferred responses are complete the `DeferredContext` is destroyed
+*/
+
+///////////////////////////////////////////////////////////////////////////////
+
 /** \page Threads Threads
 
 Evo provides multithreading and synchronization classes that wrap the OS thread APIs (pthreads, win32) and compiler atomics.
@@ -1051,14 +1778,21 @@ Thread-Local Storage:
    - \link EVO_ATOMIC_ACQUIRE\endlink, \link EVO_ATOMIC_RELEASE\endlink, \link EVO_ATOMIC_ACQ_REL\endlink
    - \link EVO_ATOMIC_SYNC\endlink (default)
 
+Linking:
+ - Linux/Unix: `-pthread`
+ - Cygwin: `-lpthread`
+ - Windows: Usually multithreaded by default -- MSVC project settings: `C/C++ -> Code Generation -> Runtime Library`
+
 Note: Before C++ 11, thread safety depends on the compiler. Be especially careful with static and global variables on pre-C++11 compilers. See notes in: \ref CppCompilers "C++ Compilers".
 */
 
 ///////////////////////////////////////////////////////////////////////////////
 
-/** \page Metaprogramming Metaprogramming
+/** \page Metaprogramming Metaprogramming & Macros
 
 Evo uses some metaprogramming internally -- these features are available for advanced use.
+
+\#include <evo/type.h> -- included by most evo headers already
 
 \par Type Traits
 
@@ -1073,6 +1807,9 @@ Evo uses some metaprogramming internally -- these features are available for adv
  - IsConst
  - IsSame
  .
+ - IsNullable
+ - IsEvoContainer
+ .
 
 \par Type Conversion
 
@@ -1081,6 +1818,7 @@ Evo uses some metaprogramming internally -- these features are available for adv
  - RemoveExtents
  - RemoveExtentsConstVol
  - RemoveVolatile
+ - Convert
  .
 
 \par Static Expressions
@@ -1091,6 +1829,167 @@ Evo uses some metaprogramming internally -- these features are available for adv
  - EVO_STATIC_JOIN()
  - StaticIf
  .
+
+\par Macros
+
+Evo also implements these helper macros
+
+\#include <evo/macro.h>
+
+ - EVO_STRINGIFY()
+ - EVO_CONCAT()
+ - EVO_EXPAND()
+ - EVO_COUNT_ARGS()
+ - EVO_MAP_FIELDS(), EVO_MAP_FIELDS_KEY()
+ .
+
+\par Compiler Helpers
+
+ - EVO_PARAM_UNUSED()
+ - \link EVO_ATTRIB_UNUSED\endlink
+ - EVO_MSVC_NOWARN_START(), \link EVO_MSVC_NOWARN_END\endlink
+ .
+
+ - \link EVO_CPP11\endlink, EVO_ONCPP11()
+ - \link EVO_CPP14\endlink
+ - \link EVO_CPP17\endlink
+ .
+
+ - \link EVO_64\endlink, \link EVO_ARCH_BITS\endlink
+ - \link EVO_COMPILER\endlink
+ - \link EVO_COMPILER_VER\endlink
+ .
+
+*/
+
+///////////////////////////////////////////////////////////////////////////////
+
+/** \page SmartQuoting Smart Quoting
+
+When handling delimited text, Evo prefers smart quoting over escape characters:
+ - Escape characters require the parser to mutate the input (remove escape prefixes), which prevents string \ref Sharing and affects performance
+ - Escape characters also require the writer to mutate the output (insert escape prefixes), which increases the data size as well
+
+Smart quoting avoids having to escape characters by using a quoting type adapted to the text being quoted.
+
+_Note: Manually applying smart quoting to text can be tricky in certain cases._
+
+\par Quoting Types
+
+A "field" is the original text, which may contain whitespace, delimiters, and/or quote characters:
+ - Binary data is not supported here as it isn't text and may be impossible to correctly quote
+ - However the field may contain unprintable characters as well as UTF-8 multibyte characters
+
+A "token" is a field as quoted or unquoted text, which is often followed by a delimiter acting as a separator for the next token:
+ - This text may contain delimiters and quote characters as well as any valid plain text
+ - If the field text _contains the delimiter_ then it must be quoted, which effectively "escapes" the delimiter character
+ - If the field text _begins or ends with literal quotes_ then it must be quoted, which effectively "escapes" those quotes
+ - If the field text _begins or ends with either whitespace or unprintable characters_ then it must be quoted to correctly preserve the beginning and end
+ - If any combination of the above cases apply, then the field must be quoted with a quoting type that doesn't confuse the parser
+ - If none of the above cases apply, then quoting isn't required to parse the field
+
+Single-char quoting:
+ - Single-quotes: `'foo bar'`
+ - Double-quotes: `"foo bar"`
+ - Backtick-quotes: <code>\`foo bar\`</code>
+
+Triple quoting (inspired by the Python language):
+ - Triple single-quotes: <code> '''foo bar''' </code>
+ - Triple double-quotes: <code> """foo bar""" </code>
+ - Triple backtick-quotes: <code> \`\`\`foo bar\`\`\` </code>
+
+_Following the above rules will correctly quote and escape text fields_ -- see below for edge cases.
+
+No quoting:
+ - If a token doesn't begin _and_ end with quotes then it's _treated as unquoted_
+   - Quoting at _end_ is determined by context: a quote followed by a delimiter, or followed by end of input
+   - There may be whitespace (spaces, tabs, newlines) between the quote and the delimiter -- see _Formatting_ section below for example
+ - The parser doesn't get confused when quote characters (or apostrophes) appear inside _unquoted_ tokens -- in this case with unquoted text, the parser just splits by delimiter
+ - Example comma-delimited fields that aren't quoted at all -- these particular cases don't confuse the parser:
+   - <code> can't,won't,'bout </code>
+     - <code> can't </code>
+     - <code> won't </code>
+     - <code> 'bout </code> -- _dangerous if unquoted due to beginning apostrophe (single quote)_
+   - <code> 'not' quoted,also not 'quoted' </code>
+     - <code> 'not' quoted </code> -- _dangerous if unquoted due to beginning single quote_
+     - <code> also not 'quoted' </code> -- _dangerous if unquoted due to ending single quote_
+ - Example that _will_ confuse the parser with words that begin or end with an apostrophe (single quote):
+   - <code> can't,'bout,runnin',jumpin' </code>
+     - <code> can't </code>
+     - <code> bout,runnin </code> -- _considered quoted, fix with actual quoting_
+     - <code> jumpin' </code> -- _dangerous if unquoted, the ending apostrophe will confuse a reverse-parser_
+   - _Reverse-Parser:_
+     - <code> bout,runnin',jumpin </code> -- _gets different tokens due to the ending apostrophe_
+     - <code> can't </code>
+   - _Fixed:_ <code> can't,"'bout","runnin'","jumpin'" </code>
+     - <code> can't </code>
+     - <code> 'bout </code>
+     - <code> runnin' </code>
+     - <code> jumpin' </code>
+ - Tricky examples -- quoting like this should be avoided:
+   - <code> 'one'two','three' </code> -- _the second quote isn't an end-quote because it isn't followed by a delimiter (or end of input)_
+     - <code> one'two </code>
+     - <code> three </code>
+   - <code> ''' </code> -- _1 quote char, not triple-quoted since there's no end quote_
+     - <code> ' </code>
+   - <code> '''' </code> -- _2 quote chars, not triple-quoted since there's no end quote_
+     - <code> '' </code>
+
+Backtick-DEL quoting:
+ - This is a fallback when no other quoting will work (which is very rare) and uses the `DEL` char (ASCII code `7F`, normally not printable but shown here as `DEL` or `␡`)
+ - Here a backtick followed by a `DEL` char is used as a quote, and this pair is used at the beginning and the end, like with other quote types
+   - Example: <code> \`␡foo bar\`␡ </code>
+ - This assumes the quoted text is valid plain text (not binary data) -- normal plain text doesn't use the `DEL` char at all, and is even less likely to include a backtick-DEL pair followed by a delimiter
+ - This can still be used in combination with the `DEL` char as a delimiter
+   - Example with `DEL` delimiter and `backtick-DEL` quoting:
+     - <code> \`␡foo bar\`␡␡\`␡stuff things\`␡ </code>
+       - <code> foo bar </code>
+       - <code> stuff things </code>
+
+The non-single-quoting types (above) and edge cases (mentioned below) are rare with normal text, but must be handled correctly when using smart quoting.
+
+\par Parsing
+
+ - \link StrTokQ\endlink, \link StrTokQR\endlink
+ - StrTok::nextq(), StrTokR::nextq()
+ - str_scan_endq(), str_scan_endq_r()
+
+Parsers will look for a beginning quote, and if found try to find a matching end-quote followed by a delimiter or end of input.
+ - If no beginning quote, or if the end-quote isn't found, then the input is treated as unquoted (see above examples under "No quoting")
+   - Input that begins with a triple quote and ends with a single quote is treated as unquoted
+ - With triple end-quotes, any extra ending quote characters are kept as-is, i.e. included in field text
+   - Example with comma delim: <code> '''one'''',two </code>
+     - <code> one' </code>
+     - <code> two </code>
+   - The same applies to beginning quotes: <code> ''''one''',two </code>
+     - <code> 'one </code>
+     - <code> two </code>
+ - The parser must be aware of the delimiter that may follow the input
+ - A reverse-parser does the same thing in reverse, and either way will result in the same tokens as long fields are quoted correctly when required
+
+\par Formatting
+
+ - String::writequoted()
+ - Stream::writequoted()
+ - StreamOut::writequoted()
+ - StrQuoting::get()
+
+Formatters will check the field text and write it with the appropriate quoting type.
+ - Quoting type preference order: `single, double, backtick, triple-single, triple-double, triple-backtick, backtick-DEL`
+ - Beginning and/or ending quote characters should not be used as the quoting type if possible, even though it would still parse correctly
+   - Example input: <code> 'foo,bar\" </code>
+     - Quoted (preferred): <code> `'foo,bar\"` </code>
+     - Quoted (avoid): <code> ''foo,bar\"' </code> -- _parsers should still handle this correctly_
+ - Field text that contains a quoting type followed by the delimiter (or end of input) cannot be quoted with that quoting type
+   - Example with comma delim: <code> foo''',bar </code> -- _cannot be quoted with_ <code> ' </code> _or_ <code> ''' </code>
+ - Any whitespace (spaces, tabs, newlines) between a quote character and a delimiter is ignored when determining the quoting type to use
+   - Examples with comma delim:
+     - <code> foo', bar </code> -- _this cannot be quoted with a single-quote char since it contains this quote char followed by a delim_
+       - Quoted: <code> "foo', bar" </code>
+     - <code> foo' , bar </code> -- _this cannot be quoted with a single-quote char since it contains this quote char followed by some whitespace then a delim_
+       - Quoted: <code> "foo' , bar" </code>
+ - Example using a comma delimiter that requires `backtick-DEL` quoting: <code> foo''',\"\"\",```,bar </code>
+   - Quoted: <code> `␡foo''',\"\"\",\`\`\`,bar\`␡ </code>
 */
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -1106,6 +2005,7 @@ Evo strings and I/O streams are byte-based and are naturally compatible with ASC
    - `wchar16` -- UTF-16 character
    - `wchar32` -- UTF-32 character, full code point
  - Evo doesn't use the C/C++ `wchar_t` type since it's platform dependent
+ - C++11: Evo has support for UTF-16 string literals (`u` prefix, via `char16_t`), see UnicodeString and String
 
 Recommended: Use String (UTF-8) and convert with UnicodeString (UTF-16) on demand as needed for APIs that require UTF-16 (like Windows).
 
@@ -1142,6 +2042,14 @@ These are implemented with Evo and don't require libicu.
 
 ///////////////////////////////////////////////////////////////////////////////
 
+/** \page ErrorHandling Error Handling
+
+_Work in progress_
+
+*/
+
+///////////////////////////////////////////////////////////////////////////////
+
 /** \page StlCompatibility STL Compatibility
 
 Evo STL compatibility info.
@@ -1152,13 +2060,68 @@ Evo STL compatibility info.
  - Evo SubString is similar to C++17 `std::string_view` (substring reference)
  - Evo SetHash is similar to C++11 `std::unordered_set` (hash table as set)
  - Evo MapHash is similar to C++11 `std::unordered_map` (hash table as map)
- - Evo Nullable is similar to `std::optional` (but only for primitive types)
- - Some Evo containers have begin/end methods for compatibility with C++11 range-based for-loops
+ - Evo Nullable is similar to C++17 `std::optional` (but is only for primitive types)
+ - Most Evo containers implement iterator methods for STL compatibility: `begin(), end(), cbegin(), cend()`
+
+\par Initializer Lists (C++11)
+
+Evo containers support C++11 initializer lists.
+
+Example:
+\code
+#include <evo/list.h>
+#include <evo/maplist.h>
+using namespace evo;
+
+int main() {
+    List<int> list = {1, 2, 3};
+
+    MapList<int,int> map = {{1, 100}, {2, 200}};
+
+    return 0;
+}
+\endcode
+
+\par Range-Based For Loops (C++11)
+
+Evo containers support C++11 range-based for loops.
+
+ - For best performance use `const` containers if possible -- Evo containers have an `asconst()` method to make this easy
+ - See \ref PrimitivesContainers and \ref Slicing
+
+Example:
+\code
+#include <evo/list.h>
+#include <evo/io.h>
+using namespace evo;
+
+int main() {
+    Console& c = con();
+
+    // Make a list and a copy (uses Copy-On-Write)
+    List<int> list = {1, 2, 3};
+    List<int> list2(list);
+
+    // Const iteration allows list2 to use Copy-On-Write for best performance
+    for (auto& item : list.asconst())
+        c.out << item << NL;
+
+    // Mutable iteration forces list2 to make a copy so items can be modified
+    for (auto& item : list) {
+        item *= 10;
+        c.out << item << NL;
+    }
+
+    return 0;
+}
+\endcode
 
 \par STL String
 
-Evo supports implicitly converting `const std::string&` and `const std::string*` to \link evo::StringBase StringBase\endlink so STL strings can be passed to most functions that
-accept Evo string types. Simply include STL strings first and Evo will try to auto-detect and enable std::string support.
+Evo supports implicitly converting `const std::string&` and `const std::string*` to \link evo::StringBase StringBase\endlink so STL strings can be passed to functions that
+accept Evo string types. Simply include STL strings first and Evo will try to auto-detect and enable `std::string` support.
+
+See \ref StringPassing
 
 Note that in some cases you may run into problems with "too many implicit conversions." Here's an example:
 \code
@@ -1166,8 +2129,8 @@ Note that in some cases you may run into problems with "too many implicit conver
 #include <evo/string.h>
 
 int main() {
-    std::string stdstring = "test";              // uses default constructor, assigns via temporary, ok here (though not ideal)
-    evo::String string    = stdstring;           // uses default constructor, assigns via temporary, possible compiler error: too many implicit conversions
+    std::string stdstring = "test";              // constructs via temporary, ok here
+    evo::String string    = stdstring;           // constructs via temporary, possible compiler error: too many implicit conversions
 
     evo::String string(stdstring);               // ok, explicit constructor (no temporary) -- preferred
     evo::String string = StringBase(stdstring);  // ok, explicit temporary
@@ -1266,7 +2229,7 @@ and is often useful in multithreaded situations (with sychronization as needed).
     }
    \endcode
  - As with String, passing SubString by value is ok but not preferred (less efficient)
- - Returning a SubString in any way is usually dangerous, unless returning one of the arguments
+ - Returning a SubString in any way is often dangerous, unless returning one of the arguments
    \code
     const SubString& foo(const SubString& str) {
         ...
@@ -1370,6 +2333,15 @@ See:
 
 This shows different approaches for string parsing.
 
+\par Whitespace
+
+Many Evo methods skip or strip whitespace. This may or may not include newlines -- this will be noted in the method documentation.
+
+ - Newlines are often used to define structure with plain text so it doesn't always make sense to skip them
+ - When performance is critical, code that only skips spaces and tabs is generally faster than a version that also skips newlines (even with SSE optimization)
+ - Tokenizers usually don't skip newlines
+ - Methods like String::strip() have a variant like String::strip2() that also strips newlines
+
 \par Check Null or Empty
 
 \code
@@ -1383,7 +2355,7 @@ int main() {
     if (str.null())
         { }
 
-    // Empty string is either null or ""
+    // Null string is also considered empty
     if (str.empty())
         { }
 
@@ -1421,6 +2393,7 @@ int main() {
 Splitting to a list with generic conversion:
 \code
 #include <evo/string.h>
+#include <evo/strtok.h>
 using namespace evo;
 
 int main() {
@@ -1428,10 +2401,11 @@ int main() {
 
     // Split into list
     List<Int> nums;
-    str.split(nums);
+    str.split<StrTok>(nums);
 
     // Join back into list
-    str.join(nums.set());
+    nums.set();
+    str.join(nums);  // set back to: 1,2,3
 
     return 0;
 }
@@ -1440,6 +2414,7 @@ int main() {
 Splitting to a list with generic conversion and alternate tokenizer:
 \code
 #include <evo/string.h>
+#include <evo/strtok.h>
 using namespace evo;
 
 int main() {
@@ -1450,7 +2425,8 @@ int main() {
     str.split<StrTokQ>(nums);
 
     // Join back into list, with quoting
-    str.joinq(nums.set());
+    nums.set();
+    str.joinq(nums);  // set back to: 1,'2,2',3
 
     return 0;
 }
@@ -1458,7 +2434,7 @@ int main() {
 
 \par Tokenizing
 
-SubString has methods for extracting tokens:
+String and SubString have methods for extracting tokens:
 \code
 #include <evo/substring.h>
 #include <evo/io.h>
@@ -1477,6 +2453,7 @@ int main() {
 StrTok classes can parse into substring tokens:
 \code
 #include <evo/substring.h>
+#include <evo/strtok.h>
 #include <evo/io.h>
 using namespace evo;
 static Console& c = con();
@@ -1508,45 +2485,20 @@ int main() {
 
 \par Quoting
 
-For delimited text Evo uses quoting unstead if escaping, which avoids having to mutate tokens by adding or filtering escape characters (like backslash).
-Where quoted tokenizing is supported, multiple quoting types are supported to handle any text.
+\link StrTokQ\endlink and StrTok::nextq() can parse quoted tokens.
 
-No quoting:
- - If a token doesn't begin _and_ end with quotes then it's considered unquoted
- - The parser doesn't get confused when quotes appear in unquoted tokens
- - Example comma-delimited strings that aren't considered quoted at all -- these don't confuse the parser:
-   - can't,won't,'bout
-     - can't
-     - won't
-     - 'bout
-   - 'not' quoted,also not 'quoted'
-     - 'not' quoted
-     - also not 'quoted'
- - Example that will confuse the parser using words that begin _and_ end with an apostrophe:
-   - can't,'bout,runnin',jumpin'
-     - can't
-     - bout,runnin -- _considered quoted, fix with actual quoting_
-     - jumpin' -- _dangerous but ok here_
+See \ref SmartQuoting
 
-Single-char quoting:
- - Single-quotes: 'foo bar'
- - Double-quotes: "foo bar"
- - Backtick-quotes: \`foo bar\`
+\par Low-Level Scanning
 
-Triple quoting:
- - Triple single-quotes: '''foo bar'''
- - Triple double-quotes: """foo bar"""
- - Triple backtick-quotes: \`\`\`foo bar\`\`\`
-
-Backtick-DEL quoting:
- - This is single-backtick quoting with a DEL char (code 7F, normally not printable but shown here as ␡) added after each backtick
-   - Example: \`␡foo bar\`␡
- - The DEL char is not normally used at all with text, and can still be used as a delimiter (and won't be confused with backtick-DEL)
-   - Example with DEL delimiter and backtick-DEL quoting:
-     - \`␡foo bar\`␡␡\`␡stuff things\`␡
-       - foo bar
-       - stuff things
- - Only needed when no other quoting is possible, which is very rare
+ - str_scan_nws(), str_scan_nws_r()
+ - str_scan_ndelim(), str_scan_ndelim_r()
+ - str_scan_delim(), str_scan_delim_r()
+ - str_scan_endq(), str_scan_endq_r()
+ - str_scan_to()
+ - str_scan_decimal()
+ - str_scan_hex()
+ - StrQuoting
 
 */
 
@@ -1650,7 +2602,7 @@ Formatting types used with `operator<<()`:
  - \link Newline\endlink: \ref NL, \ref NL_SYS, \ref nLF, \ref nCRLF, etc
  - \ref FmtInt, \ref FmtInt32, \ref FmtLong, \ref FmtUInt, \ref FmtUInt32, \ref FmtULong -- for more int variants see FmtIntT
  - \ref FmtFloat, \ref FmtFloatD, \ref FmtFloatL
- - FmtChar
+ - FmtChar, FmtString, FmtStringWrap
  - FmtDump
 
 \par Stream Style Formatting With State
@@ -1745,7 +2697,7 @@ int main() {
 }
 \endcode
 
-See also: \ref StringConversion
+See also: \ref StringConversion and \ref SmartQuoting
 */
 
 ////
@@ -1812,7 +2764,7 @@ Formatting types used with `operator<<()`:
  - \link Newline\endlink: \ref NL, \ref NL_SYS, \ref nLF, \ref nCRLF, etc
  - \ref FmtInt, \ref FmtInt32, \ref FmtLong, \ref FmtUInt, \ref FmtUInt32, \ref FmtULong -- for more int variants see FmtIntT
  - \ref FmtFloat, \ref FmtFloatD, \ref FmtFloatL
- - FmtChar
+ - FmtChar, FmtString, FmtStringWrap
  - FmtDump
 
 \par Stream Newlines
@@ -1893,6 +2845,10 @@ int main() {
 
     return 0;
 }
+
+\par Smart Quoting
+
+See also: \ref SmartQuoting
 \endcode
 
 Sticky formatting is useful for applying the same formatting to many fields.
@@ -2204,6 +3160,136 @@ int main() {
 \endcode
 */
 
+///////////////////////////////////////////////////////////////////////////////
+
+/** \page FullServer Full Server Example
+
+This gives a full server example, including:
+ - Logging with Logger
+ - Signal handling for graceful shutdown
+ - Daemonizing in Linux/Unix
+ .
+
+See: \ref Async
+
+\par Example
+
+\code
+#include <evo/string.h>
+#include <evo/maphash.h>
+#include <evo/logger.h>
+#include <evo/process.h>
+#include <evo/commandline.h>
+#include <evo/async/memcached_server.h>
+using namespace evo;
+
+// Basic memcache server
+struct Handler : async::MemcachedServerHandlerBase {
+    struct Shared : SimpleSharedBase<> {
+        StrHash map;
+    };
+
+    Shared& shared;
+
+    Handler(Global& global, Shared& shared) : shared(shared) {
+    }
+
+    StoreResult on_store(DeferredContext& context, StoreParams& params, SubString& value, Command command, uint64 cas_id) {
+        switch(command) {
+            case cSET:
+                shared.map[params.key] = value;
+                break;
+            default:
+                send_error("Not supported");
+                return rtHANDLED;
+        }
+        return Memcached::srSTORED;
+    }
+
+    ResponseType on_get(DeferredContext& context, const SubString& key, GetAdvParams* adv_params) {
+        const String* val = shared.map.find(key);
+        if (val != NULL)
+            send_value(key, *val);
+        return rtHANDLED;
+    }
+};
+
+typedef async::MemcachedServer<Handler>::Server Server;
+
+int main(int argc, const char* argv[]) {
+    Socket::sysinit();
+
+    const ulong RD_TIMEOUT_MS = 5000;
+    const ulong WR_TIMEOUT_MS = 1000;
+
+    // Command-line
+    StrHash args;
+    String tmpstr;
+    {
+        List<SubString> log_level_choices;
+        for (LogLevelEnum::Iter iter; iter; ++iter)
+            log_level_choices.add(iter.value_str());
+
+        CommandLine cmdline("Test memcached server");
+        cmdline.addver("Test Memcached Server 1.0");
+        cmdline.addopt("-p, --port", "Server port number to use")
+            .default_value("11211")
+            .numeric()
+            .maxlen(UShort::MAXSTRLEN);
+        cmdline.addopt("-l, --log", "Log file to use")
+            .default_value("server.log");
+        cmdline.addopt("-L, --loglevel", tmpstr.set("Log level to use ${default}, one of:\n ").join(log_level_choices, ','))
+            .default_value("info")
+            .addchoices(log_level_choices);
+
+        if (!cmdline.parse(args, argc, argv))
+            return 0;
+    }
+
+    // Init logger, use local time in log
+    Logger<> logger;
+    logger.set_local_time(true);
+    logger.set_level(LogLevelEnum::get_enum(lookupsub(args, "loglevel")));
+
+    // Listen on socket early and open log, stop on error such as "port in use" or permissions issue
+    Socket listener;
+    const ushort port = lookupsub(args, "port").getnum<ushort>();
+    try {
+        listener.listen_ip(port);
+        logger.open(lookupsub(args, "log"));
+    } EVO_CATCH(return 1);
+
+    // Init server
+    Server server;
+    server.set_logger(&logger);
+    server.set_timeout(RD_TIMEOUT_MS, WR_TIMEOUT_MS);
+
+    // Install shutdown signal handler using helper for servers
+    Signal::MainServer<Server> signal_main(server);
+
+    // Uncomment to daemonize (run in background) -- Linux/Unix only
+    //daemonize(DAEMONIZE_USE_STDERR);
+
+    // Run server -- logger now used, error before this point goes to stderr
+    logger.start_thread();
+    EVO_LOG_INFO(logger, tmpstr.set() << "Startup: Listening on port " << port);
+    server.run(listener);
+    EVO_LOG_INFO(logger, "Shutdown");
+    return 0;
+}
+\endcode
+*/
+
+///////////////////////////////////////////////////////////////////////////////
+
+/** \page Configuration Configuration
+
+Evo library can be customized using define directives before any Evo headers are included.
+
+_Work in progress_
+*/
+
+///////////////////////////////////////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////////////////////
 
 /** \page UnsafePtrRef Unsafe Pointer Referencing

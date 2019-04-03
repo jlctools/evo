@@ -1,9 +1,9 @@
 // Evo C++ Library
-/* Copyright 2018 Justin Crowell
+/* Copyright 2019 Justin Crowell
 Distributed under the BSD 2-Clause License -- see included file LICENSE.txt for details.
 */
 ///////////////////////////////////////////////////////////////////////////////
-/** \file lock.h Evo smart locks. */
+/** \file lock.h Evo smart locks for synchronization. */
 #pragma once
 #ifndef INCL_evo_lock_h
 #define INCL_evo_lock_h
@@ -19,7 +19,8 @@ namespace evo {
  - By default you lock with the constructor, and the destructor automatically unlocks (if locked)
  - This keeps track of whether it has locked the object, which protects against double lock or unlock here
  - \b Caution: Since this references a synchronization object, that object must be valid as long as this references it
- - \b Caution: Instances are not thread safe, use with only 1 thread at a time
+ - \b Caution: Do not share an instance across multiple threads, this is not safe
+ - See also: SmartLockInert
  .
  \tparam  T  Synchronization type to use -- ex: Mutex, Condition
 */
@@ -78,7 +79,7 @@ protected:
  - By default you lock with the constructor, and the destructor automatically unlocks (if locked)
  - This keeps track of whether it has locked the object, which protects against double lock or unlock here
  - \b Caution: Since this references a synchronization object, that object must be valid as long as this references it
- - \b Caution: Instances are not thread safe, use with only 1 thread at a time
+ - \b Caution: Do not share an instance across multiple threads, this is not safe
  .
  \tparam  T  Read/Write synchronization type to use -- ex: MutexRW
 */
@@ -137,7 +138,7 @@ protected:
  - By default you lock with the constructor, and the destructor automatically unlocks (if locked)
  - This keeps track of whether it has locked the object, which protects against double lock or unlock here
  - \b Caution: Since this references a synchronization object, that object must be valid as long as this references it
- - \b Caution: Instances are not thread safe, use with only 1 thread at a time
+ - \b Caution: Do not share an instance across multiple threads, this is not safe
  .
  \tparam  T  Sleep-locking synchronization type to use -- ex: SpinLock
 */
@@ -188,49 +189,6 @@ struct SmartSleepLock {
 
 protected:
     bool locked_;   ///< Whether object is read-locked by this
-};
-
-///////////////////////////////////////////////////////////////////////////////
-
-/** Inert lock that doesn't do anything.
- - This is used with MutexInert and implements all the lock interfaces (SmartLock, SmartLockRead, SmartSleepLock) with no-ops
- - All methods are no-ops
- - See MutexInert
- .
- \tparam  T  Locking synchronization type to use -- ex: MutexInert
-*/
-template<class T>
-struct SmartLockInert {
-    /** Constructor -- arg is ignored. */
-    SmartLockInert(T&)
-        { }
-
-    /** Constructor -- args are ignored. */
-    SmartLockInert(T&, bool)
-        { }
-
-    /** Constructor -- args are ignored. */
-    SmartLockInert(T&, ulong)
-        { }
-
-    /** Lock object (no-op).
-     \return  This
-    */
-    SmartLockInert& lock()
-        { return *this; }
-
-    /** Lock object (no-op).
-     - Arg is ignored
-     \return  This
-    */
-    SmartLockInert& lock(ulong)
-        { return *this; }
-
-    /** Unlock object (no-op).
-     \return  This
-    */
-    SmartLockInert& unlock()
-        { return *this; }
 };
 
 ///////////////////////////////////////////////////////////////////////////////

@@ -1,5 +1,5 @@
 // Evo C++ Library
-/* Copyright 2018 Justin Crowell
+/* Copyright 2019 Justin Crowell
 Distributed under the BSD 2-Clause License -- see included file LICENSE.txt for details.
 */
 ///////////////////////////////////////////////////////////////////////////////
@@ -63,6 +63,19 @@ namespace evo {
  - No extra capacity allocation, sharing, or slicing like List
  .
 
+C++11:
+ - Range-based for loop -- see \ref StlCompatibility
+   \code
+    Array<int> arr;
+    for (auto num : arr) {
+    }
+   \endcode
+ - Initialization lists
+   \code
+    Array<int> arr = {1, 2, 3};
+   \endcode
+ - Move semantics
+
 \par Iterators
 
  - Array<>::Iter -- Read-Only Iterator (IteratorRa)
@@ -75,10 +88,13 @@ namespace evo {
  - Array(const ValEmpty&)
  - Array(const ThisType&)
  - Array(const T*,Size)
+ - Array(ThisType&&) [C++11]
+ - Array(std::initializer_list<T>) [C++11]
  .
 
 \par Read Access
 
+ - asconst()
  - size()
    - null(), empty()
    - shared()
@@ -97,6 +113,8 @@ namespace evo {
    - starts(const T*,Size) const
    - ends(const T&) const
    - ends(const T*,Size) const
+ - cbegin(), cend()
+   - begin() const, end() const
  .
 
 \par Modifiers
@@ -105,6 +123,7 @@ namespace evo {
    - item(Key)
    - ring(Key)
    - operator[](Key)
+ - begin(), end()
  - resize()
    - resize2()
    - unshare()
@@ -114,6 +133,7 @@ namespace evo {
    - setempty()
    - clear()
    - operator=(const ThisType& data)
+   - operator=(ThisType&&) [C++11]
    - operator=(const ValNull&)
    - operator=(const ValEmpty&)
    - fill()
@@ -171,6 +191,15 @@ public:
     typedef T              Value;               ///< Value type (same as Item)
     typedef T              Item;                ///< Item type (same as Value)
 
+    // Iterator support types
+    /** \cond impl */
+    typedef Key IterKey;
+    typedef T   IterItem;
+    /** \endcond */
+
+    typedef typename IteratorRa<ThisType>::Const Iter;    ///< Iterator (const) - IteratorRa
+    typedef IteratorRa<ThisType>                 IterM;    ///< Iterator (mutable) - IteratorRa
+
     /** Default constructor sets as null. */
     Array() {
         data_ = NULL;
@@ -219,6 +248,47 @@ public:
             DataInit<T>::uninit(data_, size_);
             ::free(data_);
         }
+    }
+
+#if defined(EVO_CPP11)
+    /** Sequence constructor (C++11).
+     \param  init  Initializer list, passed as comma-separated values in braces `{ }`
+    */
+    Array(std::initializer_list<T> init) : Array() {
+        assert( init.size() < IntegerT<Size>::MAX );
+        resize((Size)init.size());
+        uint i = 0;
+        for (const auto& item : init)
+            data_[i++] = item;
+    }
+
+    /** Move constructor (C++11).
+     \param  src  Source to move
+    */
+    Array(ThisType&& src) {
+        ::memcpy(this, &src, sizeof(ThisType));
+        ::memset(&src, 0, sizeof(ThisType));
+    }
+
+    /** Move assignment operator (C++11).
+     \param  src  Source to move
+     \return      This
+    */
+    ThisType& operator=(ThisType&& src) {
+        resize(0);
+        ::memcpy(this, &src, sizeof(ThisType));
+        ::memset(&src, 0, sizeof(ThisType));
+        return *this;
+    }
+#endif
+
+    /** Explicitly use a const reference to this.
+     - This is useful to force using this as const without casting
+     .
+     \return  This
+    */
+    const ThisType& asconst() const {
+        return *this;
     }
 
     // SET
@@ -546,6 +616,66 @@ public:
     bool ends(const T* items, Size size) const
         { return (size_ >= size && DataEqual<T>::equal(data_+(size_-size), items, size)); }
 
+    // FIND
+
+    /** Get iterator at first item (const).
+     - This allows compatibility with range-based for loops and other libraries, otherwise use container Iter directly
+     .
+     \return  Iterator at first item, or at end position if empty
+     \see Iter, cend(), begin(), end()
+    */
+    Iter cbegin() const
+        { return Iter(*this); }
+
+    /** Get iterator at end (const).
+     - This allows compatibility with range-based for loops and other libraries, otherwise use container Iter directly
+     - This really just creates an empty iterator
+     .
+     \return  Iterator at end position
+     \see Iter, cbegin(), begin(), end()
+    */
+    Iter cend() const
+        { return Iter(); }
+
+    /** Get iterator at first item (mutable).
+     - This allows compatibility with range-based for loops and other libraries, otherwise use container Iter directly
+     - cbegin() is more efficient, since this effectively calls unshare() to make items mutable
+     .
+     \return  Iterator at first item, or at end position if empty
+     \see IterM, end(), cbegin(), cend()
+    */
+    IterM begin()
+        { return IterM(*this); }
+
+    /** Get iterator at first item (const).
+     - This allows compatibility with range-based for loops and other libraries, otherwise use container Iter directly
+     .
+     \return  Iterator at first item, or at end position if empty
+     \see end() const, cbegin()
+    */
+    Iter begin() const
+        { return Iter(*this); }
+
+    /** Get iterator at end.
+     - This allows compatibility with range-based for loops and other libraries, otherwise use container Iter directly
+     - This really just creates an empty iterator
+     .
+     \return  Iterator at end position
+     \see IterM, begin(), cbegin(), cend()
+    */
+    IterM end()
+        { return IterM(); }
+
+    /** Get iterator at end.
+     - This allows compatibility with range-based for loops and other libraries, otherwise use container Iter directly
+     - This really just creates an empty iterator
+     .
+     \return  Iterator at end position
+     \see begin() const, cend()
+    */
+    Iter end() const
+        { return Iter(); }
+
     // INFO_SET
 
     /** Get data pointer (mutable).
@@ -871,17 +1001,6 @@ public:
         }
         return *this;
     }
-
-    // ITERATORS
-
-    // Iterator support types
-    /** \cond impl */
-    typedef Key IterKey;
-    typedef T   IterItem;
-    /** \endcond */
-
-    typedef typename IteratorRa<ThisType>::Const Iter;    ///< Iterator (const) - IteratorRa
-    typedef IteratorRa<ThisType>                 IterM;    ///< Iterator (mutable) - IteratorRa
 
     // INTERNAL
 

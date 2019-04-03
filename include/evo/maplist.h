@@ -1,5 +1,5 @@
 // Evo C++ Library
-/* Copyright 2018 Justin Crowell
+/* Copyright 2019 Justin Crowell
 Distributed under the BSD 2-Clause License -- see included file LICENSE.txt for details.
 */
 ///////////////////////////////////////////////////////////////////////////////
@@ -23,7 +23,37 @@ namespace evo {
 \tparam  TKey      %Map key type
 \tparam  TValue    %Map value type
 \tparam  TCompare  Comparison type to use
-\tparam  TSize     %Size type to use for size values (must be unsigned integer) -- default: SizeT
+\tparam  TSize     %Size type to use for size values (must be unsigned integer) -- default: `SizeT`
+
+\par Features
+
+ - Similar to STL `map`, with a storage implementation similar to STL `vector`
+ - Values are stored sequentially in memory as a dynamic array -- random access with item() uses constant time
+ - Values are always unique (no duplicate keys)
+ - This uses binary search -- lookups are `O(log n)`, inserts are `O(n + log n)` since values must be shifted to make room
+ - Items are each stored as a Pair and are kept ordered by key
+ - This uses List internally while keeping items ordered   
+   - No memory allocated by new empty map
+   - Preallocates extra memory when buffer grows
+   - \ref Sharing "Sharing" makes copying efficient
+   - See List features
+ .
+
+C++11:
+ - Range-based for loop -- see \ref StlCompatibility
+   \code
+    MapList<int,int> map;
+    for (auto& item : map.asconst()) {
+        item.key();
+        item.value();
+    }
+   \endcode
+ - Initialization lists
+   \code
+    MapList<int,int> map = {{3, 300}, {1, 100}, {2, 200}};
+    MapList<String,String> strmap = {{"key1", "foo"}, {"key2", "bar"}};
+   \endcode
+ - Move semantics
 
 \par Comparison
 
@@ -43,18 +73,28 @@ See: \ref PrimitivesContainers "Primitives & Containers"
 
 \b Caution: Modifying or resizing a map will shift or invalidate existing iterators using it.
 
+\par Constructors
+
+- MapList()
+- MapList(const MapBaseType& src)
+- MapList(const ThisType& src)
+- MapList(const std::initializer_list<InitPair>&) [C++11]
+- MapList(ThisType&&) [C++11]
+
 \par Read Access
 
+ - asconst()
  - size()
    - null(), empty()
    - capacity()
    - shared()
    - ordered()
  - contains(const Key&) const
-   - contains(const Key&, const Value&) const
+ - cbegin(), cend()
+   - begin() const, end() const
+ - iter()
  - find()
    - findindex()
-   - iter()
    - item()
  - operator==()
    - operator!=()
@@ -67,8 +107,9 @@ See: \ref PrimitivesContainers "Primitives & Containers"
    - capacity(Size)
    - capacitymin()
    - unshare()
+ - begin(), end()
+ - iterM()
  - findM()
-   - iterM()
    - getitem()
    - get()
    - operator[]()
@@ -79,12 +120,19 @@ See: \ref PrimitivesContainers "Primitives & Containers"
    - clear()
    - operator=(const MapBaseType&)
    - operator=(const ThisType&)
+   - operator=(ThisType&&) [C++11]
  - add(const Key&,const Value&,bool)
    - add(const Item&,bool)
    - add(const MapBaseType&,bool)
  - remove(const Key&)
    - remove(MapBaseType::IterM&,IteratorDir)
    - removeat()
+ .
+
+\par Helpers
+
+ - map_contains()
+ - lookupsub()
  .
 
 \par Example
@@ -231,6 +279,44 @@ public:
     ~MapList()
         { }
 
+#if defined(EVO_CPP11)
+    using typename MapBaseType::InitPair;   ///< Used with initializer_list constructor (C++11)
+
+    /** Sequence constructor (C++11).
+     \param  init  Initializer list, passed as comma-separated values in braces `{ }`
+    */
+    MapList(const std::initializer_list<InitPair>& init) : MapList() {
+        assert( init.size() < IntegerT<Size>::MAX );
+        capacitymin((Size)init.size());
+        for (const auto& item : init)
+            add(item.key, item.value);
+    }
+
+    /** Move constructor (C++11).
+     \param  src  Source to move
+    */
+    MapList(ThisType&& src) : data_(std::move(src.data_)) {
+        MapBaseType::size_ = src.MapBaseType::size_;
+        src.MapBaseType::size_ = 0;
+    }
+
+    /** Move assignment operator (C++11).
+     \param  src  Source to move
+     \return      This
+    */
+    ThisType& operator=(ThisType&& src) {
+        data_ = std::move(src.data_);
+        MapBaseType::size_ = src.MapBaseType::size_;
+        src.MapBaseType::size_ = 0;
+        return *this;
+    }
+#endif
+
+    /** \copydoc List::asconst() */
+    const ThisType& asconst() const {
+        return *this;
+    }
+
     // SET
 
     /** \copydoc Map::operator=() */
@@ -319,15 +405,33 @@ public:
 
     // FIND
 
+    /** \copydoc List::cbegin() */
+    Iter cbegin() const
+        { return Iter(*this); }
+
+    /** \copydoc List::cend() */
+    Iter cend() const
+        { return Iter(); }
+
+    /** \copydoc List::begin() */
+    IterM begin()
+        { return IterM(*this); }
+
+    /** \copydoc List::begin() const */
+    Iter begin() const
+        { return Iter(*this); }
+
+    /** \copydoc List::end() */
+    IterM end()
+        { return IterM(); }
+
+    /** \copydoc List::end() const */
+    Iter end() const
+        { return Iter(); }
+
     bool contains(const Key& key) const {
         Size pos;
         return (search(pos, key) != NULL);
-    }
-
-    bool contains(const Key& key, const Value& value) const {
-        Size pos;
-        const Item* item = search(pos, key);
-        return (item != NULL && item->second == value);
     }
 
     const Value* find(const Key& key) const {
@@ -444,63 +548,6 @@ public:
         return *this;
     }
 
-    // MOVE
-
-    using MapBaseType::move;
-
-    /** Move given item from another map.
-     - This has the same effect as doing an add() then remove() on src map
-     .
-     \param  src  Source iterator in other map to move from
-     \param  dir  Direction to move src iterator to next item, iterNONE for end position
-     \return      This
-    */
-    ThisType& move(IterM& src, IteratorDir dir=iterNONE) {
-        if (src) {
-            ThisType& srcObj = src.getParent();
-            if (&srcObj != this) {
-                // Move item directly
-                IterKey& iterkey = src.getKey();
-                Item* item;
-                Size pos;
-                if ( (item=(Item*)search(pos, src->first)) == NULL) {
-                    // Move item
-                    bool nextitem = false;
-                    data_.items.move(pos, srcObj.data_.items, iterkey.a, 1);
-                    ++MapBaseType::size_;
-
-                    // Adjust iterator
-                    if (--srcObj.MapBaseType::size_ > 0 && dir != iterNONE) {
-                        if (dir == iterRV) {
-                            if (iterkey.a > 0)
-                                { --iterkey.a; nextitem = true; }
-                        } else if (iterkey.a < srcObj.data_.items.size())
-                            nextitem = true;
-                    }
-                    if (nextitem)
-                        src.setData( (IterItem*)&srcObj.data_.items.item(iterkey.a) );
-                    else
-                        src = iterEND;
-                } else {
-                    // Key already exists, overwrite item value
-                    item->second = src->second;
-                    srcObj.remove(src, dir);
-                }
-            }
-        }
-        return *this;
-    }
-
-    /** Move given item from another map.
-     - This has the same effect as doing an add() then remove() on src map
-     - Note: Though src iterator as passed as const reference, it's still set to end position to maintain data integrity
-     .
-     \param  src  Source iterator in other map to move from
-     \return      This
-    */
-    ThisType& move(const IterM& src)
-        { return move((IterM&)src, iterNONE); }
-
     // REMOVE
 
     bool remove(const Key& key) {
@@ -589,29 +636,28 @@ protected:
         { return search(iterkey.a, key); }
 
 private:
-    struct CompareSwapNone {
-        static void swap(Compare&, Compare&)
-            { }
-    };
-    struct CompareSwapMem {
-        static void swap(Compare& a, Compare& b) {
-            Compare t;
-            t = b;
-            b = a;
-            a = t;
-        }
-    };
     typedef List<Item> Items;
 
     // Use inheritance to reduce size bloat with empty Compare
     struct Data : public Compare {
         Items items;
 
-        Data() { }
-        Data(const Compare& compare) : Compare(compare) { }
-        Data(const Items& items) : items(items) { }
-        Data(const Data& data) : Compare(data), items(data.items) { }
+        Data() {
+        }
+        Data(const Data& data) : Compare(data), items(data.items) {
+        }
+
+    #if defined(EVO_CPP11)
+        Data(Data&& data) : Compare(std::move((Compare&&)data)), items(std::move(data.items)) {
+        }
+        Data& operator=(Data&& data) {
+            *((Compare*)this) = std::move((Compare&&)data);
+            items = std::move(data.items);
+            return *this;
+        }
+    #endif
     };
+
     Data data_;
 
     const Item* search(Size& index, const Key& key) const {

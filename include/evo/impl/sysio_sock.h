@@ -1,5 +1,5 @@
 // Evo C++ Library
-/* Copyright 2018 Justin Crowell
+/* Copyright 2019 Justin Crowell
 Distributed under the BSD 2-Clause License -- see included file LICENSE.txt for details.
 */
 ///////////////////////////////////////////////////////////////////////////////
@@ -355,6 +355,12 @@ struct IoSocket : public IoDevice {
         nonblock   = false;
     }
 
+    IoSocket(Handle socket) {
+        timeout_ms = TIMEOUT_DEFAULT;
+        handle     = socket;
+        nonblock   = false;
+    }
+
     bool shutdown(Shutdown how=sINOUT) {
         if (handle == INVALID)
             errno = WSAENOTCONN;
@@ -411,6 +417,14 @@ struct IoSocket : public IoDevice {
                 }
                 err = get_socket_error();
             }
+        }
+        return false;
+    }
+
+    bool accept_nonblock(Error& err, IoSocket& client_socket, SocketAddressBase* client_address=NULL) {
+        if (accept(err, client_socket, client_address)) {
+            err = set_nonblock();
+            return (err == ENone);
         }
         return false;
     }
@@ -694,6 +708,18 @@ struct IoSocket : public IoDevice {
         autoresume = true;
     }
 
+    /** Constructor attaching to existing socket.
+     - This is equivalent to using default constructor and calling attach()
+     .
+     \param  socket  Socket handle to attach
+    */
+    IoSocket(Handle socket) {
+        timeout_ms = TIMEOUT_DEFAULT;
+        handle     = socket;
+        nonblock   = false;
+        autoresume = true;
+    }
+
     /** %Shutdown socket communication.
      - This is a gracefull way to shutdown input and/or output on socket so the other end is informated
      - Don't use on error, just close the socket (or let destructor close it)
@@ -970,6 +996,52 @@ struct IoSocket : public IoDevice {
                 }
             }
         }
+        return false;
+    }
+
+    /** Accept connection from listening socket and set the new connection as non-blocking.
+     - Socket must be in listen mode, see listen()
+     - This is equivalent to accept() then set_nonblock() on the new connection, except may be more efficient on some systems (Linux)
+     .
+     \param  err             Set to error code on failure, ETimeout on timeout
+     \param  client_socket   Attached to connected client socket on success (unchanged on error)
+     \param  client_address  Pointer to store client socket address on success (ignored on error), NULL to skip
+     \return                 Whether connection successfully accepted, false on error
+    */
+    bool accept_nonblock(Error& err, IoSocket& client_socket, SocketAddressBase* client_address=NULL) {
+        if (handle == INVALID) {
+            err   = EClosed;
+            errno = ENOTCONN;
+            return false;
+        }
+
+    #if defined(__linux) && defined(SOCK_NONBLOCK) && defined(__GLIBC__) && (__GLIBC__ > 2 || (__GLIBC__ == 2 && __GLIBC_MINOR__ >= 10)) && !defined(EVO_SOCKET_NO_ACCEPT4)
+        // Use GNU accept4() and set as non-blocking at the same time (less system calls) -- avoid this by defining EVO_SOCKET_NO_ACCEPT4
+        for (;;) {
+            int client_handle;
+            if (client_address != NULL)
+                client_handle = ::accept4(handle, &((SocketAddress*)client_address)->addr, &client_address->addrlen, SOCK_NONBLOCK);
+            else
+                client_handle = ::accept4(handle, NULL, NULL, SOCK_NONBLOCK);
+            if (client_handle > 0) {
+                client_socket.attach(client_handle);
+                client_socket.nonblock = true;
+                err = ENone;
+                return true;
+            } else {
+                const int last_error = errno;
+                if (last_error == EINTR && autoresume)
+                    continue;
+                err = get_socket_error(last_error);
+            }
+            break;
+        }
+    #else
+        if (accept(err, client_socket, client_address)) {
+            err = set_nonblock();
+            return (err == ENone);
+        }
+    #endif
         return false;
     }
 

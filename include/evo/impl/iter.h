@@ -1,5 +1,5 @@
 // Evo C++ Library
-/* Copyright 2018 Justin Crowell
+/* Copyright 2019 Justin Crowell
 Distributed under the BSD 2-Clause License -- see included file LICENSE.txt for details.
 */
 ///////////////////////////////////////////////////////////////////////////////
@@ -40,7 +40,8 @@ enum IteratorDir {
  .
 */
 template<class T>
-struct IteratorBase : public SafeBool< IteratorBase<T> > {
+class IteratorBase : public SafeBool< IteratorBase<T> > {
+public:
     typedef typename T::Size    Size;               ///< Size type to use
     typedef typename T::IterKey Key;                ///< Iterator key type
     typedef typename StaticIf< IsConst<T>::value,
@@ -336,7 +337,7 @@ Iterators interact with containers using an expected interface implemented by th
    \endcode
 */
 template<class T>
-struct IteratorFw : public IteratorBase<T> {
+class IteratorFw : public IteratorBase<T> {
 protected:
     using IteratorBase<T>::obj_;
     using IteratorBase<T>::end_;
@@ -607,7 +608,7 @@ Iterators interact with containers using an expected interface implemented by th
    \endcode
 */
 template<class T>
-struct IteratorBi : public IteratorFw<T> {
+class IteratorBi : public IteratorFw<T> {
 protected:
     using IteratorBase<T>::obj_;
     using IteratorBase<T>::end_;
@@ -900,7 +901,7 @@ Iterators interact with containers using an expected interface implemented by th
    \endcode
 */
 template<class T>
-struct IteratorRa : public IteratorBi<T> {
+class IteratorRa : public IteratorBi<T> {
 protected:
     using IteratorBase<T>::obj_;
     using IteratorBase<T>::end_;
@@ -1180,6 +1181,220 @@ protected:
         if (data_ == NULL)
             end_ = true;
         return !end_;
+    }
+};
+
+///////////////////////////////////////////////////////////////////////////////
+
+/** Iterator template for sequential enum values.
+ - Enum numeric values must be sequential, and must not have any gaps between first and last values
+ - This is used by enum types created by helpers like: EVO_ENUM_MAP_PREFIXED() and EVO_ENUM_CLASS_MAP()
+ - See \ref EnumConversion
+ .
+ \tparam  T  Enum type to iterator values on
+ \tparam  F  First enum value to start iterator at
+ \tparam  L  Last enum value to end iterator at
+
+\par Example
+
+This simple example prints out enum number values
+ - For an example printing enum string values see EnumMapIterator
+ .
+
+\code
+#include <evo/type.h>
+#include <evo/io.h>
+using namespace evo;
+
+enum MyEnum {
+    ENUM_ONE,
+    ENUM_TWO,
+    ENUM_THREE
+};
+
+typedef EnumIterator<MyEnum,ENUM_ONE,ENUM_THREE> MyEnumIter;
+
+int main() {
+    Console& c = con();
+    for (MyEnumIter iter; iter; ++iter)
+        c.out << iter.value_num() << NL;
+
+    return 0;
+}
+\endcode
+*/
+template<class T, int F, int L>
+class EnumIterator : public SafeBool< EnumIterator<T,F,L> > {
+public:
+    typedef EnumIterator<T,F,L> This;
+    typedef T EnumType;
+    static const T FIRST = (T)F;
+    static const T LAST = (T)L;
+
+    /** Constructor, sets to first enum value. */
+    EnumIterator() : value_(FIRST), end_(false) {
+    }
+
+    /** Copy constructor.
+     \param  src  Source to copy
+    */
+    EnumIterator(const This& src) : value_(src.value_), end_(src.end_) {
+    }
+
+    /** Constructor to start at explicit enum value.
+     \param  value  Enum value to start at
+    */
+    EnumIterator(EnumType value) : value_(value), end_(false) {
+    }
+
+    /** Constructor to start at given position.
+     \param  pos  Position to start at, either: iterFIRST, iterLAST, or iterEND
+    */
+    EnumIterator(IteratorPos pos) {
+        setpos(pos);
+    }
+
+    /** Assignment operator.
+     \param  src  Source to copy
+     \return      This
+    */
+    This& operator=(const This& src) {
+        value_ = src.value_;
+        end_ = src.end_;
+        return *this;
+    }
+
+    /** Assignment operator to set at explicit enum value.
+     \param  value  Enum value to set at
+     \return        This
+    */
+    This& operator=(EnumType value) {
+        value_ = value;
+        end_ = false;
+        return *this;
+    }
+
+    /** Assignment operator to set at given position.
+     \param  pos  Position to start at, either: iterFIRST, iterLAST, or iterEND
+     \return        This
+    */
+    This& operator=(IteratorPos pos) {
+        setpos(pos);
+        return *this;
+    }
+
+    /** Check whether iterator is at end.
+     \return  Whether at end
+    */
+    bool operator!() const
+        { return end_; }
+
+    /** Dereference iterator to get current enum value.
+     \return  Current enum value
+    */
+    EnumType operator*() const
+        { return value_; }
+
+    /** Equality operator to compare with another iterator to same enum.
+     \param  oth  Other iterator to compare to
+     \return      Whether equal
+    */
+    bool operator==(const This& oth) const
+        { return (end_ == oth.end_ && value_ == oth.value_); }
+
+    /** Inequality operator to compare with another iterator to same enum.
+     \param  oth  Other iterator to compare to
+     \return      Whether inequal
+    */
+    bool operator!=(const This& oth) const
+        { return (end_ != oth.end_ || value_ != oth.value_); }
+
+    /** Pre increment operator, moves to next enum value or end.
+     \return  This
+    */
+    This& operator++() {
+        next();
+        return *this;
+    }
+
+    /** Post increment operator, moves to next enum value or end.
+     \return  Iterator copy before increment
+    */
+    This operator++(int) {
+        This result(*this);
+        next();
+        return result;
+    }
+
+    /** Pre decrement operator, moves to previous enum value or end.
+     \return  This
+    */
+    This& operator--() {
+        prev();
+        return *this;
+    }
+
+    /** Post decrement operator, moves to previous enum value or end.
+     \return  Iterator copy before decrement
+    */
+    This operator--(int) {
+        This result(*this);
+        prev();
+        return result;
+    }
+
+    /** Get current enum value.
+     \return  Current enum value
+    */
+    EnumType value() const
+        { return value_; }
+
+    /** Get current enum number value.
+     \return  Current enum number value
+    */
+    int value_num(int endvalue=0) const {
+        if (end_)
+            return endvalue;
+        return (int)value_;
+    }
+
+protected:
+    EnumType value_;
+    bool end_;
+
+    void setpos(IteratorPos pos) {
+        switch (pos) {
+            case iterFIRST:
+                value_ = FIRST;
+                end_ = false;
+                break;
+            case iterLAST:
+                value_ = LAST;
+                end_ = false;
+                break;
+            default:
+                value_ = LAST;
+                end_ = true;
+                break;
+        }
+    }
+
+    void prev() {
+        if (!end_) {
+            if (value_ <= FIRST)
+                end_ = true;
+            else
+                value_ = (EnumType)((int)value_ - 1);
+        }
+    }
+
+    void next() {
+        if (!end_) {
+            if (value_ >= LAST)
+                end_ = true;
+            else
+                value_ = (EnumType)((int)value_ + 1);
+        }
     }
 };
 

@@ -1,5 +1,5 @@
 // Evo C++ Library
-/* Copyright 2018 Justin Crowell
+/* Copyright 2019 Justin Crowell
 Distributed under the BSD 2-Clause License -- see included file LICENSE.txt for details.
 */
 ///////////////////////////////////////////////////////////////////////////////
@@ -110,7 +110,7 @@ namespace evo {
 
 /** Sequential list of managed pointers with random access.
 
- \tparam  T      Type to use -- an item will be T* (Item), a pointer to list will be T** (Item*)
+ \tparam  T      Type to use -- an item type will be `T*` (`Item`), a pointer to items type will be `T**` (`Item*`)
  \tparam  TSize  Size type to use for size/index values (must be unsigned integer) -- default: SizeT
 
 \par Features
@@ -129,6 +129,19 @@ namespace evo {
  - Supports \ref Sharing "Sharing" -- however immutable data will be copied
  .
 
+C++11:
+ - Range-based for loop -- see \ref StlCompatibility
+   \code
+    PtrList<int> list;
+    for (auto num : list.asconst()) {
+    }
+   \endcode
+ - Initialization lists
+   \code
+    PtrList<int> list = {1, 2, 3};
+   \endcode
+ - Move semantics
+
 \par Iterators
 
  - PtrList<>::Iter -- Read-Only Iterator (IteratorRa)
@@ -139,6 +152,8 @@ namespace evo {
 
  - PtrList()
  - PtrList(const ThisType&)
+ - PtrList(std::initializer_list<T>) [C++11]
+ - PtrList(ThisType&&) [C++11]
  .
 
 \par Read Access
@@ -153,6 +168,8 @@ namespace evo {
  - compare()
    - operator==()
    - operator!=()
+ - cbegin(), cend()
+   - begin() const, end() const
  - find()
    - findr()
  .
@@ -162,6 +179,7 @@ namespace evo {
  - dataM()
    - itemM()
    - operator()()
+ - begin(), end()
  - resize()
    - resizemin()
    - unshare()
@@ -170,6 +188,7 @@ namespace evo {
    - setempty()
    - clear()
    - operator=(const ThisType&)
+   - operator=(ThisType&&) [C++11]
    - copy(const ThisType&)
  - get()
    - getitem()
@@ -187,6 +206,15 @@ public:
     typedef T*                  Item;           ///< Item type (pointer to Value)
 
     typedef PtrList<T,Size>     ThisType;       ///< This list type
+
+    // Iterator support types
+    /** \cond impl */
+    typedef Key   IterKey;
+    typedef Value IterItem;
+    /** \endcond */
+
+    typedef typename IteratorRa<ThisType>::Const Iter;  ///< Iterator (const) - IteratorRa
+    typedef IteratorRa<ThisType>                 IterM; ///< Iterator (mutable) - IteratorRa
 
     /** Default constructor sets as null. */
     PtrList() {
@@ -215,6 +243,55 @@ public:
     /** Destructor. */
     ~PtrList()
         { EVO_IMPL_PTRLIST_FREE(header_); }
+
+#if defined(EVO_CPP11)
+    /** Sequence constructor (C++11).
+     \param  init  Initializer list, passed as comma-separated values in braces `{ }`
+    */
+    PtrList(std::initializer_list<T> init) : PtrList() {
+        assert( init.size() < IntegerT<Size>::MAX );
+        resize((Size)init.size());
+        Size i = 0;
+        for (const auto& val : init)
+            get(i++) = val;
+    }
+
+    /** Move constructor (C++11).
+     \param  src  Source to move
+    */
+    PtrList(ThisType&& src) {
+        header_ = src.header_;
+        data_ = src.data_;
+        size_ = src.size_;
+        src.header_ = NULL;
+        src.data_ = NULL;
+        src.size_ = 0;
+    }
+
+    /** Move assignment operator (C++11).
+     \param  src  Source to move
+     \return      This
+    */
+    ThisType& operator=(ThisType&& src) {
+        EVO_IMPL_PTRLIST_FREE(header_);
+        header_ = src.header_;
+        data_ = src.data_;
+        size_ = src.size_;
+        src.header_ = NULL;
+        src.data_ = NULL;
+        src.size_ = 0;
+        return *this;
+    }
+#endif
+
+    /** Explicitly use a const reference to this.
+     - This is useful to force using this as const without casting
+     .
+     \return  This
+    */
+    const ThisType& asconst() const {
+        return *this;
+    }
 
     // SET
 
@@ -538,6 +615,30 @@ public:
     }
 
     // FIND
+
+    /** \copydoc List::cbegin() */
+    Iter cbegin() const
+        { return Iter(*this); }
+
+    /** \copydoc List::cend() */
+    Iter cend() const
+        { return Iter(); }
+
+    /** \copydoc List::begin() */
+    IterM begin()
+        { return IterM(*this); }
+
+    /** \copydoc List::begin() const */
+    Iter begin() const
+        { return Iter(*this); }
+
+    /** \copydoc List::end() */
+    IterM end()
+        { return IterM(); }
+
+    /** \copydoc List::end() const */
+    Iter end() const
+        { return Iter(); }
 
     /** Find first occurrence of item with forward search.
      - This searches non-null items for given value, using item %operator==() for comparisons
@@ -983,17 +1084,6 @@ public:
     */
     void swap(ThisType& list)
         { EVO_IMPL_CONTAINER_SWAP(this, &list, ThisType); }
-
-    // ITERATORS
-
-    // Iterator support types
-    /** \cond impl */
-    typedef Key   IterKey;
-    typedef Value IterItem;
-    /** \endcond */
-
-    typedef typename IteratorRa<ThisType>::Const Iter;    ///< Iterator (const) - IteratorRa
-    typedef IteratorRa<ThisType>                 IterM;    ///< Iterator (mutable) - IteratorRa
 
     // INTERNAL
 

@@ -1,5 +1,5 @@
 // Evo C++ Library
-/* Copyright 2018 Justin Crowell
+/* Copyright 2019 Justin Crowell
 Distributed under the BSD 2-Clause License -- see included file LICENSE.txt for details.
 */
 ///////////////////////////////////////////////////////////////////////////////
@@ -45,16 +45,17 @@ namespace evo {
 
 \par Read Access
 
+ - asconst()
  - size()
    - null(), empty()
    - capacity()
    - shared()
    - ordered()
  - contains(const Key&) const
-   - contains(const Key&, const Value&) const
+ - cbegin(), cend()
+   - begin() const, end() const
  - find()
- - iter()
-   - cbegin(), cend()
+   - iter()
  - operator==()
    - operator!=()
  .
@@ -65,12 +66,12 @@ namespace evo {
    - capacity(Size)
    - capacitymin()
    - unshare()
+ - begin(), end()
  - findM()
+   - iterM()
    - getitem()
    - get()
    - operator[]()
- - iterM()
-   - begin(), end()
  - set()
    - set(const MapBaseType&)
    - setempty()
@@ -81,6 +82,44 @@ namespace evo {
  - remove(const Key&)
    - remove(IterM&,IteratorDir)
  .
+
+\par Helpers
+
+ - map_contains()
+ - lookupsub()
+ .
+
+\par Comparison Object
+
+%Maps that use a hash/comparison type will have these additional methods (not included in this interface), where T is the hash/compare type used:
+ - `const T& get_compare() const`
+ - `T& get_compare()`
+ .
+
+See MapList or MapHash for example.
+
+\par Ordered Maps
+
+Ordered maps will have these additional methods (not included in this interface):
+ - `Iter iter_lower(const Key& value) const`
+ - `Iter iter_upper(const Key& value) const`
+ - `IterM iter_lowerM(const Key& value)`
+ - `IterM iter_upperM(const Key& value)`
+ - `Size remove(const Value& Key, Size count)`
+ - `Size remove_range(IterM& Key, Size count)`
+ - `Size remove_range(IterM& Key, IterM& end)`
+ .
+
+See MapList for example.
+
+\par List Maps
+
+%List maps will have these additional methods (not included in this interface):
+ - `Size item(Size index) const`
+ - `Size removeat(Size index)`
+ .
+
+See MapList for example.
 
 \par Example
 
@@ -115,6 +154,28 @@ public:
     typedef typename IteratorBi<ThisType>::Const Iter;      ///< Iterator (const) - IteratorBi
     typedef IteratorBi<ThisType>                 IterM;     ///< Iterator (mutable) - IteratorBi
 
+#if defined(EVO_CPP11)
+    using KeyPass = typename DataCopy<TKey>::PassType;      ///< Key type for passing through InitPair (C++11)
+    using ValuePass = typename DataCopy<TValue>::PassType;  ///< Value type for passing through InitPair (C++11)
+
+    /** Initializer key/value pair, used with initializer (C++11). */
+    struct InitPair {
+        KeyPass   key;     ///< %Map key value
+        ValuePass value;   ///< %Map value
+
+        /** Constructor with key and value.
+         \param  key    Key to use
+         \param  value  Value to use
+        */
+        InitPair(KeyPass key, ValuePass value) : key(key), value(value) {
+        }
+
+        InitPair() = delete;
+        InitPair(const InitPair&) = delete;
+        InitPair& operator=(const InitPair&) = delete;
+    };
+#endif
+
 protected:
     Size       size_;           ///< %Map size (number of items, automatically updated by concrete set members)
     bool       ordered_;        ///< Whether map is ordered (items are kept in order by key)
@@ -143,6 +204,11 @@ public:
     /** Destructor. */
     virtual ~Map()
         { }
+
+    /** \copydoc List::asconst() */
+    const MapBaseType& asconst() const {
+        return *this;
+    }
 
     // SET
 
@@ -257,18 +323,37 @@ public:
 
     // FIND
 
+    /** \copydoc List::cbegin() */
+    Iter cbegin() const
+        { return Iter(*this); }
+
+    /** \copydoc List::cend() */
+    Iter cend() const
+        { return Iter(); }
+
+    /** \copydoc List::begin() */
+    IterM begin()
+        { return IterM(*this); }
+
+    /** \copydoc List::begin() const */
+    Iter begin() const
+        { return Iter(*this); }
+
+    /** \copydoc List::end() */
+    IterM end()
+        { return IterM(); }
+
+    /** \copydoc List::end() const */
+    Iter end() const
+        { return Iter(); }
+
     /** Get whether map contains the given key.
+     - See also: map_contains()
+     .
      \param  key  Key to look for
      \return      Whether key was found
     */
     virtual bool contains(const Key& key) const = 0;
-
-    /** Get whether map contains the given key with given value.
-     \param  key    Key to look for
-     \param  value  Value to check for
-     \return        Whether key was found and matches value
-    */
-    virtual bool contains(const Key& key, const Value& value) const = 0;
 
     /** Find (lookup) value for given key (const).
      \param  key  Key to find
@@ -281,44 +366,6 @@ public:
      \return      Found value pointer, NULL if not found
     */
     virtual Value* findM(const Key& key) = 0;
-
-    /** Get iterator at first item (const).
-     - This allows compatibility with range-based for loops and other libraries, otherwise use container Iter directly
-     .
-     \return  Iterator at first item, or at end position if empty
-     \see Iter, cend(), begin(), end()
-    */
-    Iter cbegin() const
-        { return Iter(*this); }
-
-    /** Get iterator at end (const).
-     - This allows compatibility with range-based for loops and other libraries, otherwise use container Iter directly
-     .
-     \return  Iterator at end position
-     \see Iter, cbegin(), begin(), end()
-    */
-    Iter cend() const
-        { return Iter(); }
-
-    /** Get iterator at first item (mutable).
-     - This allows compatibility with range-based for loops and other libraries, otherwise use container Iter directly
-     - cbegin() is more efficient, since this effectively calls unshare() to make items mutable
-     - \b Caution: Results are undefined if value is modified in a way that changes it's ordered position in set
-     .
-     \return  Iterator at first item, or at end position if empty
-     \see IterM, end(), cbegin(), cend()
-    */
-    IterM begin()
-        { return IterM(*this); }
-
-    /** Get iterator at end (const).
-     - This allows compatibility with range-based for loops and other libraries, otherwise use container Iter directly
-     .
-     \return  Iterator at end position
-     \see IterM, begin(), cbegin(), cend()
-    */
-    IterM end()
-        { return IterM(); }
 
     /** Find (lookup) iterator for given key (const).
      \param  key  Key to find
@@ -476,43 +523,6 @@ public:
         return count;
     }
 
-    // MOVE
-
-    /** Move given item from another map.
-     - This has the same effect as doing an add() then remove() on src map
-     - For best performance use concrete iterator instead of base Map::Iter
-     .
-     \tparam  T  Map type, must have same key/value types -- inferred from src parameter
-     \param  src  Source iterator in other map to move from
-     \param  dir  Direction to move src iterator to next item, iterNONE for end position
-     \return      This
-    */
-    template<class T>
-    MapBaseType& move(IteratorBi<T>& src, IteratorDir dir=iterNONE) {
-        STATIC_ASSERT(!IsConst<T>::value, ERROR_move_iterator_must_be_mutable_not_const);
-        STATIC_ASSERT((IsSame<typename T::Item,Item>::value), ERROR_move_from_incompatible_source_iterator);
-        if (src) {
-            MapBaseType& srcObj = src.getParent();
-            if (&srcObj != this) {
-                this->add((Item&)*src);
-                srcObj.remove((IterM&)src, dir);
-            }
-        }
-        return *this;
-    }
-
-    /** Move given item from another map.
-     - This has the same effect as doing an add() then remove() on src map
-     - For best performance use concrete iterator instead of base Map::Iter
-     .
-     \tparam  T  Map type, must have same key/value types -- inferred from src parameter
-     \param  src  Source iterator in other map to move from
-     \return      This
-    */
-    template<class T>
-    MapBaseType& move(const IteratorBi<T>& src)
-        { return move<T>((IteratorBi<T>&)src, iterNONE); }
-
     // REMOVE
 
     /** Find and remove item with given key.
@@ -546,6 +556,20 @@ public:
 };
 
 ///////////////////////////////////////////////////////////////////////////////
+
+/** Check whether map contains key with matching value.
+ - This requires map value type to implement `operator==()`
+ .
+ \tparam  T  %Map type, inferred from arg
+ \param  map    %Map to check
+ \param  key    Key to check
+ \param  value  Value to check for
+ \return        Whether map contains key with matching value
+*/
+template<class T> inline bool map_contains(const T& map, const typename T::Key& key, const typename T::Value& value) {
+    const typename T::Value* p = map.find(key);
+    return (p != NULL && *p == value);
+}
 
 /** Lookup (find) map value as SubString for given key.
  - Useful helper for looking up any string value and converting via SubString\n

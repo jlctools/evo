@@ -1,5 +1,5 @@
 // Evo C++ Library
-/* Copyright 2018 Justin Crowell
+/* Copyright 2019 Justin Crowell
 Distributed under the BSD 2-Clause License -- see included file LICENSE.txt for details.
 */
 ///////////////////////////////////////////////////////////////////////////////
@@ -11,7 +11,7 @@ Distributed under the BSD 2-Clause License -- see included file LICENSE.txt for 
 // Includes/Defines
 #include "impl/sys.h"
 #include "type.h"
-#if defined(EVO_CPP11) || (defined(EVO_MSVC_YEAR) && EVO_MSVC_YEAR >= 2012) || defined(EVO_INTEL_VER) || defined(DOXYGEN)
+#if defined(EVO_CPP11) || (defined(EVO_MSVC_YEAR) && EVO_MSVC_YEAR >= 2012) || defined(EVO_INTEL_VER)
     #include <atomic>
     #define EVO_INTRINSIC_ATOMICS 1		// 1 when compiler supports atomic operations
     #define EVO_STD_ATOMIC 1			// 1 when compiler supports std::atomic and std::atomic_flag

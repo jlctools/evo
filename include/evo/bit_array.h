@@ -1,5 +1,5 @@
 // Evo C++ Library
-/* Copyright 2018 Justin Crowell
+/* Copyright 2019 Justin Crowell
 Distributed under the BSD 2-Clause License -- see included file LICENSE.txt for details.
 */
 ///////////////////////////////////////////////////////////////////////////////
@@ -26,6 +26,9 @@ namespace evo {
  - \b Caution: Resizing, setting, or freeing the parent will invalidate all subsets referencing it
  .
 
+C++11:
+ - Move semantics
+
 Note that this is not a full EvoContainer and doesn't have any iterators.
 
  - See BitArrayT notes on performance.
@@ -38,6 +41,7 @@ Note that this is not a full EvoContainer and doesn't have any iterators.
  - BitArraySubsetT(const Parent&,Size,Size)
  - BitArraySubsetT(Parent&,Size,Size)
  - BitArraySubsetT(const ThisType&)
+ - BitArraySubsetT(ThisType&&)
  .
 
 \par Read Access
@@ -69,9 +73,10 @@ Note that this is not a full EvoContainer and doesn't have any iterators.
    - set(const ThisType&,Size,Size)
    - set(const Parent&,Size,Size)
    - set(Parent&,Size,Size)
-   - operator=(const ThisType& data)
-   - operator=(const Parent& data)
-   - operator=(Parent& data)
+   - operator=(const ThisType&)
+   - operator=(ThisType&&)
+   - operator=(const Parent&)
+   - operator=(Parent&)
  .
 
 \par Example
@@ -97,11 +102,11 @@ int main() {
     subset.setbits(2, 5);
 
     // Extract and print integer in hex from all 8 bits in subset: 00111110
-    uint16 val = subset.extract<uint16>(0, 8);
+    uint16 val = subset.extractr<uint16>(0, 8);
     c.out << FmtUInt16(val, fHEX) << NL;
 
     // Extract and print integer in hex from all 10 bits: 1001111101
-    val = array.extract<uint16>(0, 10);
+    val = array.extractr<uint16>(0, 10);
     c.out << FmtUInt16(val, fHEX) << NL;
 
     return 0;
@@ -161,6 +166,26 @@ public:
     */
     BitArraySubsetT(const ThisType& src) : parent_rd_(src.parent_rd_), parent_wr_(src.parent_wr_), offset_(src.offset_), bitsize_(src.bitsize_) {
     }
+
+#if defined(EVO_CPP11)
+    /** Move constructor (C++11).
+     \param  src  Source to move
+    */
+    BitArraySubsetT(ThisType&& src) {
+        ::memcpy(this, &src, sizeof(ThisType));
+        ::memset(&src, 0, sizeof(ThisType));
+    }
+
+    /** Move assignment operator (C++11).
+     \param  src  Source to move
+     \return      This
+    */
+    ThisType& operator=(ThisType&& src) {
+        ::memcpy(this, &src, sizeof(ThisType));
+        ::memset(&src, 0, sizeof(ThisType));
+        return *this;
+    }
+#endif
 
     // SET
 
@@ -755,19 +780,24 @@ private:
  - No extra capacity allocation, sharing, or slicing like List
  .
 
+C++11:
+ - Range-based for loop
+   \code
+    BitArray arr;
+    for (auto bit : arr) {
+    }
+   \endcode
+ - Initialization lists (uint32 list)
+   \code
+    BitArray arr = {0xFFFFFFFF, 0x00000000};
+   \endcode
+ - Move semantics
+   - \b Caution: Moving a BitArray invalidates any BitArraySubetT referencing it
+
 Note that this is not a full EvoContainer and has more limited iterators.
 
- - For subset see BitArraySubsetT.
- - For default sizing use \ref BitArray and \ref BitArraySubset.
-
-For best performance with bit operations:
- - GCC & Clang: Compile with `-msse4.2` (or similar) to enable SSE instructions
-   - You can also optimize further for current or specific hardware with `-march=` and `-tune=`
-   - See: https://gcc.gnu.org/onlinedocs/gcc/x86-Options.html
- - MSVC: Define `EVO_MSVC_POPCNT` (before including Evo headers) to enable optimized POPCNT CPU instructions
-   - \b Caution: When enabled, runtime results are undefined on a CPU that doesn't support this instruction
-   - See: https://docs.microsoft.com/en-us/cpp/intrinsics/popcnt16-popcnt-popcnt64
- .
+ - For subset see BitArraySubsetT
+ - For default size types use \ref BitArray and \ref BitArraySubset
 
 \par Constructors
 
@@ -776,13 +806,18 @@ For best performance with bit operations:
  - BitArrayT(const ThisType&)
  - BitArrayT(const ThisType&,Size,Size)
  - BitArrayT(const Subset&,Size,Size)
+ - BitArrayT(std::initializer_list<uint32>) [C++11]
+ - BitArrayT(ThisType&&) [C++11]
  .
 
 \par Read Access
 
+ - asconst()
  - size()
    - null(), empty()
    - shared()
+ - cbegin(), cend()
+   - begin(), end()
  - getbit()
    - checkall()
    - checkany()
@@ -817,6 +852,7 @@ For best performance with bit operations:
    - set(const Subset&)
    - setempty()
    - operator=(const ThisType& data)
+   - operator=(ThisType&&) [C++11]
  - shiftl(), shiftr()
  .
 
@@ -844,10 +880,10 @@ int main() {
     const bool bit1 = array.getbit(1);      // false
 
     // Extract and print integer from bits 2-4: 111
-    c.out << array.extract<uint16>(2, 3) << NL;
+    c.out << array.extractr<uint16>(2, 3) << NL;
 
     // Extract and print integer in hex from all 10 bits: 1011100001
-    const uint16 val = array.extract<uint16>(0, 10);
+    const uint16 val = array.extractr<uint16>(0, 10);
     c.out << FmtUInt16(val, fHEX) << NL;
 
     return 0;
@@ -868,6 +904,17 @@ public:
     typedef BitArraySubsetT<ThisType> Subset;   ///< Subset type for this bit array type
     typedef TSize Size;                         ///< Size integer type
     typedef T     Value;                        ///< Chunk value type for bits
+
+    // Iterator support types
+    /** \cond impl */
+    struct IterKey {
+        Size offset;
+        typename Bits<T,Size>::IterState state;
+    };
+    typedef Size IterItem;
+    /** \endcond */
+
+    typedef typename IteratorFw<ThisType>::Const Iter;    ///< Iterator (const) - IteratorFw
 
     /** Default constructor sets as null. */
     BitArrayT() : data_(NULL), size_(0), bitsize_(0) {
@@ -931,6 +978,50 @@ public:
     ~BitArrayT() {
         if (size_ > 0)
             ::free(data_);
+    }
+
+#if defined(EVO_CPP11)
+    /** Sequence constructor that initializes bits from a list of uint32 values (C++11).
+     \param  init  Initializer list, passed as comma-separated uint32 values in braces `{ }`
+    */
+    BitArrayT(std::initializer_list<uint32> init) : BitArrayT() {
+        const Size ITEM_BITS = sizeof(uint32) * 8;
+        assert( init.size() < IntegerT<Size>::MAX / ITEM_BITS );
+        resize((Size)init.size() * ITEM_BITS);
+        Size offset = 0;
+        for (auto num : init) {
+            store(offset, ITEM_BITS, num);
+            offset += ITEM_BITS;
+        }
+    }
+
+    /** Move constructor (C++11).
+     \param  src  Source to move
+    */
+    BitArrayT(ThisType&& src) {
+        ::memcpy(this, &src, sizeof(ThisType));
+        ::memset(&src, 0, sizeof(ThisType));
+    }
+
+    /** Move assignment operator (C++11).
+     \param  src  Source to move
+     \return      This
+    */
+    ThisType& operator=(ThisType&& src) {
+        resize(0);
+        ::memcpy(this, &src, sizeof(ThisType));
+        ::memset(&src, 0, sizeof(ThisType));
+        return *this;
+    }
+#endif
+
+    /** Explicitly use a const reference to this.
+     - This is useful to force using this as const without casting
+     .
+     \return  This
+    */
+    const ThisType& asconst() const {
+        return *this;
     }
 
     // SET
@@ -1103,6 +1194,22 @@ public:
     }
 
     // BITS
+
+    /** \copydoc SubList::cbegin() */
+    Iter cbegin() const
+        { return Iter(*this); }
+
+    /** \copydoc SubList::cend() */
+    Iter cend() const
+        { return Iter(); }
+
+    /** \copydoc SubList::begin() */
+    Iter begin() const
+        { return Iter(*this); }
+
+    /** \copydoc SubList::end() */
+    Iter end() const
+        { return Iter(); }
 
     /** Count number of bits set or cleared (const).
      - This scans through all bits and counts the number of bits set or cleared
@@ -1580,6 +1687,12 @@ public:
             size_ = size;
             bitsize_ = bitsize;
         } else {
+            // Same array size
+            if (bitsize < bitsize_) {
+                // Clear removed bits
+                const T mask = (Bits<T,Size>::RBIT << (bitsize_ - bitsize)) - 1;
+                data_[size_ - 1] &= ~mask;
+            }
             bitsize_ = bitsize;
         }
         return *this;
@@ -1598,19 +1711,6 @@ public:
         resize(bitsize);
         return *this;
     }
-
-    // ITERATORS
-
-    // Iterator support types
-    /** \cond impl */
-    struct IterKey {
-        Size offset;
-        typename Bits<T,Size>::IterState state;
-    };
-    typedef Size IterItem;
-    /** \endcond */
-
-    typedef typename IteratorFw<ThisType>::Const Iter;    ///< Iterator (const) - IteratorFw
 
     // INTERNAL
 

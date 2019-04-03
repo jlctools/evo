@@ -1,0 +1,14 @@
+digraph "Nullable&lt; T &gt;"
+{
+  edge [fontname="Helvetica",fontsize="10",labelfontname="Helvetica",labelfontsize="10"];
+  node [fontname="Helvetica",fontsize="10",shape=record];
+  Node1 [label="Nullable\< T \>",height=0.2,width=0.4,color="black", fillcolor="grey75", style="filled", fontcolor="black"];
+  Node2 -> Node1 [dir="back",color="midnightblue",fontsize="10",style="solid",fontname="Helvetica"];
+  Node2 [label="SafeBool\< Nullable\l\< T \> \>",height=0.2,width=0.4,color="black", fillcolor="white", style="filled",URL="$classevo_1_1_safe_bool.html"];
+  Node1 -> Node3 [dir="back",color="midnightblue",fontsize="10",style="solid",fontname="Helvetica"];
+  Node3 [label="CharT\< T \>",height=0.2,width=0.4,color="black", fillcolor="white", style="filled",URL="$structevo_1_1_char_t.html",tooltip="Nullable primitive character base type. "];
+  Node1 -> Node4 [dir="back",color="midnightblue",fontsize="10",style="solid",fontname="Helvetica"];
+  Node4 [label="FloatT\< T \>",height=0.2,width=0.4,color="black", fillcolor="white", style="filled",URL="$structevo_1_1_float_t.html",tooltip="Nullable basic floating-point base type. "];
+  Node1 -> Node5 [dir="back",color="midnightblue",fontsize="10",style="solid",fontname="Helvetica"];
+  Node5 [label="IntegerT\< T \>",height=0.2,width=0.4,color="black", fillcolor="white", style="filled",URL="$structevo_1_1_integer_t.html",tooltip="Basic integer type. "];
+}
