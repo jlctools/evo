@@ -49,10 +49,10 @@ Hello Evo 123!
 If the compiler can't find the Evo headers you will need to add an include path like the following.
 
 Example with gcc/clang:
-> g++ -I/opt/evo-0.4/include example.cpp
-> clang++ -I/opt/evo-0.4/include example.cpp
+> g++ -I/opt/evo-0.5/include example.cpp
+> clang++ -I/opt/evo-0.5/include example.cpp
 
-For MS Visual C++ projects, add evo-0.4/include to "Include Directories" under: Project Properties -> VC++ Directories.
+For MS Visual C++ projects, add evo-0.5/include to "Include Directories" under: Project Properties -> VC++ Directories.
 
 Compilers
 ---------
