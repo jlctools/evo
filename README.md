@@ -5,8 +5,8 @@ _May 2019: Evo 0.5.1 Released!_
 
 [Evo on Github](https://github.com/jlctools/evo)
 
-* [Documentation](http://jlctools.github.io/evo/evo-0.5/html/index.html)
-* [What's New](http://jlctools.github.io/evo/evo-0.5.1/html/WhatsNew.html)
+* [Documentation](http://jlctools.github.io/evo/evo-0.5.1/html/index.html)
+* [What's New](http://jlctools.github.io/evo/evo-0.5.1/html/_whats_new.html)
 * [Benchmarks](bench/README.md)
 * [FAQ](FAQ.md)
 
@@ -17,8 +17,8 @@ Inspired by modern languages like Python and D, Evo is the result of many years 
 Download
 --------
 
-* Linux/Unix: [Evo 0.5](https://github.com/jlctools/evo/raw/master/download/evo-0.5.tar.gz)
-* Windows: [Evo 0.5](https://github.com/jlctools/evo/raw/master/download/evo-0.5.zip)
+* Linux/Unix: [Evo 0.5.1](jlctools.github.io/evo/downloads/evo-0.5.1.tar.gz)
+* Windows: [Evo 0.5.1](jlctools.github.io/evo/downloads/evo-0.5.1.zip)
 
 License
 -------
