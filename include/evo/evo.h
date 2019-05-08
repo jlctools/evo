@@ -155,6 +155,8 @@ object oriented C++ server code. Evo aims to make C++ easier and more powerful w
    - EVO_ENUM_REMAP(), EVO_ENUM_REMAP_PREFIXED()
  - EVO_ENUM_CLASS_MAP()
    - EVO_ENUM_CLASS_REMAP()
+ - EVO_ENUM_TRAITS()
+   - EVO_ENUM_CLASS_TRAITS()
  - EnumIterator, EnumMapIterator
  .
 
@@ -1054,6 +1056,10 @@ Evo has helpers for efficiently converting between strings and enums.
  - Lookups are fast -- binary search is used to find the enum string in a pre-sorted list with SubStringMapList
  - This is done using EVO_ENUM_MAP_PREFIXED() or EVO_ENUM_CLASS_MAP(), or a related variant
  - \b Caution: This requires string values to be _pre-sorted_, and _no gaps_ between enum values
+ .
+
+Additionally, these helpers are useful for mapping enums to "trait" objects:
+ - EVO_ENUM_TRAITS(), EVO_ENUM_CLASS_TRAITS()
  .
 
 This example defines an enum, then uses the EVO_ENUM_MAP_PREFIXED() helper to create string mappings.
