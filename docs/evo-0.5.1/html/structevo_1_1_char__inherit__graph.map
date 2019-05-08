@@ -1,0 +1,5 @@
+<map id="Char" name="Char">
+<area shape="rect" id="node2" href="$structevo_1_1_char_t.html" title="CharT\&lt; char \&gt;" alt="" coords="21,169,139,196"/>
+<area shape="rect" id="node3" href="$classevo_1_1_nullable.html" title="Nullable\&lt; char \&gt;" alt="" coords="13,95,147,121"/>
+<area shape="rect" id="node4" href="$classevo_1_1_safe_bool.html" title="SafeBool\&lt; Nullable\l\&lt; char \&gt; \&gt;" alt="" coords="5,5,155,47"/>
+</map>

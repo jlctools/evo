@@ -181,7 +181,7 @@ public:
      - This returns a pointer to the oldest items and the size of contiguous items from there
      - Use pop_size() with size to remove these items, then call this again to see any remaining items
      .
-     \param  size  Set to number of contiguous items from pointer, 0 if empty
+     \param  size  %Set to number of contiguous items from pointer, 0 if empty
      \return       Oldest item pointer, NULL if empty
     */
     const T* peek(Size& size) const {

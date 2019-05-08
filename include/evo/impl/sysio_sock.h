@@ -95,7 +95,7 @@ class ExceptionSocketOut : public ExceptionStreamOut
 struct SocketAddressBase {
     socklen_t addrlen;          ///< Address length
 
-    /** Set addrlen to max size for socket address.
+    /** %Set addrlen to max size for socket address.
      - Low-level socket functions that store a socket address need to know the max socket address length
      - Derived class must implement this and set the proper max size
     */
@@ -249,7 +249,7 @@ struct SocketAddressInfo {
         return ELength;
     }
 
-    /** Convert host address to one or more socket addresses.
+    /** %Convert host address to one or more socket addresses.
      - This is like resolve() but doesn't call an external service (like DNS) so doesn't block
      .
      \param  host  Host address to convert/resolve (terminated string)
@@ -258,7 +258,7 @@ struct SocketAddressInfo {
     Error convert(const char* host)
         { return resolve(host, EVO_CNULL, NUMERIC); }
 
-    /** Convert host address to one or more socket addresses.
+    /** %Convert host address to one or more socket addresses.
      - This is like resolve() but doesn't call an external service (like DNS) so doesn't block
      .
      \param  host  Host address to resolve (terminated string)
@@ -268,7 +268,7 @@ struct SocketAddressInfo {
     Error convert(const char* host, ushort port)
         { return resolve(host, port, NUMERIC); }
 
-    /** Convert host address to one or more socket addresses.
+    /** %Convert host address to one or more socket addresses.
      - This is like resolve() but doesn't call an external service (like DNS) so doesn't block
      .
      \param  host  Host address to resolve (terminated string)
@@ -725,7 +725,7 @@ struct IoSocket : public IoDevice {
      - Don't use on error, just close the socket (or let destructor close it)
      .
      \param  how  Whether to shutdown input, output, or both -- see Shutdown enum
-     \return      Whether successfull, false on error (not connected, invalid, etc)
+     \return      Whether successful, false on error (not connected, invalid, etc)
     */
     bool shutdown(Shutdown how=sINOUT) {
         if (handle == INVALID)
@@ -792,7 +792,7 @@ struct IoSocket : public IoDevice {
      - Used with non-blocking I/O, after connection is started
      - If connection failed this fails with err set to the error code
      .
-     \param  err         Set to error code on failure, ETimeout on timeout
+     \param  err         %Set to error code on failure, ETimeout on timeout
      \param  timeout_ms  Wait timeout in milliseconds, 0 for no wait (returns immediately, useful for polling)
      \return             Whether connected, false on error
     */
@@ -824,7 +824,7 @@ struct IoSocket : public IoDevice {
      - Socket is ready to read when it's received some data to read
      - Used with non-blocking I/O, before calling read()
      .
-     \param  err         Set to error code on failure, ETimeout on timeout
+     \param  err         %Set to error code on failure, ETimeout on timeout
      \param  timeout_ms  Wait timeout in milliseconds, 0 for indefinite
      \return             Whether ready to read, false on error
     */
@@ -888,7 +888,7 @@ struct IoSocket : public IoDevice {
      - Socket is ready to write when it's connected and there's room in the write buffer
      - Normally used with non-blocking I/O
      .
-     \param  err         Set to error code on failure, ETimeout on timeout
+     \param  err         %Set to error code on failure, ETimeout on timeout
      \param  timeout_ms  Wait timeout in milliseconds, 0 for indefinite
      \return             Whether ready to write, false on error
     */
@@ -964,7 +964,7 @@ struct IoSocket : public IoDevice {
     /** Accept connection from listening socket.
      - Socket must be in listen mode, see listen()
      .
-     \param  err             Set to error code on failure, ETimeout on timeout
+     \param  err             %Set to error code on failure, ETimeout on timeout
      \param  client_socket   Attached to connected client socket on success (unchanged on error)
      \param  client_address  Pointer to store client socket address on success (ignored on error), NULL to skip
      \return                 Whether connection successfully accepted, false on error
@@ -1003,7 +1003,7 @@ struct IoSocket : public IoDevice {
      - Socket must be in listen mode, see listen()
      - This is equivalent to accept() then set_nonblock() on the new connection, except may be more efficient on some systems (Linux)
      .
-     \param  err             Set to error code on failure, ETimeout on timeout
+     \param  err             %Set to error code on failure, ETimeout on timeout
      \param  client_socket   Attached to connected client socket on success (unchanged on error)
      \param  client_address  Pointer to store client socket address on success (ignored on error), NULL to skip
      \return                 Whether connection successfully accepted, false on error
@@ -1075,7 +1075,7 @@ struct IoSocket : public IoDevice {
         return ENone;
     }
 
-    /** Set socket option with new value.
+    /** %Set socket option with new value.
      - This calls setsockopt() on the socket
      .
      \param  level    Option level, ex: SOL_SOCKET, IPPROTO_IP
@@ -1147,7 +1147,7 @@ struct IoSocket : public IoDevice {
         { return (handle != INVALID); }
 
     /** Create and bind socket using address info and listen for connections.
-     \param  err           Set to ENone on success, EExist if address/port already used, otherwise set to error code
+     \param  err           %Set to ENone on success, EExist if address/port already used, otherwise set to error code
      \param  address_info  Pointer to addrinfo structure to bind to (first in linked list)
      \param  backlog       Listener queue backlog size
      \param  all           Whether to try all addresses in addrinfo until successful, false to just try the first address
@@ -1189,7 +1189,7 @@ struct IoSocket : public IoDevice {
     }
 
     /** Create and bind socket to address and listen for connections.
-     \param  err          Set to ENone on success, EExist if address/port already used, otherwise set to error code
+     \param  err          %Set to ENone on success, EExist if address/port already used, otherwise set to error code
      \param  address      Socket address to bind to, must not be NULL
      \param  address_len  Socket address length to bind to, must be positive
      \param  backlog      Listener queue backlog size
@@ -1218,7 +1218,7 @@ struct IoSocket : public IoDevice {
     }
 
     /** Create and bind datagram socket to address.
-     \param  err          Set to ENone on success, EExist if address/port already used, otherwise set to error code
+     \param  err          %Set to ENone on success, EExist if address/port already used, otherwise set to error code
      \param  address      Socket address to bind to, must not be NULL
      \param  address_len  Socket address length to bind to, must be positive
      \param  socktype     Socket type
@@ -1244,7 +1244,7 @@ struct IoSocket : public IoDevice {
     }
 
     /** Create unbound datagram socket for casting.
-     \param  err       Set to ENone on success, otherwise set to error code
+     \param  err       %Set to ENone on success, otherwise set to error code
      \param  family    Socket family type (AF_INET, AF_INET6)
      \param  socktype  Socket type, SOCK_DGRAM for datagram socket
      \param  protocol  Network protocol, 0 for default
@@ -1269,7 +1269,7 @@ struct IoSocket : public IoDevice {
        - This also sets system "errno" accordingly (even in Windows), so it matches err
        .
      .
-     \param  err           Set to ENone on success, otherwise set to error code
+     \param  err           %Set to ENone on success, otherwise set to error code
      \param  address_info  Pointer to addrinfo structure to use (first in linked list)
      \param  all           Whether to try all addresses in addrinfo until successful, false to just try the first address
      \return               Whether successful, false on error
@@ -1306,7 +1306,7 @@ struct IoSocket : public IoDevice {
      - In blocking mode this blocks while connecting, and could take a while for the implementation to timeout
      - In non-blocking mode this returns with err=ENonBlock -- use write_wait() to wait/poll
      .
-     \param  err          Set to ENone on success, otherwise set to error code
+     \param  err          %Set to ENone on success, otherwise set to error code
      \param  address      Socket address to connect to, must not be NULL
      \param  address_len  Socket address length to connect to, must be positive
      \param  socktype     Socket type, usually SOCK_STREAM
@@ -1363,7 +1363,7 @@ struct IoSocket : public IoDevice {
     }
 
     /** Not supported with sockets.
-     \param  err  Set to EInval  [out]
+     \param  err  %Set to EInval  [out]
      \return      Always 0
     */
     ulongl pos(Error& err) {
@@ -1373,7 +1373,7 @@ struct IoSocket : public IoDevice {
     }
 
     /** Not supported with sockets.
-     \param  err  Set to EInval  [out]
+     \param  err  %Set to EInval  [out]
      \return      Always 0
     */
     ulongl seek(Error& err, ulongl, Seek) {

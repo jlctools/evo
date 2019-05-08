@@ -88,12 +88,13 @@ public:
 
     /** Stop processing events and shutdown threads.
      - This starts the shutdown process, call join() to wait for all threads to fully stop
+     - Stop adding events to the queue before calling this, otherwise behavior is undefned (likely shutdown delay or memory leak)
      .
      \return  This
     */
     This& shutdown() {
         shared_state.shutdown.store(1, EVO_ATOMIC_RELEASE);
-        shared_state.queue.notify_multiwait(shared_state.condmutex);
+        shared_state.condmutex.lock_notify_all();
         return *this;
     }
 
@@ -108,6 +109,7 @@ private:
         const ulong waitms = state.waitms;
         while (state.shutdown.load(EVO_ATOMIC_ACQUIRE) == 0)
             state.queue.process_multiwait(state.condmutex, state.shutdown, waitms);
+        while (state.queue.process_multi(state.condmutex));
     }
 };
 

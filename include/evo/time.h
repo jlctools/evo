@@ -333,7 +333,7 @@ struct Date {
      .
      \param  inp  Start parsing pointer (must be `<= end`), set to stop position  [in/out]
      \param  end  End of string pointer, must not be NULL
-     \return      Whether successfull, false on bad input or unrecognized format
+     \return      Whether successful, false on bad input or unrecognized format
     */
     bool parse_std_impl(const char*& inp, const char* end) {
         year = month = day = 0;
@@ -425,7 +425,7 @@ struct Date {
        - Alternate delimiters supported: `SPACE`, `SLASH` (`/`), `PERIOD` (`.`)
      .
      \param  str  %String to parse
-     \return      Whether successfull, false on bad input or unrecognized format
+     \return      Whether successful, false on bad input or unrecognized format
     */
     bool parse(const SubString& str) {
         const char* p = str.data();
@@ -783,7 +783,7 @@ struct TimeOfDay {
         return true;
     }
 
-    /** Set time fields from day fraction.
+    /** %Set time fields from day fraction.
      - \b Caution: Milliseconds aren't stored in the fraction (not enough precision) so `msecond` is set from `msec`
      - See get_fraction()
      .
@@ -889,7 +889,7 @@ struct TimeOfDay {
      \param  inp                  Start parsing pointer (must be `<= end`), set to stop position  [in/out]
      \param  end                  End of string pointer, must not be NULL
      \param  allow_hour_overflow  Allow `hour` higher than `23`, but still must be 2 digits
-     \return                      Whether successfull, false on bad input or unrecognized format
+     \return                      Whether successful, false on bad input or unrecognized format
     */
     bool parse_std_impl(const char*& inp, const char* end, bool allow_hour_overflow=false) {
         const double ROUND_MSEC = 0.001;
@@ -1336,7 +1336,7 @@ struct TimeZoneOffset {
  - You can access the fields directly, or use methods as needed
  - Format with format(), parse with parse()
  - Validate with validate()
- - Set to current time with: set_utc(), set_local(), set_local_notz()
+ - %Set to current time with: set_utc(), set_local(), set_local_notz()
  .
 
 \par Example

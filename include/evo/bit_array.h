@@ -413,7 +413,7 @@ public:
      .
      \param  pos      Bit position in subset to set, 0 for first bit on left, etc
      \param  value    Bit value to set, true to set bit, false to clear bit
-     \return          Whether successfull, false if `pos` out of bounds
+     \return          Whether successful, false if `pos` out of bounds
      \see setbits(), clearbit(), togglebit(), getbit()
     */
     bool setbit(Size pos, bool value=true) {
@@ -443,7 +443,7 @@ public:
      - Bits are counted left-to-right, as if from an array of bools
      .
      \param  pos  Bit position in subset to clear, 0 for first bit on left, etc
-     \return      Whether successfull, false if `pos` out of bounds
+     \return      Whether successful, false if `pos` out of bounds
      \see clearbits(), setbit(), togglebit(), getbit()
     */
     bool clearbit(Size pos) {
@@ -472,7 +472,7 @@ public:
      - Bits are counted left-to-right, as if from an array of bools
      .
      \param  pos      Bit position in subset to toggle, 0 for first bit on left, etc
-     \return          Whether successfull, false if `pos` out of bounds
+     \return          Whether successful, false if `pos` out of bounds
      \see togglebits(), setbit(), getbit()
     */
     bool togglebit(Size pos) {
@@ -1258,7 +1258,7 @@ public:
      .
      \param  pos      Bit position to set, 0 for first bit on left, etc
      \param  value    Bit value to set, true to set bit, false to clear bit
-     \return          Whether successfull, false if `pos` out of bounds
+     \return          Whether successful, false if `pos` out of bounds
      \see setbits(), clearbit(), togglebit(), getbit()
     */
     bool setbit(Size pos, bool value=true) {
@@ -1282,7 +1282,7 @@ public:
      - Bits are counted left-to-right, as if from an array of bools
      .
      \param  pos  Bit position to clear, 0 for first bit on left, etc
-     \return      Whether successfull, false if `pos` out of bounds
+     \return      Whether successful, false if `pos` out of bounds
      \see clearbits(), setbit(), togglebit(), getbit()
     */
     bool clearbit(Size pos) {
@@ -1305,7 +1305,7 @@ public:
      - Bits are counted left-to-right, as if from an array of bools
      .
      \param  pos      Bit position to toggle, 0 for first bit on left, etc
-     \return          Whether successfull, false if `pos` out of bounds
+     \return          Whether successful, false if `pos` out of bounds
      \see togglebits(), setbit(), clearbit(), getbit()
     */
     bool togglebit(Size pos) {

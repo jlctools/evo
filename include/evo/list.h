@@ -3388,6 +3388,12 @@ private:
                             memcpy((void*)newbuf, (void*)data_, sizeof(T)*size_);
                         if (offset > 0)
                             DataInit<T>::uninit(buf_.ptr, offset);
+
+                        // Write new items
+                        meminit(newbuf+size_, data, size);
+                        size_ = newused;
+
+                        // Free old items, update state
                         buf_.memfree();
                         buf_.header = newheader;
                         buf_.ptr    = newbuf;
@@ -3396,8 +3402,14 @@ private:
                         // Shift to make room at end
                         DataInit<T>::uninit(buf_.ptr, offset);
                         memmove((void*)buf_.ptr, (void*)data_, sizeof(T)*size_);
+                        if (data >= data_ && data < data_ + size_)
+                            data -= (data_ - buf_.ptr); // Copy from self
                         buf_.header->used = newused;
                         data_             = buf_.ptr;
+
+                        // Write new items
+                        meminit(data_+size_, data, size);
+                        size_ = newused;
                     } else {
                         // Enough room at end
                         if (data_ < buf_.ptr) {
@@ -3405,11 +3417,11 @@ private:
                             data_ = buf_.ptr;
                         }
                         buf_.header->used += size;
-                    }
 
-                    // Write new items
-                    meminit(data_+size_, data, size);
-                    size_ = newused;
+                        // Write new items
+                        meminit(data_+size_, data, size);
+                        size_ = newused;
+                    }
                     return;
                 }
             }
@@ -3421,8 +3433,8 @@ private:
                 DataInit<T>::init(newbuf, data_, size_);
             meminit(newbuf+size_, data, size);
             newheader->used = newused;
-            data_       = buf_.replace(newbuf, newheader);
-            size_       = newused;
+            data_ = buf_.replace(newbuf, newheader);
+            size_ = newused;
             #if EVO_LIST_OPT_REFTERM
                 terminated_ = false;
             #endif
@@ -3473,40 +3485,47 @@ private:
                         }
                     } else
                         offset = 0;
-                    if (size > offset) {
-                        // Not enough room at beginning, cleanup and make room
-                        if (newused > buf_.header->size-size_) {
-                            // Move to new bigger buffer
-                            Size newbufsize = Capacity::grow(buf_.header->size);
-                            if (newbufsize <= newused)
-                                newbufsize = newused + 1; // Leave extra space
-                            Header* newheader;
-                            T* newbuf = buf_.memalloc(newbufsize, newused, newheader);
-                            if (size_ > 0)
-                                memcpy((void*)(newbuf+size), (void*)data_, sizeof(T)*size_);
-                            if (offset > 0)
-                                DataInit<T>::uninit(buf_.ptr, offset);
-                            buf_.memfree();
-                            buf_.header = newheader;
-                            buf_.ptr    = newbuf;
-                            data_       = newbuf;
-                        } else {
-                            // Shift to make room at beginning
-                            if (offset > 0)
-                                DataInit<T>::uninit(buf_.ptr, offset);
-                            memmove((void*)(buf_.ptr+size), (void*)data_, sizeof(T)*size_);
-                            buf_.header->used = newused;
-                            data_             = buf_.ptr;
-                        }
+                    if (newused > buf_.header->size) {
+                        // Move to new bigger buffer
+                        Size newbufsize = Capacity::grow(buf_.header->size);
+                        if (newbufsize <= newused)
+                            newbufsize = newused + 1; // Leave extra space
+                        Header* newheader;
+                        T* newbuf = buf_.memalloc(newbufsize, newused, newheader);
+                        if (size_ > 0)
+                            memcpy((void*)(newbuf+size), (void*)data_, sizeof(T)*size_);
+                        if (offset > 0)
+                            DataInit<T>::uninit(buf_.ptr, offset);
+
+                        // Write new items
+                        meminit(newbuf, data, size);
+
+                        // Free old items, update state
+                        buf_.memfree();
+                        buf_.header = newheader;
+                        buf_.ptr    = newbuf;
+                        data_       = newbuf;
+                    } else if (size > offset) {
+                        // Shift to make room at beginning
+                        if (offset > 0)
+                            DataInit<T>::uninit(buf_.ptr, offset);
+                        memmove((void*)(buf_.ptr+size), (void*)data_, sizeof(T)*size_);
+                        if (data >= data_ && data < data_ + size_)
+                            data += (buf_.ptr + size - data_); // Copy from self
+                        buf_.header->used = newused;
+                        data_             = buf_.ptr;
+
+                        // Write new items
+                        meminit(data_, data, size);
                     } else {
-                        // Enough room at beginning, cleanup
+                        // Enough room at beginning
                         data_ = buf_.ptr + (offset - size);
                         DataInit<T>::uninit(data_, size);
+
+                        // Write new items
+                        meminit(data_, data, size);
                     }
                     size_ = newused;
-
-                    // Write new items
-                    meminit(data_, data, size);
                     return;
                 }
             }
@@ -3604,32 +3623,70 @@ private:
                         memcpy((void*)(newbuf+index+size), (void*)(data_+index), sizeof(T)*(size_-index));
                         if (offset > 0)
                             DataInit<T>::uninit(buf_.ptr, offset);
+
+                        // Write new items
+                        meminit(newbuf+index, data, size);
+
+                        // Free old items, update state
                         buf_.memfree();
                         buf_.header = newheader;
                         buf_.ptr    = newbuf;
                         data_       = newbuf;
-                    } else  {
-                        if (size > offset) {
-                            // Shift beginning and end to make room
-                            if (offset > 0) {
-                                DataInit<T>::uninit(buf_.ptr, offset);
-                                memmove((void*)buf_.ptr, (void*)data_, sizeof(T)*index);
-                                data_ = buf_.ptr;
-                            }
-                            memmove((void*)(data_+index+size), (void*)(data_+index+offset), sizeof(T)*(size_-index));
-                            buf_.header->used = newused;
+                    } else if (size > offset) {
+                        // Shift beginning and end to make room
+                        if (offset > 0) {
+                            DataInit<T>::uninit(buf_.ptr, offset);
+                            memmove((void*)buf_.ptr, (void*)data_, sizeof(T)*index);
+                            if (data >= data_ && data < data_ + index)
+                                data -= offset; // Copy from self, adjust for shift
+                            data_ = buf_.ptr;
+                        }
+                        T* ptr = data_ + index;
+                        memmove((void*)(ptr+size), (void*)(ptr+offset), sizeof(T)*(size_-index));
+                        buf_.header->used = newused;
+
+                        // Write new items
+                        if (data >= data_ && data < ptr) {
+                            // Copy from self before insert point
+                            Size sz = (Size)(ptr - data);
+                            if (sz > size)
+                                sz = size;
+                            meminit(ptr, data, sz);
+                            if (size > sz)
+                                meminit(ptr+sz, ptr+size, size-sz);
                         } else {
-                            // Shift beginning to make room
-                            const Size newoffset = offset - size;
+                            if (data < (data_ + size_) && data >= data_)
+                                data += (size - offset); // Copy from self after insert point, adjust for shift
+                            meminit(data_+index, data, size);
+                        }
+                    } else {
+                        // Shift beginning to make room
+                        const Size newoffset = offset - size;
+                        DataInit<T>::uninit(buf_.ptr, offset-newoffset);
+                        if (data >= data_ && data < data_ + index) {
+                            // Copy from self, which is splitting to make room
                             data_ = buf_.ptr + newoffset;
-                            DataInit<T>::uninit(buf_.ptr, offset-newoffset);
                             memmove((void*)data_, (void*)(buf_.ptr+offset), sizeof(T)*index);
+                            data -= (offset - newoffset); // source moved, adjust pointer
+
+                            // Write new items
+                            if (size >= index) {
+                                // Insert splits source, copy from both sides of split -- data after insert hasn't moved
+                                T* ptr = data_ + index;
+                                const Size sz = (Size)(ptr - data);
+                                meminit(ptr, data, sz);
+                                meminit(ptr+sz, ptr+size, size-sz);
+                            } else
+                                meminit(data_+index, data, size);
+                        } else {
+                            data_ = buf_.ptr + newoffset;
+                            memmove((void*)data_, (void*)(buf_.ptr+offset), sizeof(T)*index);
+
+                            // Write new items
+                            meminit(data_+index, data, size);
                         }
                     }
                     size_ = newused;
-
-                    // Write new items
-                    meminit(data_+index, data, size);
                     return index;
                 }
             }
@@ -3839,6 +3896,7 @@ private:
                 {
                     // Replace existing items
                     const Size copysize = (size < newsize ? size : newsize);
+                    assert( data < data_+index || data >= data_+index+copysize ); // Replacement source can't overlap with target to replace
                     DataInit<T>::copy(data_+index, data, copysize);
                     index     += copysize;
                     data      += copysize;
@@ -3855,19 +3913,93 @@ private:
                     buf_.header->used -= size;
                     size_             -= size;
                 } else if (newsize > 0) {
-                    // Insert new items
-                    const Size newused = buf_.header->used + newsize;
-                    if (newused > buf_.header->size) {
-                        const Size offset = (Size)(data_ - buf_.ptr);
-                        buf_.ptr = buf_.memrealloc(Capacity::grow(newused));
-                        data_    = buf_.ptr + offset;
+                    size = newsize;
+                    const Size newused = size_ + size;
+
+                    // Copied as-is from modInsertMid()
+                    Size offset = (Size)(data_ - buf_.ptr);
+                    {
+                        const Size tailsize = buf_.header->used - size_ - offset;
+                        if (tailsize > 0) {
+                            DataInit<T>::uninit(data_+size_, tailsize);
+                            buf_.header->used -= tailsize;
+                        }
                     }
-                    T* dataptr = data_ + index;
-                    if (index < size_)
-                        memmove(dataptr+newsize, dataptr, sizeof(T)*(size_-index));
-                    DataInit<T>::init(dataptr, data, newsize);
-                    buf_.header->used = newused;
-                    size_            += newsize;
+                    if (newused > buf_.header->size) {
+                        // Move to new bigger buffer
+                        Size newbufsize = Capacity::grow(buf_.header->size);
+                        if (newbufsize <= newused)
+                            newbufsize = newused + 1; // Leave extra space
+                        Header* newheader;
+                        T* newbuf = buf_.memalloc(newbufsize, newused, newheader);
+                        memcpy((void*)newbuf, (void*)data_, sizeof(T)*index);
+                        memcpy((void*)(newbuf+index+size), (void*)(data_+index), sizeof(T)*(size_-index));
+                        if (offset > 0)
+                            DataInit<T>::uninit(buf_.ptr, offset);
+
+                        // Write new items
+                        meminit(newbuf+index, data, size);
+
+                        // Free old items, update state
+                        buf_.memfree();
+                        buf_.header = newheader;
+                        buf_.ptr    = newbuf;
+                        data_       = newbuf;
+                    } else if (size > offset) {
+                        // Shift beginning and end to make room
+                        if (offset > 0) {
+                            DataInit<T>::uninit(buf_.ptr, offset);
+                            memmove((void*)buf_.ptr, (void*)data_, sizeof(T)*index);
+                            if (data >= data_ && data < data_ + index)
+                                data -= offset; // Copy from self, adjust for shift
+                            data_ = buf_.ptr;
+                        }
+                        T* ptr = data_ + index;
+                        memmove((void*)(ptr+size), (void*)(ptr+offset), sizeof(T)*(size_-index));
+                        buf_.header->used = newused;
+
+                        // Write new items
+                        if (data >= data_ && data < ptr) {
+                            // Copy from self before insert point
+                            Size sz = (Size)(ptr - data);
+                            if (sz > size)
+                                sz = size;
+                            meminit(ptr, data, sz);
+                            if (size > sz)
+                                meminit(ptr+sz, ptr+size, size-sz);
+                        } else {
+                            if (data < (data_ + size_) && data >= data_)
+                                data += (size - offset); // Copy from self after insert point, adjust for shift
+                            meminit(data_+index, data, size);
+                        }
+                    } else {
+                        // Shift beginning to make room
+                        const Size newoffset = (Size)(offset - size);
+                        DataInit<T>::uninit(buf_.ptr, offset-newoffset);
+                        if (data >= data_ && data < data_ + index) {
+                            // Copy from self, which is splitting to make room
+                            data_ = buf_.ptr + newoffset;
+                            memmove((void*)data_, (void*)(buf_.ptr+offset), sizeof(T)*index);
+                            data -= (offset - newoffset); // source moved, adjust pointer
+
+                            // Write new items
+                            if (size >= index) {
+                                // Insert splits source, copy from both sides of split -- data after insert hasn't moved
+                                T* ptr = data_ + index;
+                                const Size sz = (Size)(ptr - data);
+                                meminit(ptr, data, sz);
+                                meminit(ptr+sz, ptr+size, size-sz);
+                            } else
+                                meminit(data_+index, data, size);
+                        } else {
+                            data_ = buf_.ptr + newoffset;
+                            memmove((void*)data_, (void*)(buf_.ptr+offset), sizeof(T)*index);
+
+                            // Write new items
+                            meminit(data_+index, data, size);
+                        }
+                    }
+                    size_ = newused;
                 }
                 return;
             }

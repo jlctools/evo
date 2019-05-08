@@ -706,7 +706,7 @@ public:
         return *this;
     }
 
-    /** Set new max line length for usage help output.
+    /** %Set new max line length for usage help output.
      \param  maxline  New max line length, set to 40 if lower than 40
      \return          This
     */

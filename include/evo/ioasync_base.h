@@ -83,7 +83,7 @@ public:
      - Use notify1() to wake this up if it's blocking/waiting so the caller can do other processing
      - \b Caution: `run*()` methods must only be called from 1 thread at a time, otherwise results are undefined
      .
-     \return  Whether successfull, false on internal error
+     \return  Whether successful, false on internal error
     */
     bool run1() {
         int result = ::event_base_loop(evbase_, EVLOOP_ONCE);
@@ -664,7 +664,7 @@ protected:
     /** Run event loop with one pass and process all events.
      - This waits until some events are active then processes all active events and returns
      .
-     \return  Whether successfull, false on internal error
+     \return  Whether successful, false on internal error
     */
     bool run_eventloop_once() {
         if (parent_base_ != NULL || !evloop_->run1())
@@ -673,7 +673,7 @@ protected:
     }
 
     /** Run event loop and process all events and repeat until shutdown.
-     \return  Whether successfull, false on internal error
+     \return  Whether successful, false on internal error
     */
     bool run_eventloop() {
         while (evloop_->active()) {

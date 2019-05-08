@@ -8,8 +8,8 @@ Distributed under the BSD 2-Clause License -- see included file LICENSE.txt for 
 #ifndef INCL_evo_benchmark_h
 #define INCL_evo_benchmark_h
 
+#include "fmt.h"
 #include "io.h"
-#include "substring.h"
 #include "thread.h"
 #include "timer.h"
 
@@ -19,21 +19,13 @@ Distributed under the BSD 2-Clause License -- see included file LICENSE.txt for 
  - Call EVO_BENCH_RUN() or EVO_BENCH_RUN2() for each function or functor to benchmark
  - See \link evo::Benchmark Benchmark\endlink
  .
- \param  F  Function or functor to use to setup scale (for repeat count) -- passed to Benchmark::scale()
-*/
-#define EVO_BENCH_SETUP(F) Benchmark bench; bench.scale(F)
-
-/** Shortcut setting up a Benchmark instance.
- - Call EVO_BENCH_RUN() or EVO_BENCH_RUN2() for each function or functor to benchmark
- - See \link evo::Benchmark Benchmark\endlink
- .
  \param  F       Function or functor to use to setup scale (for repeat count) -- passed to Benchmark::scale()
- \param  FACTOR  Factor to multiple repeat count -- passed to Benchmark::scale()
+ \param  WARMUP  Warmup count to use (passed to Benchmark constructor), use `0` for default
 */
-#define EVO_BENCH_SETUP2(F, FACTOR) Benchmark bench; bench.scale(F, FACTOR)
+#define EVO_BENCH_SETUP(F, WARMUP) Benchmark bench(0, WARMUP); bench.scale(F)
 
 /** Shortcut for running a benchmark on given function or functor.
- - Use EVO_BENCH_SETUP() or EVO_BENCH_SETUP2() to setup first
+ - Use EVO_BENCH_SETUP() to setup first
  - See \link evo::Benchmark Benchmark\endlink
  .
  \param  F  Function or functor to benchmark -- passed to Benchmark::run(), also used for the benchmark name
@@ -43,8 +35,8 @@ Distributed under the BSD 2-Clause License -- see included file LICENSE.txt for 
 /** Shortcut for running a benchmark on given parameterized functor.
  - This builds a string with the benchmark name and calls `F.get_name()` to add a suffix to the benchmark name
    - This allows the functor to append parameters to the benchmark name
-   - Expected method signiture `void get_name(String&) const`
- - Use EVO_BENCH_SETUP() or EVO_BENCH_SETUP2() to setup first
+   - Expected method signature `void get_name(String&) const`
+ - Use EVO_BENCH_SETUP() to setup first
  - See \link evo::Benchmark Benchmark\endlink
  .
  \param  F  Function or functor to benchmark -- passed to Benchmark::run(), also used for the benchmark name
@@ -63,16 +55,17 @@ namespace evo {
  - Used to benchmark related blocks of code for comparison
  - This can benchmark a function or functor (object with `operator()()` -- note that this method must be const)
    - Functors are useful for "parameterizing" the code being benchmarked (via methods/properties)
- - Each benchmark runs a given function or functor repeatedly according to a repeat count
- - Call scale() first to automatically set a default repeat count (optional)
- - Call run() for each benchmark to run
- - Call report() to show results and clear stored report -- the destructor calls this if there's pending report data
- - Repeat if needed
+ - Each benchmark runs a given function/functor repeatedly according to a repeat count and measures time elapsed
+ - Usage:
+   - Call scale() first to automatically set a default repeat count (optional)
+   - Call run() for each benchmark to run
+   - Call report() to show results and clear stored report -- the destructor calls this if there's pending report data
+     - Report includes a "DiffBest" column showing the difference between AvgCPU of current call and the best (fastest) call in this report -- lower value is better
+   - Repeat if needed
  .
 
 Shortcut helpers:
  - EVO_BENCH_SETUP()
- - EVO_BENCH_SETUP2()
  - EVO_BENCH_RUN()
  - EVO_BENCH_RUN2()
  .
@@ -86,14 +79,14 @@ using namespace evo;
 // Function to benchmark
 inline void bm_function() {
     for (ulong i = 0; i < 100; ++i)
-        printf("");
+        printf("%s", "");
 }
 
 // Functor to benchmark
 struct BM_Class {
     void operator()() const {
         for (ulong i = 0; i < 50; ++i)
-            printf("");
+            printf("%s", "");
     }
 };
 
@@ -114,9 +107,9 @@ int main() {
 
 Example output:
 \code{.unparsed}
-Name                Time(nsec)     CPU(nsec)         Count  AvgTime(nsec)  AvgCPU(nsec)
-bm_function          222063900     218750000       1000000           222           218
-bm_obj                92977500      93750000       1000000            92            93
+Name         Time(nsec)  CPU(nsec)  Count    AvgTime(nsec)  AvgCPU(nsec)  DiffBest(nsec)
+bm_function  204529700   203125000  1000000  204.5297       203.125       109.375
+BM_Class     96745700    93750000   1000000  96.7457        93.75         0
 \endcode
 
 This is the same benchmarking code using the shortcut macros:
@@ -124,7 +117,7 @@ This is the same benchmarking code using the shortcut macros:
 \code
 int main() {
     // Setup and scale using bm_function
-    EVO_BENCH_SETUP(bm_function);
+    EVO_BENCH_SETUP(bm_function, 0);
 
     // Benchmark bm_function()
     EVO_BENCH_RUN(bm_function);
@@ -159,13 +152,13 @@ struct BM_Class {
     // Code to benchmark
     void operator()() const {
         for (ulong i = 0; i < count; ++i)
-            printf("");
+            printf("%s", "");
     }
 };
 
 int main() {
     BM_Class bm_obj;
-    EVO_BENCH_SETUP(bm_obj);
+    EVO_BENCH_SETUP(bm_obj, 0);
 
     // Benchmark with defaults first
     EVO_BENCH_RUN2(bm_obj);
@@ -181,17 +174,18 @@ int main() {
 Example output:
 
 \code{.unparsed}
-Name                Time(nsec)     CPU(nsec)         Count  AvgTime(nsec)  AvgCPU(nsec)
-bm_obj/50            174346400     171875000       2000000            87            85
-bm_obj/60            213084000     218750000       2000000           106           109
+Name       Time(nsec)  CPU(nsec)  Count    AvgTime(nsec)  AvgCPU(nsec)  DiffBest(nsec)
+bm_obj/50  83509600    78125000   1000000  83.5096        78.125        0
+bm_obj/60  112968900   109375000  1000000  112.9689       109.375       31.25
 \endcode
 */
 class Benchmark {
 public:
     /** Constructor.
-     \param  default_count  Default repeat count to use
+     \param  default_count         Default repeat count to use
+     \param  default_warmup_count  Default warmup count to use
     */
-    Benchmark(ulongl default_count=0) : default_count_(default_count) {
+    Benchmark(ulongl default_count=0, ulongl default_warmup_count=0) : default_count_(default_count), default_warmup_count_(default_warmup_count) {
     }
 
     /** Destructor.
@@ -263,7 +257,7 @@ public:
         for (; warmup_count > 0; --warmup_count)
             func(); // warmup
 
-        // Start a monitor thread to keep run from taking too long, the atomic var also creates fences that prevent too much optimization
+        // Start a monitor thread to keep run from taking too long
         AtomicInt monitor_flag;
         monitor_flag.store(0);
         Thread monitor(monitor_thread, &monitor_flag);
@@ -286,7 +280,7 @@ public:
         return *this;
     }
 
-    /** Run benchmark on given function/functor with default repeat count.
+    /** Run benchmark on given function/functor with default repeat and wramup counts.
      - This does the benchmark and records the result
      - Call report() to print out results
      .
@@ -297,7 +291,7 @@ public:
     */
     template<class T>
     Benchmark& run(const SubString& name, const T& func) {
-        return run(name, func, default_count_);
+        return run(name, func, default_count_, default_warmup_count_);
     }
 
     /** Clear current report. */
@@ -311,39 +305,44 @@ public:
      - This clears current benchmark data to setup for another set of benchmarks
      .
      \tparam  T  Output stream/string type (inferred by argument)
-     \param  out  Output stream/string to write to
-     \return      This
+     \param  out   Output stream/string to write to
+     \param  type  Output format type -- see FmtTable::Type
+     \return       This
     */
     template<class T>
-    Benchmark& report_out(T& out) {
+    Benchmark& report_out(T& out, FmtTable::Type type=FmtTable::tTEXT) {
         if (!report_.empty()) {
-            const int MAXLEN_TIME  = UInt32::MAXSTRLEN;
-            const int MAXLEN_COUNT = UInt32::MAXSTRLEN;
-            uint maxname = 16;
-            for (ReportList::Iter iter(report_); iter; ++iter)
-                if (iter->name.size() > maxname)
-                    maxname = (uint)iter->name.size();
+            const SubString COLUMN_NAMES[] = {
+                "Name",
+                "Time(nsec)",
+                "CPU(nsec)",
+                "Count",
+                "AvgTime(nsec)",
+                "AvgCPU(nsec)",
+                "DiffBest(nsec)",
+                ""
+            };
 
-            // Header
-            out << FmtString("Name").width(maxname)
-                << "  " << FmtString("Time(nsec)", fRIGHT).width(MAXLEN_TIME)
-                << "  " << FmtString("CPU(nsec)", fRIGHT).width(MAXLEN_TIME)
-                << "  " << FmtString("Count", fRIGHT).width(MAXLEN_COUNT)
-                << "  " << FmtString("AvgTime(nsec)", fRIGHT).width(MAXLEN_TIME)
-                << "  " << FmtString("AvgCPU(nsec)", fRIGHT).width(MAXLEN_TIME)
-                << NL;
-
-            // Tests
+            // Find lowest cpu time
+            const ReportItem* fastest = NULL;
             for (ReportList::Iter iter(report_); iter; ++iter) {
                 const ReportItem& item = *iter;
-                out << FmtString(item.name, maxname)
-                    << "  " << FmtULongL(item.walltime_nsec).width(MAXLEN_TIME, ' ')
-                    << "  " << FmtULongL(item.cputime_nsec).width(MAXLEN_TIME, ' ')
-                    << "  " << FmtULongL(item.count).width(MAXLEN_COUNT, ' ')
-                    << "  " << FmtFloatD((double)item.walltime_nsec / item.count).width(MAXLEN_TIME, ' ')
-                    << "  " << FmtFloatD((double)item.cputime_nsec / item.count).width(MAXLEN_TIME, ' ')
-                    << NL;
+                if (fastest == NULL || item.cputime_nsec < fastest->cputime_nsec)
+                    fastest = &item;
             }
+
+            // Tests
+            FmtTable table(COLUMN_NAMES, 0);
+            FmtTableOut<T> table_out(out, table, type);
+            for (ReportList::Iter iter(report_); iter; ++iter) {
+                const ReportItem& item = *iter;
+                const double cpu_avg_diff = (fastest == NULL ? 0.0 : ((double)item.cputime_nsec / item.count) - ((double)fastest->cputime_nsec / fastest->count));
+                table_out
+                    << item.name << item.walltime_nsec << item.cputime_nsec << item.count
+                    << ((double)item.walltime_nsec / item.count) << ((double)item.cputime_nsec / item.count)
+                    << cpu_avg_diff << NL;
+            }
+            table_out << fFLUSH;
             out << NL;
 
             report_.clear();
@@ -354,9 +353,11 @@ public:
     /** Write benchmark report to stdout.
      - Call run() first to run each benchmarks, then call this to show the report -- repeat if needed
      - This clears current benchmark data to setup for another set of benchmarks
+     .
+     \param  type  Output format type -- see FmtTable::Type
     */
-    Benchmark& report() {
-        return report_out(con().out);
+    Benchmark& report(FmtTable::Type type=FmtTable::tTEXT) {
+        return report_out(con().out, type);
     }
 
 private:
@@ -383,6 +384,7 @@ private:
     typedef List<ReportItem> ReportList;
 
     ulongl default_count_;
+    ulongl default_warmup_count_;
     ReportList report_;
 
     static void monitor_thread(void* arg) {

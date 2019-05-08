@@ -139,7 +139,7 @@ public:
         SocketAddressInfo address_info(family);
         Error err = address_info.convert(host, port);
         if (err == ENone) {
-            assert( address_info.ptr->ai_addrlen <= (size_t)Int::MAX );
+            assert( address_info.ptr->ai_addrlen > 0 && (size_t)address_info.ptr->ai_addrlen <= (size_t)Int::MAX );
             if (connect_new(address_info.ptr->ai_addr, (int)address_info.ptr->ai_addrlen)) {
                 if (logger.check(LOG_LEVEL_DEBUG)) {
                     const SubString host_str(host);

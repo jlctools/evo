@@ -248,15 +248,15 @@ public:
         T* event;
         uint64 seq, count = 0;
         typename U::Lock lock(mutex);
-        seq = read_pos_.load(EVO_ATOMIC_ACQUIRE);
+        seq = read_pos_.load(EVO_ATOMIC_RELAXED);
         for (; seq <= cursor_pos_.load(EVO_ATOMIC_ACQUIRE); ++count) {
             event = ringbuf_[seq & ringbuf_size_mask_];
-            seq = read_pos_.fetch_add(1, EVO_ATOMIC_ACQ_REL) + 1;
+            read_pos_.fetch_add(1, EVO_ATOMIC_RELEASE);
             lock.unlock();
             if ((*event)())
                 delete event;
             lock.lock();
-            seq = read_pos_.load(EVO_ATOMIC_ACQUIRE);
+            seq = read_pos_.load(EVO_ATOMIC_RELAXED);
         }
         lock.unlock();
         return (count > 0);
@@ -279,17 +279,17 @@ public:
         uint64 seq;
         typename U::Lock lock(condmutex);
         for (;;) {
-            seq = read_pos_.load(EVO_ATOMIC_ACQUIRE);
+            seq = read_pos_.load(EVO_ATOMIC_RELAXED);
             for (; seq <= cursor_pos_.load(EVO_ATOMIC_ACQUIRE);) {
                 event = ringbuf_[seq & ringbuf_size_mask_];
-                seq = read_pos_.fetch_add(1, EVO_ATOMIC_ACQ_REL) + 1;
+                read_pos_.fetch_add(1, EVO_ATOMIC_RELEASE);
                 lock.unlock();
                 if ((*event)())
                     delete event;
                 lock.lock();
-                seq = read_pos_.load(EVO_ATOMIC_ACQUIRE);
+                seq = read_pos_.load(EVO_ATOMIC_RELAXED);
             }
-            if (stopflag.load(EVO_ATOMIC_ACQUIRE))
+            if (stopflag.load(EVO_ATOMIC_RELAXED))
                 break;
             condmutex.wait(waitms, true);
         }

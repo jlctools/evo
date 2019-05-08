@@ -1,0 +1,16 @@
+<map id="Exception" name="Exception">
+<area shape="rect" id="node2" href="$classevo_1_1_exception_dir_open.html" title="Directory open exception for errors opening a directory for reading entries, see Exception. " alt="" coords="170,5,309,32"/>
+<area shape="rect" id="node3" href="$classevo_1_1_exception_logger.html" title="Logger exception, see Exception. " alt="" coords="174,56,305,83"/>
+<area shape="rect" id="node4" href="$classevo_1_1_exception_stream.html" title="Base stream exception for all stream errors, see Exception. " alt="" coords="173,107,306,133"/>
+<area shape="rect" id="node15" href="$classevo_1_1_exception_sub_string_map_list.html" title="SubStringMapList input ordering verification failed, see Exception. " alt="" coords="140,157,339,184"/>
+<area shape="rect" id="node5" href="$classevo_1_1_exception_socket_config.html" title="Socket config exception for getopt() or setopt() errors, see Exception. " alt="" coords="387,31,557,57"/>
+<area shape="rect" id="node6" href="$classevo_1_1_exception_stream_in.html" title="Input stream exception for stream read errors, see Exception. " alt="" coords="399,81,545,108"/>
+<area shape="rect" id="node9" href="$classevo_1_1_exception_stream_open.html" title="Stream open exception for errors opening a stream, see Exception. " alt="" coords="389,132,555,159"/>
+<area shape="rect" id="node12" href="$classevo_1_1_exception_stream_out.html" title="Output stream exception for stream write errors, see Exception. " alt="" coords="394,233,550,260"/>
+<area shape="rect" id="node7" href="$classevo_1_1_exception_file_in.html" title="File input stream exception for file read errors, see Exception. " alt="" coords="627,31,747,57"/>
+<area shape="rect" id="node8" href="$classevo_1_1_exception_socket_in.html" title="Socket input stream exception for socket read errors, see Exception. " alt="" coords="616,81,759,108"/>
+<area shape="rect" id="node10" href="$classevo_1_1_exception_file_open.html" title="File open exception for errors opening a file, see Exception. " alt="" coords="616,132,759,159"/>
+<area shape="rect" id="node11" href="$classevo_1_1_exception_socket_open.html" title="Socket open exception for socket connect/bind/listen errors, see Exception. " alt="" coords="605,183,769,209"/>
+<area shape="rect" id="node13" href="$classevo_1_1_exception_file_out.html" title="File output stream exception for file write errors, see Exception. " alt="" coords="622,233,753,260"/>
+<area shape="rect" id="node14" href="$classevo_1_1_exception_socket_out.html" title="Socket output stream exception for socket write errors, see Exception. " alt="" coords="611,284,764,311"/>
+</map>

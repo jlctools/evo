@@ -1,0 +1,5 @@
+<map id="SocketAddressBase" name="SocketAddressBase">
+<area shape="rect" id="node2" href="$structevo_1_1_socket_address.html" title="Generic socket address (used internally). " alt="" coords="5,80,124,107"/>
+<area shape="rect" id="node3" href="$structevo_1_1_socket_address_ip.html" title="TCP/IP socket address. " alt="" coords="147,80,278,107"/>
+<area shape="rect" id="node4" href="$structevo_1_1_socket_address_unix.html" title="Unix Domain socket address (linux/unix). " alt="" coords="303,80,451,107"/>
+</map>

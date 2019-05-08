@@ -18,10 +18,10 @@ Distributed under the BSD 2-Clause License -- see included file LICENSE.txt for 
 #define EVO_VERSION 0.5
 
 /** Evo version patch number. */
-#define EVO_VERSION_PATCH 0
+#define EVO_VERSION_PATCH 1
 
 /** Evo version string (major.minor.patch). */
-#define EVO_VERSION_STRING "0.5.0"
+#define EVO_VERSION_STRING "0.5.1"
 
 ///////////////////////////////////////////////////////////////////////////////
 // Global
@@ -47,18 +47,31 @@ Distributed under the BSD 2-Clause License -- see included file LICENSE.txt for 
 // Containers
 
 #if !defined(EVO_STD_STRING)
-    /** Whether to support std::string compatibility in Evo string classes (String, SubString).
-     - Default: 0 (auto-detect, enable if std::string included)
-     - By default this will try to auto-detect whether STL strings have been included already, and if so enable std::string support
-     - Set to 1 to explicitly enable (and auto-include std::string), -1 to explicitly disable and skip auto-detect
-     - Set this BEFORE including any Evo headers
+    /** Whether to support `std::string` compatibility in Evo string classes (String, SubString).
+     - Default: 0 (auto-detect, enable if `std::string` include detected)
+     - By default this will try to auto-detect whether STL `string` has been included already, and if so enable `std::string` support
+     - %Set to 1 to explicitly enable (and auto-include for `std::string`), -1 to explicitly disable and skip auto-detect
+     - %Set this BEFORE including any Evo headers
      - When enabled, any function that takes "const StringBase&" will automatically support "const std::string&" and "const std::string*"
-       - Such functions should use "const SubString&" instead of the base type though
+     - See also: \ref EVO_STD_STRING and \ref StringPassing
     */
     #define EVO_STD_STRING 0
 #endif
 
-// Work-In-Progress: Do not change from defaults at this time
+#if !defined(EVO_STD_STRING_VIEW)
+    /** Whether to support `std::string_view` compatibility in Evo string classes (String, SubString).
+     - Default: 0 (auto-detect, enable if `std::string_view` include detected)
+     - By default this will try to auto-detect whether STL `string_view` has been included already, and if so enable `std::string_view` support
+     - %Set to 1 to explicitly enable (and auto-include for `std::string_view`), -1 to explicitly disable and skip auto-detect
+     - %Set this BEFORE including any Evo headers
+     - When enabled, any function that takes "const StringBase&" will automatically support "const std::string_view&" and "const std::string_view*"
+     - This is ignored if C++17 (or `string_view`) is not supported
+     - See also: \ref EVO_STD_STRING and \ref StringPassing
+    */
+    #define EVO_STD_STRING_VIEW 0
+#endif
+
+// TODO -- Work-In-Progress: Do not change from defaults at this time
 
 // Size Type
 #if !defined(EVO_SIZE_TYPE)

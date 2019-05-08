@@ -1,0 +1,7 @@
+<map id="MemcachedClient::OnEvent" name="MemcachedClient::OnEvent">
+<area shape="rect" id="node3" href="$structevo_1_1async_1_1_memcached_client_1_1_on_store.html" title="Base interface for on_store() event. " alt="" coords="123,5,197,32"/>
+<area shape="rect" id="node4" href="$structevo_1_1async_1_1_memcached_client_1_1_on_increment.html" title="Base interface for on_increment() event. " alt="" coords="221,5,328,32"/>
+<area shape="rect" id="node5" href="$structevo_1_1async_1_1_memcached_client_1_1_on_touch.html" title="Base interface for on_touch() event. " alt="" coords="352,5,429,32"/>
+<area shape="rect" id="node6" href="$structevo_1_1async_1_1_memcached_client_1_1_on_remove.html" title="Base interface for on_remove() event. " alt="" coords="453,5,547,32"/>
+<area shape="rect" id="node7" href="$structevo_1_1async_1_1_memcached_client_1_1_on_get.html" title="Base interface for on_get() and on_get_end() events. " alt="" coords="571,5,634,32"/>
+</map>

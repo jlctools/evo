@@ -1968,6 +1968,18 @@ inline bool is_pow2(T num)
     { return (num && (num & (num - 1)) == 0); }
 
 ///////////////////////////////////////////////////////////////////////////////
+
+/** Pure base class, i.e. an empty base class with pure destructor.
+ - A simple base class with nothing but a virtual destructor, use full as a common base class
+*/
+class PureBase {
+public:
+    /** Destructor. */
+    virtual ~PureBase() {
+    }
+};
+
+///////////////////////////////////////////////////////////////////////////////
 //@}
 }
 #endif

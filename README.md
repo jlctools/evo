@@ -1,12 +1,14 @@
 Evo C++ Library
 ---------------
 
-_Apr 2019: Evo 0.5 Released!_
+_May 2019: Evo 0.5.1 Released!_
 
 [Evo on Github](https://github.com/jlctools/evo)
 
 * [Documentation](http://jlctools.github.io/evo/evo-0.5/html/index.html)
-* [What's New](http://jlctools.github.io/evo/evo-0.5/html/WhatsNew.html)
+* [What's New](http://jlctools.github.io/evo/evo-0.5.1/html/WhatsNew.html)
+* [Benchmarks](bench/README.md)
+* [FAQ](FAQ.md)
 
 Evo is a modern high performance C++ library designed to make writing efficient and portable code easy.
 

@@ -1071,7 +1071,7 @@ public:
      - Only use under normal conditions (not on communication error)
      - This doesn't throw any exception (if enabled) on error since an error closing communication doesn't block progress
      .
-     \return  Whether successfull, false on error (not connected, invalid, etc)
+     \return  Whether successful, false on error (not connected, invalid, etc)
     */
     bool finish()
         { return device_.shutdown(); }
@@ -1082,7 +1082,7 @@ public:
      - Only use under normal conditions (not on communication error)
      - This doesn't throw any exception (if enabled) on error since an error closing communication doesn't block progress
      .
-     \return  Whether successfull, false on error (not connected, invalid, etc)
+     \return  Whether successful, false on error (not connected, invalid, etc)
     */
     bool finish_in()
         { return device_.shutdown(IoSocket::sIN); }
@@ -1092,7 +1092,7 @@ public:
      - Only use under normal conditions (not on communication error)
      - This doesn't throw any exception (if enabled) on error since an error closing communication doesn't block progress
      .
-     \return  Whether successfull, false on error (not connected, invalid, etc)
+     \return  Whether successful, false on error (not connected, invalid, etc)
     */
     bool finish_out()
         { return device_.shutdown(IoSocket::sOUT); }

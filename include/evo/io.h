@@ -616,6 +616,10 @@ public:
 
     // operator<<() overloads copied from Stream
 
+    /** \copydoc evo::Stream::operator<<(This&) */
+    This& operator<<(This&)
+        { return *this; }
+
     /** \copydoc evo::Stream::operator<<(Newline) */
     This& operator<<(Newline nl) {
         if (error_ == ENone) {
@@ -845,6 +849,21 @@ public:
     /** \copydoc evo::Stream::operator<<(const FmtFloatL&) */
     This& operator<<(const FmtFloatL& fmt)
         { writefmtnumf(fmt.num, fmt.fmt); return *this; }
+
+    /** \copydoc evo::Stream::operator<<(const FmtShort&) */
+    template<class U>
+    This& operator<<(const FmtFieldNum<U>& fmt) {
+        if (IntegerT<U>::SIGN)
+            writefmtnum(fmt.num.num, fmt.num.fmt, &fmt.field);
+        else
+            writefmtnumu(fmt.num.num, fmt.num.fmt, &fmt.field);
+        return *this;
+    }
+
+    /** \copydoc evo::Stream::operator<<(const FmtShort&) */
+    template<class U>
+    This& operator<<(const FmtFieldFloat<U>& fmt)
+        { writefmtnumf(fmt.num.num, fmt.num.fmt, &fmt.field); return *this; }
 
     /** \copydoc evo::Stream::operator<<(const FmtPtr&) */
     This& operator<<(const FmtPtr& fmtptr)

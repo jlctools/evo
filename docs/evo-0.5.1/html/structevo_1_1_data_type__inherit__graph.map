@@ -1,0 +1,13 @@
+<map id="DataType&lt; T &gt;" name="DataType&lt; T &gt;">
+<area shape="rect" id="node2" href="$structevo_1_1_compare_base.html" title="Base type for comparison types. " alt="" coords="175,81,325,108"/>
+<area shape="rect" id="node8" href="$structevo_1_1_data_compare.html" title="Data comparison helpers. " alt="" coords="175,132,325,159"/>
+<area shape="rect" id="node9" href="$structevo_1_1_data_copy.html" title="Optimized data copy helpers. " alt="" coords="188,183,312,209"/>
+<area shape="rect" id="node10" href="$structevo_1_1_data_fill.html" title="Optimized data fill helpers. " alt="" coords="195,233,305,260"/>
+<area shape="rect" id="node11" href="$structevo_1_1_data_hash.html" title="Optimized data hash helpers. " alt="" coords="188,284,312,311"/>
+<area shape="rect" id="node12" href="$structevo_1_1_data_init.html" title="Optimized data initialization and uninitialization helpers. " alt="" coords="194,335,306,361"/>
+<area shape="rect" id="node3" href="$structevo_1_1_compare.html" title="Comparison object used with containers that order/sort items. " alt="" coords="380,5,499,32"/>
+<area shape="rect" id="node5" href="$structevo_1_1_compare_i.html" title="Comparison object used with containers that order/sort items (case&#45;insensitive). " alt="" coords="378,56,501,83"/>
+<area shape="rect" id="node6" href="$structevo_1_1_compare_i_r.html" title="Comparison object used with containers that order/sort items (case&#45;insensitive, reverse). " alt="" coords="373,107,505,133"/>
+<area shape="rect" id="node7" href="$structevo_1_1_compare_r.html" title="Comparison object used with containers that order/sort items (reverse). " alt="" coords="375,157,503,184"/>
+<area shape="rect" id="node4" href="$structevo_1_1_compare_hash.html" title="Hash object used with containers that hash items. " alt="" coords="553,5,705,32"/>
+</map>

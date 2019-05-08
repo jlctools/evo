@@ -145,7 +145,7 @@ struct SysNativeTimeStamp {
     typedef struct timeval Fields;
     struct timeval ts;
 
-    /** Set to current date/time (UTC). */
+    /** %Set to current date/time (UTC). */
     void set_utc() {
         ::gettimeofday(&ts, NULL);
         assert( ts.tv_sec > 0 );
@@ -179,7 +179,7 @@ struct SysNativeTimeStamp {
 #endif
     static const int SEC_PER_MIN = 60;  ///< Number of seconds per minute
 
-    /** Convert current date/time to DateTime holding UTC.
+    /** %Convert current date/time to DateTime holding UTC.
      \tparam  DateTime type, inferred from argument
      \param  dt  Stores converted date/time [out]
     */
@@ -196,7 +196,7 @@ struct SysNativeTimeStamp {
         dt.time.msecond = get_msec();
     }
 
-    /** Convert current date/time to DateTime holding Local Time, including timezone offset.
+    /** %Convert current date/time to DateTime holding Local Time, including timezone offset.
      \tparam  DateTime type, inferred from argument
      \param  dt  Stores converted date/time [out]
     */
@@ -219,7 +219,7 @@ struct SysNativeTimeStamp {
         dt.time.msecond = get_msec();
     }
 
-    /** Convert current date/time to DateTime holding Local Time, without storing timezone offset.
+    /** %Convert current date/time to DateTime holding Local Time, without storing timezone offset.
      \tparam  DateTime type, inferred from argument
      \param  dt  Stores converted date/time [out]
     */
@@ -256,7 +256,7 @@ struct SysNativeTimeStamp {
     SysNativeTimeStamp& operator=(const SysNativeTimeStamp& src)
         { ::memcpy(this, &src, sizeof(SysNativeTimeStamp)); return *this; }
 
-    /** Set as null/invalid timestamp. */
+    /** %Set as null/invalid timestamp. */
     void set()
          { ::memset(&ts, 0, sizeof(Fields)); }
 };
@@ -385,7 +385,7 @@ struct SysTimestamp {
     #endif
     }
 
-    /** Set as current real (wall clock) time for use by timers.
+    /** %Set as current real (wall clock) time for use by timers.
      - This is intended for calculating time elapsed on the system and is accurate for that purpose, but is not accurate for getting current date/time
      - This uses a monotonic high-resolution (nanosecond) system clock, if possible
     */
@@ -431,7 +431,7 @@ struct SysTimestamp {
     #endif
     }
 
-    /** Set as current CPU (process) time for use by timers. */
+    /** %Set as current CPU (process) time for use by timers. */
     void set_cpu() {
     #if defined(_WIN32)
         FILETIME create, exit, kernel, user;
@@ -541,10 +541,10 @@ struct SysTimestamp {
      - This is equivalent of using get_wall_datetime() then converting the timestamp to date/time fields
      - Timezone is always UTC here
      .
-     \param  year     Set to 4 digit year for date  [out]
-     \param  month    Set to month of year for date (1 - 12)  [out]
-     \param  day      Set to day of moneth for date (1 - 31)  [out]
-     \param  hour     Set to hour for time of day (0 - 23)  [out]
+     \param  year     %Set to 4 digit year for date  [out]
+     \param  month    %Set to month of year for date (1 - 12)  [out]
+     \param  day      %Set to day of moneth for date (1 - 31)  [out]
+     \param  hour     %Set to hour for time of day (0 - 23)  [out]
      \param  minute   Minutes for time of day (0 - 59)  [out]
      \param  second   Seconds for time of day (0 - 60)  [out]
      \param  msecond  Milliseconds for time of day (0 - 999)  [out]
@@ -582,10 +582,10 @@ struct SysTimestamp {
      - This is equivalent of using get_wall_datetime() then converting the timestamp to date/time fields in local time
      - Time is in the current local timezone, but this does _not_ get the local timezone offset
      .
-     \param  year     Set to 4 digit year for date  [out]
-     \param  month    Set to month of year for date (1 - 12)  [out]
-     \param  day      Set to day of moneth for date (1 - 31)  [out]
-     \param  hour     Set to hour for time of day (0 - 23)  [out]
+     \param  year     %Set to 4 digit year for date  [out]
+     \param  month    %Set to month of year for date (1 - 12)  [out]
+     \param  day      %Set to day of moneth for date (1 - 31)  [out]
+     \param  hour     %Set to hour for time of day (0 - 23)  [out]
      \param  minute   Minutes for time of day (0 - 59)  [out]
      \param  second   Seconds for time of day (0 - 60)  [out]
      \param  msecond  Milliseconds for time of day (0 - 999)  [out]
@@ -623,10 +623,10 @@ struct SysTimestamp {
      - This is equivalent of using get_wall_datetime() then converting the timestamp to date/time fields in local time
      - Time is in the current local timezone
      .
-     \param  year       Set to 4 digit year for date  [out]
-     \param  month      Set to month of year for date (1 - 12)  [out]
-     \param  day        Set to day of moneth for date (1 - 31)  [out]
-     \param  hour       Set to hour for time of day (0 - 23)  [out]
+     \param  year       %Set to 4 digit year for date  [out]
+     \param  month      %Set to month of year for date (1 - 12)  [out]
+     \param  day        %Set to day of moneth for date (1 - 31)  [out]
+     \param  hour       %Set to hour for time of day (0 - 23)  [out]
      \param  minute     Minutes for time of day (0 - 59)  [out]
      \param  second     Seconds for time of day (0 - 60)  [out]
      \param  msecond    Milliseconds for time of day (0 - 999)  [out]

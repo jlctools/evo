@@ -22,7 +22,7 @@ Distributed under the BSD 2-Clause License -- see included file LICENSE.txt for 
 // Disable certain MSVC warnings for this file
 #if defined(_MSC_VER)
     #pragma warning(push)
-    #pragma warning(disable:4100)
+    #pragma warning(disable:4100 4996)
 #endif
 
 namespace evo {

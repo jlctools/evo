@@ -182,14 +182,14 @@ public:
     Key& getKey()
         { return key_; }
 
-    /** Set new key/pointer (used internally) */
+    /** %Set new key/pointer (used internally) */
     void set(const Key& key, const Item* data) {
         key_  = key;
         data_ = (Item*)data;
         end_  = (data_ == NULL);
     }
 
-    /** Set item pointer (used internally). */
+    /** %Set item pointer (used internally). */
     void setData(const Item* item)
         { data_ = (Item*)item; }
     /** \endcond */

@@ -1,0 +1,29 @@
+digraph "StaticBool&lt; val &gt;"
+{
+  edge [fontname="Helvetica",fontsize="10",labelfontname="Helvetica",labelfontsize="10"];
+  node [fontname="Helvetica",fontsize="10",shape=record];
+  rankdir="LR";
+  Node0 [label="StaticBool\< val \>",height=0.2,width=0.4,color="black", fillcolor="grey75", style="filled", fontcolor="black"];
+  Node0 -> Node1 [dir="back",color="midnightblue",fontsize="10",style="solid",fontname="Helvetica"];
+  Node1 [label="EvoContainer\< false \>",height=0.2,width=0.4,color="black", fillcolor="white", style="filled",URL="$structevo_1_1_evo_container.html",tooltip="Trait to identify Evo container types. "];
+  Node0 -> Node2 [dir="back",color="midnightblue",fontsize="10",style="solid",fontname="Helvetica"];
+  Node2 [label="IsArray\< false \>",height=0.2,width=0.4,color="black", fillcolor="white", style="filled",URL="$structevo_1_1_is_array.html",tooltip="Check if type is an array. "];
+  Node0 -> Node3 [dir="back",color="midnightblue",fontsize="10",style="solid",fontname="Helvetica"];
+  Node3 [label="IsBool\< false \>",height=0.2,width=0.4,color="black", fillcolor="white", style="filled",URL="$structevo_1_1_is_bool.html",tooltip="Check if type is a boolean (true/false) type. "];
+  Node0 -> Node4 [dir="back",color="midnightblue",fontsize="10",style="solid",fontname="Helvetica"];
+  Node4 [label="IsConst\< false \>",height=0.2,width=0.4,color="black", fillcolor="white", style="filled",URL="$structevo_1_1_is_const.html",tooltip="Check if type is const. "];
+  Node0 -> Node5 [dir="back",color="midnightblue",fontsize="10",style="solid",fontname="Helvetica"];
+  Node5 [label="IsFloat\< false \>",height=0.2,width=0.4,color="black", fillcolor="white", style="filled",URL="$structevo_1_1_is_float.html",tooltip="Check if type is a floating point type. "];
+  Node0 -> Node6 [dir="back",color="midnightblue",fontsize="10",style="solid",fontname="Helvetica"];
+  Node6 [label="IsInt\< false \>",height=0.2,width=0.4,color="black", fillcolor="white", style="filled",URL="$structevo_1_1_is_int.html",tooltip="Check if type is an integer (whole number) type. "];
+  Node0 -> Node7 [dir="back",color="midnightblue",fontsize="10",style="solid",fontname="Helvetica"];
+  Node7 [label="IsPointer\< false \>",height=0.2,width=0.4,color="black", fillcolor="white", style="filled",URL="$structevo_1_1_is_pointer.html",tooltip="Check if type is a pointer. "];
+  Node0 -> Node8 [dir="back",color="midnightblue",fontsize="10",style="solid",fontname="Helvetica"];
+  Node8 [label="IsReference\< false \>",height=0.2,width=0.4,color="black", fillcolor="white", style="filled",URL="$structevo_1_1_is_reference.html",tooltip="Check if type is a reference. "];
+  Node0 -> Node9 [dir="back",color="midnightblue",fontsize="10",style="solid",fontname="Helvetica"];
+  Node9 [label="IsSame\< false \>",height=0.2,width=0.4,color="black", fillcolor="white", style="filled",URL="$structevo_1_1_is_same.html",tooltip="Check if types are exactly the same. "];
+  Node0 -> Node10 [dir="back",color="midnightblue",fontsize="10",style="solid",fontname="Helvetica"];
+  Node10 [label="IsSigned\< true \>",height=0.2,width=0.4,color="black", fillcolor="white", style="filled",URL="$structevo_1_1_is_signed.html",tooltip="Check if integer type is unsigned. "];
+  Node0 -> Node11 [dir="back",color="midnightblue",fontsize="10",style="solid",fontname="Helvetica"];
+  Node11 [label="IsSmartPtr\< false \>",height=0.2,width=0.4,color="black", fillcolor="white", style="filled",URL="$structevo_1_1_is_smart_ptr.html",tooltip="Check if type is a SmartPtr or SharedPtr. "];
+}

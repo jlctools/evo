@@ -53,7 +53,7 @@ protected:
         { index_ = END; }
 
     /** Default constructor creates empty tokenizer. */
-    StrTokBase(const SubString& string) :
+    StrTokBase(const StringBase& string) :
         string_( string ),
         index_(  END )
         { }
@@ -89,16 +89,23 @@ protected:
  .
 Example:
 \code
-String str = "one, two, three";
+#include <evo/strtok.h>
+#include <evo/io.h>
+using namespace evo;
 
-// Tokens:
-//  one
-//  two
-//  three
-{
+int main() {
+    Console& c = con();
+    SubString str = "one, two, three";
+
+    // Tokens:
+    //  one
+    //  two
+    //  three
     StrTok tok(str);
     while (tok.next(','))
-        cout << tok.value();
+        c.out << tok.value();
+
+    return 0;
 }
 \endcode
 */
@@ -124,10 +131,12 @@ public:
     StrTok(const BaseType& src) : StrTokBase(src)
         { }
 
-    /** Constructor to start tokenizing given string. Call next() or nextw() for each token.
+    /** Constructor to start tokenizing given string.
+     - Call next() or nextw() for each token
+     .
      \param  str  %String to tokenize
     */
-    StrTok(const SubString& str) : StrTokBase(str)
+    StrTok(const StringBase& str) : StrTokBase(str)
         { impl_reset(); }
 
     /** Assignment/Copy operator.
@@ -148,7 +157,7 @@ public:
      \param  str  %String to tokenize
      \return      This
     */
-    ThisType& operator=(const SubString& str) {
+    ThisType& operator=(const StringBase& str) {
         this->string_ = str;
         this->value_.set();
         this->delim_.set();
@@ -309,7 +318,7 @@ public:
      \param  delims  Delimiters to use
      \return         Whether next token was found, false if no more
     */
-    bool nextany(const SubString& delims) {
+    bool nextany(const StringBase& delims) {
         Size& ind  = this->index_;
         Size  size = this->string_.size_;
         if (ind > size) {
@@ -333,7 +342,7 @@ public:
         size -= ind;
         const char* start = data + ind;
         const char* end = start + size;
-        const char* p = str_scan_delim(start, end, delims.data(), delims.size());
+        const char* p = str_scan_delim(start, end, delims.data_, delims.size_);
         size = (Size)(p - start);
         this->value_.set(start, size).strip();
         if (p == end) {
@@ -357,7 +366,7 @@ public:
      \param  ws_delim  Use to specify a whitespace char in `delims` so it's handled correctly, 1 to auto-detect, 0 if no whitespace delim
      \return           Whether next token was found, false if no more
     */
-    bool nextanyq(const SubString& delims, char ws_delim) {
+    bool nextanyq(const StringBase& delims, char ws_delim) {
         Size& ind  = this->index_;
         Size  size = this->string_.size_;
         if (ind > size) {
@@ -380,8 +389,8 @@ public:
         // Detect whitespace delim
         char ws_delim_char;
         if (ws_delim == 1) {
-            const StrSizeT ws_i = delims.findany(" \t\r\n", 4);
-            ws_delim_char = (ws_i == NONE ? 0 : delims[ws_i]);
+            const StrSizeT ws_i = SubString(delims).findany(" \t\r\n", 4);
+            ws_delim_char = (ws_i == NONE ? 0 : delims.data_[ws_i]);
         } else
             ws_delim_char = ws_delim;
 
@@ -390,7 +399,7 @@ public:
         const char* end = data + size;
         const char* startq;
         const char* endq;
-        const char* p = str_scan_endq(startq, endq, start, end, delims.data(), delims.size(), ws_delim_char);
+        const char* p = str_scan_endq(startq, endq, start, end, delims.data_, delims.size_, ws_delim_char);
         size = (Size)(endq - startq);
         if (p == end) {
             this->value_.set(startq, size);
@@ -411,12 +420,12 @@ public:
      - Token may be single-quoted ( ' ), double-quoted ( " ), backtick-quoted ( ` ), or triple-quoted ( ''' or """ or ``` )
        - This also supports backtick-DEL quoting -- backtick followed by the DEL char (7F) -- used when no other quoting is possible
      - Token is only considered quoted if it begins and ends with given quotes, after excluding whitespace -- so an unquoted token can contain quote chars
-     - For best performance use `nextanyq(const SubString&,char)` and set `ws_delim` to 0 or the whitespace delimiter to skip whitespace delimiter detection
+     - For best performance use `nextanyq(const StringBase&,char)` and set `ws_delim` to 0 or the whitespace delimiter to skip whitespace delimiter detection
      .
      \param  delims  Delimiters to use -- must not have more than 1 whitespace character (space, tab, newline)
      \return         Whether next token was found, false if no more
     */
-    bool nextanyq(const SubString& delims) {
+    bool nextanyq(const StringBase& delims) {
         return nextanyq(delims, 1); // 1 to detect a whitespace delim
     }
 
@@ -500,16 +509,23 @@ private:
  .
 Example:
 \code
-String str = "one, two, three";
+#include <evo/strtok.h>
+#include <evo/io.h>
+using namespace evo;
 
-// Tokens:
-//  three
-//  two
-//  one
-{
+int main() {
+    Console& c = con();
+    SubString str = "one, two, three";
+
+    // Tokens:
+    //  three
+    //  two
+    //  one
     StrTokR tok(str);
     while (tok.next(','))
-        cout << tok.value();
+        c.out << tok.value();
+
+    return 0;
 }
 \endcode
 */
@@ -538,7 +554,7 @@ public:
     /** Constructor to start tokenizing given string. Call next() or nextw() for each token.
      \param  str  %String to tokenize
     */
-    StrTokR(const SubString& str) : StrTokBase(str)
+    StrTokR(const StringBase& str) : StrTokBase(str)
         { impl_reset(); }
 
     /** Assignment/Copy operator.
@@ -559,7 +575,7 @@ public:
      \param  str  %String to tokenize
      \return      This
     */
-    ThisType& operator=(const SubString& str) {
+    ThisType& operator=(const StringBase& str) {
         this->string_ = str;
         this->value_.set();
         this->delim_.set();
@@ -713,7 +729,7 @@ public:
      \param  delims  Delimiters to use
      \return         Whether next token was found, false if no more
     */
-    bool nextany(const SubString& delims) {
+    bool nextany(const StringBase& delims) {
         Size& ind  = this->index_;
         Size  size = this->string_.size_;
         if (ind > size) {
@@ -735,7 +751,7 @@ public:
 
         // Extract token
         const char* end = data + ind;
-        const char* p = str_scan_delim_r(data, end, delims.data(), delims.size());
+        const char* p = str_scan_delim_r(data, end, delims.data_, delims.size_);
         size = (Size)(end - p);
         this->value_.set(p, size).stripl();
         if (p == data) {
@@ -760,7 +776,7 @@ public:
      \param  ws_delim  Use to specify a whitespace char in `delims` so it's handled correctly, 1 to auto-detect, 0 if no whitespace delim
      \return           Whether next token was found, false if no more
     */
-    bool nextanyq(const SubString& delims, char ws_delim) {
+    bool nextanyq(const StringBase& delims, char ws_delim) {
         Size& ind  = this->index_;
         Size  size = this->string_.size_;
         if (ind > size) {
@@ -783,8 +799,8 @@ public:
         // Detect whitespace delim
         char ws_delim_char;
         if (ws_delim == 1) {
-            const StrSizeT ws_i = delims.findany(" \t\r\n", 4);
-            ws_delim_char = (ws_i == NONE ? 0 : delims[ws_i]);
+            const StrSizeT ws_i = SubString(delims).findany(" \t\r\n", 4);
+            ws_delim_char = (ws_i == NONE ? 0 : delims.data_[ws_i]);
         } else
             ws_delim_char = ws_delim;
 
@@ -792,7 +808,7 @@ public:
         const char* end = data + ind;
         const char* startq;
         const char* endq;
-        const char* p = str_scan_endq_r(startq, endq, data, end, delims.data(), delims.size(), ws_delim_char);
+        const char* p = str_scan_endq_r(startq, endq, data, end, delims.data_, delims.size_, ws_delim_char);
         size = (Size)(endq - startq);
         p = str_scan_nws_r(data, p, ws_delim_char);
         if (p == data) {
@@ -819,7 +835,7 @@ public:
      \param  delims  Delimiters to use -- must not have more than 1 whitespace character (space, tab, newline)
      \return         Whether next token was found, false if no more
     */
-    bool nextanyq(const SubString& delims) {
+    bool nextanyq(const StringBase& delims) {
         return nextanyq(delims, 1); // 1 to detect a whitespace delim
     }
 
@@ -887,16 +903,23 @@ private:
  .
 Example:
 \code
-String str = "one,two,three";
+#include <evo/strtok.h>
+#include <evo/io.h>
+using namespace evo;
 
-// Tokens:
-//  one
-//  two
-//  three
-{
+int main() {
+    Console& c = con();
+    SubString str = "one,two,three";
+
+    // Tokens:
+    //  one
+    //  two
+    //  three
     StrTokS tok(str);
     while (tok.next(','))
-        cout << tok.value();
+        c.out << tok.value();
+
+    return 0;
 }
 \endcode
 */
@@ -925,7 +948,7 @@ public:
     /** Constructor to start tokenizing given string. Call next() or nextw() for each token.
      \param  str  %String to tokenize
     */
-    StrTokS(const SubString& str) : StrTokBase(str)
+    StrTokS(const StringBase& str) : StrTokBase(str)
         { this->index_ = (this->string_.size_ > 0 ? 0 : (Size)END); }
 
     /** Assignment/Copy operator.
@@ -946,7 +969,7 @@ public:
      \param  str  %String to tokenize
      \return      This
     */
-    ThisType& operator=(const SubString& str) {
+    ThisType& operator=(const StringBase& str) {
         this->string_ = str;
         this->value_.set();
         this->delim_.set();
@@ -1046,7 +1069,7 @@ public:
      \param  delims  Delimiters to use
      \return         Whether next token was found, false if no more
     */
-    bool nextany(const SubString& delims) {
+    bool nextany(const StringBase& delims) {
         Size& ind  = this->index_;
         Size  size = this->string_.size_;
         if (ind > size) {
@@ -1065,7 +1088,7 @@ public:
         const char* data = this->string_.data_;
         const char* start = data + ind;
         const char* end = start + size;
-        const char* p = str_scan_delim(start, end, delims.data(), delims.size());
+        const char* p = str_scan_delim(start, end, delims.data_, delims.size_);
         size = (Size)(p - start);
         this->value_.set(start, size);
         if (p == end) {
@@ -1130,16 +1153,23 @@ public:
  .
 Example:
 \code
-String str = "one,two,three";
+#include <evo/strtok.h>
+#include <evo/io.h>
+using namespace evo;
 
-// Tokens:
-//  three
-//  two
-//  one
-{
+int main() {
+    Console& c = con();
+    SubString str = "one,two,three";
+
+    // Tokens:
+    //  three
+    //  two
+    //  one
     StrTokRS tok(str);
     while (tok.next(','))
-        cout << tok.value();
+        c.out << tok.value();
+
+    return 0;
 }
 \endcode
 */
@@ -1168,7 +1198,7 @@ public:
     /** Constructor to start tokenizing given string. Call next() or nextw() for each token.
      \param  str  %String to tokenize
     */
-    StrTokRS(const SubString& str) : StrTokBase(str)
+    StrTokRS(const StringBase& str) : StrTokBase(str)
         { this->index_ = (str.size_ > 0 ? str.size_ : END); }
 
     /** Assignment/Copy operator.
@@ -1189,7 +1219,7 @@ public:
      \param  str  %String to tokenize
      \return      This
     */
-    ThisType& operator=(const SubString& str) {
+    ThisType& operator=(const StringBase& str) {
         this->string_ = str;
         this->index_  = (str.size_ > 0 ? str.size_ : END);
         this->value_.set();
@@ -1286,7 +1316,7 @@ public:
      \param  delims  Delimiters to use
      \return         Whether next token was found, false if no more
     */
-    bool nextany(const SubString& delims) {
+    bool nextany(const StringBase& delims) {
         Size& ind  = this->index_;
         Size  size = this->string_.size_;
         if (ind > size) {
@@ -1303,7 +1333,7 @@ public:
         // Extract token
         const char* data = this->string_.data_;
         const char* end = data + ind;
-        const char* p = str_scan_delim_r(data, end, delims.data(), delims.size());
+        const char* p = str_scan_delim_r(data, end, delims.data_, delims.size_);
         size = (Size)(end - p);
         this->value_.set(p, size);
         if (p == data) {
@@ -1367,7 +1397,7 @@ public:
  \tparam  NextCh   Pointer to member function for next() to call
  \tparam  NextAny  Pointer to member function for nextany() to call
 */
-template<class T, bool (T::*NextCh)(char), bool (T::*NextAny)(const SubString&)=&T::nextany>
+template<class T, bool (T::*NextCh)(char), bool (T::*NextAny)(const StringBase&)=&T::nextany>
 struct StrTokVariant : public T {
     typedef StrTokVariant<T,NextCh,NextAny> ThisType;   ///< This type
     typedef StrTokBase                      BaseType;   ///< Root base type
@@ -1379,19 +1409,19 @@ struct StrTokVariant : public T {
         { }
     StrTokVariant(const BaseType& src) : T(src)
         { }
-    StrTokVariant(const SubString& str) : T(str)
+    StrTokVariant(const StringBase& str) : T(str)
         { }
 
     ThisType& operator=(const ThisType& src)
         { this->copy(src); return *this; }
     ThisType& operator=(const BaseType& src)
         { this->copy(src); return *this; }
-    ThisType& operator=(const SubString& str)
+    ThisType& operator=(const StringBase& str)
         { T::operator=(str); return *this; }
 
     bool next(char delim)
         { return ( ((T*)this)->*NextCh )(delim); }
-    bool nextany(const SubString& delims)
+    bool nextany(const StringBase& delims)
         { return ( ((T*)this)->*NextAny )(delims); }
 
     template<class C,class S>
@@ -1421,16 +1451,23 @@ struct StrTokVariant : public T {
  .
 Example:
 \code
-String str = "one, \"two\", three";
+#include <evo/strtok.h>
+#include <evo/io.h>
+using namespace evo;
 
-// Tokens:
-//  one
-//  two
-//  three
-{
+int main() {
+    Console& c = con();
+    SubString str = "one, \"two\", three";
+
+    // Tokens:
+    //  one
+    //  two
+    //  three
     StrTokQ tok(str);
     while (tok.next(','))
-        cout << tok.value();
+        c.out << tok.value();
+
+    return 0;
 }
 \endcode
  */
@@ -1441,16 +1478,23 @@ typedef StrTokVariant<StrTok,&StrTok::nextq,&StrTok::nextanyq> StrTokQ;
  .
 Example:
 \code
-String str = "one, \"two\", three";
+#include <evo/strtok.h>
+#include <evo/io.h>
+using namespace evo;
 
-// Tokens:
-//  three
-//  two
-//  one
-{
+int main() {
+    Console& c = con();
+    SubString str = "one, \"two\", three";
+
+    // Tokens:
+    //  three
+    //  two
+    //  one
     StrTokQR tok(str);
     while (tok.next(','))
-        cout << tok.value();
+        c.out << tok.value();
+
+    return 0;
 }
 \endcode
  */
@@ -1464,16 +1508,23 @@ typedef StrTokVariant<StrTokR,&StrTokR::nextq,&StrTokR::nextanyq> StrTokQR;
  .
 Example:
 \code
-String str = "one, two, three";
+#include <evo/strtok.h>
+#include <evo/io.h>
+using namespace evo;
 
-// Tokens:
-//  one
-//  two
-//  three
-{
+int main() {
+    Console& c = con();
+    SubString str = "one, two, three";
+
+    // Tokens:
+    //  one
+    //  two
+    //  three
     StrTokWord tok(str);
     while (tok.next(','))
-        cout << tok.value();
+        c.out << tok.value();
+
+    return 0;
 }
 \endcode
  */
@@ -1485,16 +1536,23 @@ typedef StrTokVariant<StrTok,&StrTok::nextw> StrTokWord;
  .
 Example:
 \code
-String str = "one, two, three";
+#include <evo/strtok.h>
+#include <evo/io.h>
+using namespace evo;
 
-// Tokens:
-//  three
-//  two
-//  one
-{
+int main() {
+    Console& c = con();
+    SubString str = "one, two, three";
+
+    // Tokens:
+    //  three
+    //  two
+    //  one
     StrTokWordR tok(str);
     while (tok.next(','))
-        cout << tok.value();
+        c.out << tok.value();
+
+    return 0;
 }
 \endcode
  */
@@ -1506,16 +1564,23 @@ typedef StrTokVariant<StrTokR,&StrTokR::nextw> StrTokWordR;
  .
 Example:
 \code
-String str = "one,two,three";
+#include <evo/strtok.h>
+#include <evo/io.h>
+using namespace evo;
 
-// Tokens:
-//  one
-//  two
-//  three
-{
+int main() {
+    Console& c = con();
+    SubString str = "one,two,three";
+
+    // Tokens:
+    //  one
+    //  two
+    //  three
     StrTokWordS tok(str);
     while (tok.next(','))
-        cout << tok.value();
+        c.out << tok.value();
+
+    return 0;
 }
 \endcode
  */
@@ -1527,16 +1592,23 @@ typedef StrTokVariant<StrTokS,&StrTokS::nextw> StrTokWordS;
  .
 Example:
 \code
-String str = "one,two,three";
+#include <evo/strtok.h>
+#include <evo/io.h>
+using namespace evo;
 
-// Tokens:
-//  three
-//  two
-//  one
-{
+int main() {
+    Console& c = con();
+    SubString str = "one,two,three";
+
+    // Tokens:
+    //  three
+    //  two
+    //  one
     StrTokWordRS tok(str);
     while (tok.next(','))
-        cout << tok.value();
+        c.out << tok.value();
+
+    return 0;
 }
 \endcode
  */
@@ -1594,8 +1666,8 @@ public:
     StrTokLine(const BaseType& src) : StrTokBase(src)
         { }
 
-    /** \copydoc StrTok::StrTok(const SubString&) */
-    StrTokLine(const SubString& str) : StrTokBase(str)
+    /** \copydoc StrTok::StrTok(const StringBase&) */
+    StrTokLine(const StringBase& str) : StrTokBase(str)
         { impl_reset(); }
 
     /** \copydoc StrTok::operator=(const ThisType&) */
@@ -1606,8 +1678,8 @@ public:
     ThisType& operator=(const BaseType& src)
         { this->copy(src); return *this; }
 
-    /** \copydoc StrTok::operator=(const SubString&) */
-    ThisType& operator=(const SubString& str) {
+    /** \copydoc StrTok::operator=(const StringBase&) */
+    ThisType& operator=(const StringBase& str) {
         this->string_ = str;
         this->value_.set();
         this->delim_.set();

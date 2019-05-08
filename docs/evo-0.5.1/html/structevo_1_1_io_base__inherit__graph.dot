@@ -1,0 +1,35 @@
+digraph "IoBase"
+{
+  edge [fontname="Helvetica",fontsize="10",labelfontname="Helvetica",labelfontsize="10"];
+  node [fontname="Helvetica",fontsize="10",shape=record];
+  rankdir="LR";
+  Node0 [label="IoBase",height=0.2,width=0.4,color="black", fillcolor="grey75", style="filled", fontcolor="black"];
+  Node1 -> Node0 [dir="back",color="midnightblue",fontsize="10",style="solid",fontname="Helvetica"];
+  Node1 [label="SafeBool\< IoBase \>",height=0.2,width=0.4,color="black", fillcolor="white", style="filled",URL="$classevo_1_1_safe_bool.html"];
+  Node0 -> Node2 [dir="back",color="midnightblue",fontsize="10",style="solid",fontname="Helvetica"];
+  Node2 [label="SocketCast",height=0.2,width=0.4,color="black", fillcolor="white", style="filled",URL="$classevo_1_1_socket_cast.html",tooltip="Socket for I/O casting (datagram/UDP). "];
+  Node0 -> Node3 [dir="back",color="midnightblue",fontsize="10",style="solid",fontname="Helvetica"];
+  Node3 [label="StreamBase",height=0.2,width=0.4,color="black", fillcolor="white", style="filled",URL="$structevo_1_1_stream_base.html",tooltip="Base text and binary stream interface. "];
+  Node3 -> Node4 [dir="back",color="midnightblue",fontsize="10",style="solid",fontname="Helvetica"];
+  Node4 [label="Stream\< T \>",height=0.2,width=0.4,color="black", fillcolor="white", style="filled",URL="$classevo_1_1_stream.html",tooltip="Input/Output stream implementation. "];
+  Node3 -> Node5 [dir="back",color="midnightblue",fontsize="10",style="solid",fontname="Helvetica"];
+  Node5 [label="StreamIn\< T \>",height=0.2,width=0.4,color="black", fillcolor="white", style="filled",URL="$classevo_1_1_stream_in.html",tooltip="Input stream implementation. "];
+  Node3 -> Node6 [dir="back",color="midnightblue",fontsize="10",style="solid",fontname="Helvetica"];
+  Node6 [label="StreamOut\< T \>",height=0.2,width=0.4,color="black", fillcolor="white", style="filled",URL="$classevo_1_1_stream_out.html",tooltip="Output stream implementation. "];
+  Node3 -> Node7 [dir="back",color="midnightblue",fontsize="10",style="solid",fontname="Helvetica"];
+  Node7 [label="Stream\< IoFile \>",height=0.2,width=0.4,color="black", fillcolor="white", style="filled",URL="$classevo_1_1_stream.html"];
+  Node7 -> Node8 [dir="back",color="midnightblue",fontsize="10",style="solid",fontname="Helvetica"];
+  Node8 [label="File",height=0.2,width=0.4,color="black", fillcolor="white", style="filled",URL="$classevo_1_1_file.html",tooltip="File I/O stream. "];
+  Node3 -> Node9 [dir="back",color="midnightblue",fontsize="10",style="solid",fontname="Helvetica"];
+  Node9 [label="Stream\< IoSocket \>",height=0.2,width=0.4,color="black", fillcolor="white", style="filled",URL="$classevo_1_1_stream.html"];
+  Node9 -> Node10 [dir="back",color="midnightblue",fontsize="10",style="solid",fontname="Helvetica"];
+  Node10 [label="Socket",height=0.2,width=0.4,color="black", fillcolor="white", style="filled",URL="$classevo_1_1_socket.html",tooltip="Socket I/O stream. "];
+  Node3 -> Node11 [dir="back",color="midnightblue",fontsize="10",style="solid",fontname="Helvetica"];
+  Node11 [label="StreamIn\< IoFile \>",height=0.2,width=0.4,color="black", fillcolor="white", style="filled",URL="$classevo_1_1_stream_in.html"];
+  Node11 -> Node12 [dir="back",color="midnightblue",fontsize="10",style="solid",fontname="Helvetica"];
+  Node12 [label="PipeIn",height=0.2,width=0.4,color="black", fillcolor="white", style="filled",URL="$classevo_1_1_pipe_in.html",tooltip="Input stream for reading from pipe. "];
+  Node3 -> Node13 [dir="back",color="midnightblue",fontsize="10",style="solid",fontname="Helvetica"];
+  Node13 [label="StreamOut\< IoFile \>",height=0.2,width=0.4,color="black", fillcolor="white", style="filled",URL="$classevo_1_1_stream_out.html"];
+  Node13 -> Node14 [dir="back",color="midnightblue",fontsize="10",style="solid",fontname="Helvetica"];
+  Node14 [label="PipeOut",height=0.2,width=0.4,color="black", fillcolor="white", style="filled",URL="$classevo_1_1_pipe_out.html",tooltip="Output stream for writing to pipe. "];
+}

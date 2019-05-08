@@ -83,16 +83,28 @@ Distributed under the BSD 2-Clause License -- see included file LICENSE.txt for 
             #define EVO_OLDCC
         #endif
     #endif
+    #include <ciso646> // used to identify LLVM libc++
+    #if defined(_LIBCPP_VERSION)
+        #define EVO_CLANG_LIBCPP _LIBCPP_VERSION
+    #else
+        #if defined(__GLIBCXX__)
+            #define EVO_GLIBCPP __GLIBCXX__
+        #endif
+    #endif
 #elif defined(__GNUC__)
     #define EVO_COMPILER "gcc"
     #define EVO_GCC_VER ((__GNUC__ * 100) + __GNUC_MINOR__)
     #define EVO_COMPILER_VER EVO_GCC_VER
     #if EVO_GCC_VER < 409
         #define EVO_OLDCC
-        #if EVO_GCC_VER < 406
+        #if EVO_GCC_VER < 407
             #define EVO_OLDCC2
         #endif
     #endif
+    #include <limits.h> // used to identify GNU libc++
+    #if defined(__GLIBCXX__)
+        #define EVO_GLIBCPP __GLIBCXX__
+    #endif        
 #elif defined(__CODEGEARC__) && __CODEGEARC__ >= 0x0630     // Not supported before C++ Builder XE
     // C++ Builder -- calculated version (100 for 10, 101 for 10.1, etc) for latest recognized version, XE number for older compiler (1 for XE, 2 for XE2, etc)
     #define EVO_COMPILER "C++ Builder"
@@ -153,8 +165,14 @@ Distributed under the BSD 2-Clause License -- see included file LICENSE.txt for 
 // System includes
 #if defined(_WIN32)
     #define _WINSOCKAPI_            // exclude winsock from windows.h
-    #ifndef WIN32_LEAN_AND_MEAN
+    #if !defined(WIN32_LEAN_AND_MEAN)
         #define WIN32_LEAN_AND_MEAN // minimize windows.h include
+    #endif
+    #if !defined(_CRT_SECURE_CPP_OVERLOAD_STANDARD_NAMES)
+        #define _CRT_SECURE_CPP_OVERLOAD_STANDARD_NAMES 1
+    #endif
+    #if !defined(_CRT_NONSTDC_NO_WARNINGS)
+        #define _CRT_NONSTDC_NO_WARNINGS 1
     #endif
     #define NOMINMAX                // disable windows min/max macros
 
@@ -197,12 +215,6 @@ Distributed under the BSD 2-Clause License -- see included file LICENSE.txt for 
 // Evo Config
 #include "../evo_config.h"
 
-// STL Compatibility
-#if (EVO_STD_STRING || defined(_BASIC_STRING_H) || defined(_STRING_)) && EVO_STD_STRING != -1
-    #include <string> // std::string
-    #define EVO_STD_STRING_ENABLED 1
-#endif
-
 // C++ Version
 #if __cplusplus >= 201103L || (defined(EVO_MSVC_YEAR) && EVO_MSVC_YEAR >= 2017) || defined(DOXYGEN)
     /** Defined when compiler C++11 supported is enabled. */
@@ -241,12 +253,17 @@ Distributed under the BSD 2-Clause License -- see included file LICENSE.txt for 
             Bar(const Bar&) EVO_ONCPP11(= delete);
         };
        \endcode
+     .
+     \param  EXPR  Expression to use if C++11 is supported
     */
     #define EVO_ONCPP11(EXPR) EXPR
 
     /** Compile to `EXPR1` if C++11 support is detected, otherwise compile to `EXPR2`.
      - \#include <evo/type.h>
      - This is useful to make code using C++11 features portable with and without C++11 support
+     .
+     \param  EXPR1  Expression to use if C++11 is supported
+     \param  EXPR2  Expression to use if C++11 is not supported
     */
     #define EVO_ONCPP11_ELSE(EXPR1, EXPR2) EXPR1
 #else
@@ -258,6 +275,7 @@ Distributed under the BSD 2-Clause License -- see included file LICENSE.txt for 
     /** Compile `EXPR` only if C++14 support is detected, otherwise this is a no-op.
      - This is useful to specify `constexpr` when it improves code with C++14 support
      .
+     \param  EXPR  Expression to use if C++14 is supported
     */
     #define EVO_ONCPP14(EXPR) EXPR
 #else
@@ -269,10 +287,30 @@ Distributed under the BSD 2-Clause License -- see included file LICENSE.txt for 
      - This is useful to specify `constexpr` when it improves code with C++14 support
 	 - This excludes MSVC before 2017 due to C++14 issues
      .
+     \param  EXPR  Expression to use if C++14 is fully supported
     */
 	#define EVO_ONCPP14_FULL(EXPR) EXPR
 #else
 	#define EVO_ONCPP14_FULL(EXPR)
+#endif
+
+#if defined(EVO_CPP17)
+    /** Compile `EXPR` only if C++17 support is detected, otherwise this is a no-op.
+     \param  EXPR  Expression to use if C++17 is supported
+    */
+    #define EVO_ONCPP17(EXPR) EXPR
+#else
+    #define EVO_ONCPP17(EXPR)
+#endif
+
+// STL Compatibility
+#if (EVO_STD_STRING || defined(_BASIC_STRING_H) || defined(_STRING_) || defined(_LIBCPP_STRING) || defined(_GLIBCXX_STRING) || (defined(_MSC_VER) && defined(_XSTRING_))) && EVO_STD_STRING != -1
+    #include <string> // std::string
+    #define EVO_STD_STRING_ENABLED 1
+#endif
+#if defined(EVO_CPP17) && (EVO_STD_STRING_VIEW || defined(_LIBCPP_STRING_VIEW) || defined(_GLIBCXX_STRING_VIEW) || (defined(_MSC_VER) && defined(_XSTRING_))) && EVO_STD_STRING_VIEW != -1
+    #include <string_view> // std::string_view
+    #define EVO_STD_STRING_VIEW_ENABLED 1
 #endif
 
 // Exception support
@@ -317,12 +355,14 @@ Distributed under the BSD 2-Clause License -- see included file LICENSE.txt for 
 #endif
 
 /** Whether char is signed -- usually true, but unsigned on some systems. */
-#if defined(EVO_MSVC_YEAR) || defined(DOXYGEN)
-    #define EVO_CHAR_SIGNED 1
-#elif (((char)-1) < 0)
-    #define EVO_CHAR_SIGNED 1
-#else
-    #define EVO_CHAR_SIGNED 0
+#if !defined(EVO_CHAR_SIGNED)
+    #if defined(EVO_MSVC_YEAR) || defined(DOXYGEN)
+        #define EVO_CHAR_SIGNED 1
+    #elif (((char)-1) < 0)
+        #define EVO_CHAR_SIGNED 1
+    #else
+        #define EVO_CHAR_SIGNED 0
+    #endif
 #endif
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -386,7 +426,7 @@ Distributed under the BSD 2-Clause License -- see included file LICENSE.txt for 
     */
     #define EVO_PARAM_UNUSED(NAME)
 
-    /** Set starting point to ignore MSVC warnings.
+    /** %Set starting point to ignore MSVC warnings.
      - This must be followed by a matching \link EVO_MSVC_NOWARN_END\endlink at some point in the same file
      - Semicolon not needed after this
      - This is MSVC specific and is ignored by other compilers
@@ -410,7 +450,7 @@ Distributed under the BSD 2-Clause License -- see included file LICENSE.txt for 
     */
     #define EVO_MSVC_NOWARN_START(CODES)
 
-    /** Set end point for ignoring MSVC warnings.
+    /** %Set end point for ignoring MSVC warnings.
      - See EVO_MSVC_NOWARN_START()
      - Semicolon not needed after this
      - This is MSVC specific and is ignored by other compilers
@@ -590,7 +630,6 @@ namespace impl {
         if (timer == NULL) {
             result = false;
         } else {
-            const DWORD NSEC100_PER_MSEC = 10000;
             LARGE_INTEGER tm;
             if (nsec100 > (ulongl)std::numeric_limits<LONGLONG>::max())
                 tm.QuadPart = std::numeric_limits<LONGLONG>::min();
@@ -945,6 +984,11 @@ struct ListBase {
         size_ = 0;
     }
 
+    ListBase(const ListBaseType& src) {
+        data_ = src.data_;
+        size_ = src.size_;
+    }
+
     ListBase(const char* str) {
         if (str == NULL) {
             data_ = NULL;
@@ -981,6 +1025,11 @@ struct ListBase<char,TSize> {
         size_ = 0;
     }
 
+    ListBase(const ListBaseType& src) {
+        data_ = src.data_;
+        size_ = src.size_;
+    }
+
     ListBase(const char* str) {
         if (str == NULL) {
             data_ = NULL;
@@ -1015,6 +1064,23 @@ struct ListBase<char,TSize> {
             size_ = (TSize)str->length();
         }
     }
+
+#if EVO_STD_STRING_VIEW_ENABLED
+    ListBase(const std::basic_string_view<char>& str) {
+        size_ = (TSize)str.length();
+        data_ = (char*)(size_ > 0 ? str.data() : "");
+    }
+
+    ListBase(const std::basic_string_view<char>* str) {
+        if (str == NULL) {
+            data_ = NULL;
+            size_ = 0;
+        } else {
+            data_ = (char*)str->data();
+            size_ = (TSize)str->length();
+        }
+    }
+#endif
 };
 #endif
 /** \endcond */

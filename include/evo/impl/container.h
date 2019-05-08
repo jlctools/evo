@@ -550,7 +550,7 @@ struct DataCopy : public DataType<T> {
     /** Most efficient type for passing as parameter (const-reference or POD value). */
     typedef typename AddConst<T>::Type& PassType;
 
-    /** Set value to default.
+    /** %Set value to default.
      - For POD types this sets to 0
      - For all other types this copies from a default-constructed object
      .
@@ -559,7 +559,7 @@ struct DataCopy : public DataType<T> {
     static void set_default(T& val)
         { static const T DEFAULT; val = DEFAULT; }
 
-    /** Set new POD value to default value (0).
+    /** %Set new POD value to default value (0).
      - For POD types this sets to 0
      - For all other types this does nothing
      .

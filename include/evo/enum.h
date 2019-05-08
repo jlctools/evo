@@ -308,6 +308,66 @@ struct EnumMapIterator : EnumIterator<typename T::Type, (int)T::FIRST, (int)T::L
 #endif
 
 ///////////////////////////////////////////////////////////////////////////////
+
+/** Helper for creating enum trait mappers.
+ - \#include <evo/enum.h>
+ - This creates a struct with a static array of `TRAITS` values mapped to enum values
+ - The created struct type is named after ENUM with suffix "EnumTraits", and has the helper function:
+     - static const TRAITS& get(ENUM value)
+       - Get traits for enum value
+   .
+ - See: \ref EnumConversion "Enum Conversion"
+ .
+ \param  ENUM         Enum type to create traits for
+ \param  TRAITS       Traits type to create for each enum value, usually named after `ENUM` with suffix `Traits`
+ \param  START_VAL    Start enum value used as the starting point of enum values -- usually this is the "UNKNOWN" enum value
+ \param  ...          %List of initializers for TRAITS values matching enum values starting at `START_VAL`
+*/
+#define EVO_ENUM_TRAITS(ENUM, TRAITS, START_VAL, ...) \
+    struct ENUM ## EnumTraits { \
+        typedef ENUM Type; \
+        static const ENUM START = START_VAL; \
+        static const TRAITS& get(ENUM value) { \
+            return data()[(int)value - (int)START]; \
+        } \
+    private: \
+        static const TRAITS* data() { \
+            static const TRAITS DATA[] = { __VA_ARGS__ }; \
+            return DATA; \
+        } \
+    };
+
+#if defined(EVO_CPP11)
+    /** Helper for creating enum class trait mappers (C++11).
+     - \#include <evo/enum.h>
+     - This creates a struct with a static array of `TRAITS` values mapped to enum values
+     - The created struct type is named after ENUM with suffix "EnumTraits", and has the helper function:
+         - static const TRAITS& get(ENUM value)
+           - Get traits for enum value
+       .
+     - If you want to specify a different starting value use EVO_ENUM_TRAITS(), which works on enum class too
+     - See: \ref EnumConversion "Enum Conversion"
+     .
+     \param  ENUM    Enum type to create traits for
+     \param  TRAITS  Traits type to create for each enum value, usually named after `ENUM` with suffix `Traits`
+     \param  ...     %List of initializers for TRAITS values matching enum class values starting at `ENUM::UNKNOWN`
+    */
+    #define EVO_ENUM_CLASS_TRAITS(ENUM, TRAITS, ...) \
+        struct ENUM ## EnumTraits { \
+            typedef ENUM Type; \
+            static const ENUM START = ENUM::UNKNOWN; \
+            static const TRAITS& get(ENUM value) { \
+                return data()[(int)value - (int)START]; \
+            } \
+        private: \
+            static const TRAITS* data() { \
+                static const TRAITS DATA[] = { __VA_ARGS__ }; \
+                return DATA; \
+            } \
+        };
+#endif
+
+///////////////////////////////////////////////////////////////////////////////
 //@}
 }
 #endif

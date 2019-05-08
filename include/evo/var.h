@@ -264,15 +264,21 @@ public:
     Var(const Var& src) {
         type_ = src.type_;
         switch (type_) {
-            case tOBJECT:
-                new((ObjectType*)buf_obj_) ObjectType(*(ObjectType*)src.buf_obj_);
+            case tOBJECT: {
+                const ObjectType* src_ptr = (const ObjectType*)src.buf_obj_;
+                new((ObjectType*)buf_obj_) ObjectType(*src_ptr);
                 break;
-            case tLIST:
-                new((ListType*)buf_list_) ListType(*(ListType*)src.buf_list_);
+            }
+            case tLIST: {
+                const ListType* src_ptr = (const ListType*)src.buf_list_;
+                new((ListType*)buf_list_) ListType(*src_ptr);
                 break;
-            case tSTRING:
-                new((String*)buf_str_) String(*(String*)src.buf_str_);
+            }
+            case tSTRING: {
+                const String* src_ptr = (const String*)src.buf_str_;
+                new((String*)buf_str_) String(*src_ptr);
                 break;
+            }
             case tFLOAT:
                 buf_float_ = src.buf_float_;
                 break;
@@ -531,12 +537,18 @@ public:
     */
     bool shared() const {
         switch (type_) {
-            case tOBJECT:
-                return ((ObjectType*)buf_obj_)->shared();
-            case tLIST:
-                return ((ListType*)buf_list_)->shared();
-            case tSTRING:
-                return ((String*)buf_str_)->shared();
+            case tOBJECT: {
+                const ObjectType* p = (const ObjectType*)buf_obj_;
+                return p->shared();
+            }
+            case tLIST: {
+                const ListType* p = (const ListType*)buf_list_;
+                return p->shared();
+            }
+            case tSTRING: {
+                const String* p = (const String*)buf_str_;
+                return p->shared();
+            }
             default:
                 break;
         }
@@ -553,7 +565,8 @@ public:
     bool shared_scan() const {
         switch (type_) {
             case tOBJECT: {
-                ObjectType& obj = *(ObjectType*)buf_obj_;
+                const ObjectType* p = (const ObjectType*)buf_obj_;
+                const ObjectType& obj = *p;
                 if (obj.shared())
                     return true;
                 for (ObjectType::Iter iter(obj); iter; ++iter)
@@ -562,7 +575,8 @@ public:
                 break;
             }
             case tLIST: {
-                ListType& list = *(ListType*)buf_list_;
+                const ListType* p = (const ListType*)buf_list_;
+                const ListType& list = *p;
                 if (list.shared())
                     return true;
                 for (ListType::Iter iter(list); iter; ++iter)
@@ -570,8 +584,10 @@ public:
                         return true;
                 break;
             }
-            case tSTRING:
-                return ((String*)buf_str_)->shared();
+            case tSTRING: {
+                const String* p = (const String*)buf_str_;
+                return p->shared();
+            }
             default:
                 break;
         }
@@ -583,12 +599,18 @@ public:
     */
     bool null() const {
         switch (type_) {
-            case tOBJECT:
-                return ((ObjectType*)buf_obj_)->null();
-            case tLIST:
-                return ((ListType*)buf_list_)->null();
-            case tSTRING:
-                return ((String*)buf_str_)->null();
+            case tOBJECT: {
+                const ObjectType* p = (const ObjectType*)buf_obj_;
+                return p->null();
+            }
+            case tLIST: {
+                const ListType* p = (const ListType*)buf_list_;
+                return p->null();
+            }
+            case tSTRING: {
+                const String* p = (const String*)buf_str_;
+                return p->null();
+            }
             case tNULL:
                 return true;
             default:
@@ -604,10 +626,14 @@ public:
     */
     bool empty() const {
         switch (type_) {
-            case tOBJECT:
-                return ((ObjectType*)buf_obj_)->empty();
-            case tLIST:
-                return ((ListType*)buf_list_)->empty();
+            case tOBJECT: {
+                const ObjectType* p = (const ObjectType*)buf_obj_;
+                return p->empty();
+            }
+            case tLIST: {
+                const ListType* p = (const ListType*)buf_list_;
+                return p->empty();
+            }
             default:
                 break;
         }
@@ -619,17 +645,21 @@ public:
     */
     Size size() const {
         switch (type_) {
-            case tOBJECT:
-                return ((ObjectType*)buf_obj_)->size();
-            case tLIST:
-                return ((ListType*)buf_list_)->size();
+            case tOBJECT: {
+                const ObjectType* p = (const ObjectType*)buf_obj_;
+                return p->size();
+            }
+            case tLIST: {
+                const ListType* p = (const ListType*)buf_list_;
+                return p->size();
+            }
             default:
                 break;
         }
         return 0;
     }
 
-    /** Set as null type/value.
+    /** %Set as null type/value.
      \return  This
     */
     Var& set() {
@@ -645,15 +675,21 @@ public:
     */
     Var& clear() {
         switch (type_) {
-            case tOBJECT:
-                ((ObjectType*)buf_obj_)->clear();
+            case tOBJECT: {
+                ObjectType* p = (ObjectType*)buf_obj_;
+                p->clear();
                 break;
-            case tLIST:
-                ((ListType*)buf_list_)->clear();
+            }
+            case tLIST: {
+                ListType* p = (ListType*)buf_list_;
+                p->clear();
                 break;
-            case tSTRING:
-                ((String*)buf_str_)->clear();
+            }
+            case tSTRING: {
+                String* p = (String*)buf_str_;
+                p->clear();
                 break;
+            }
             case tFLOAT:
                 buf_float_ = 0.0;
                 break;
@@ -680,15 +716,21 @@ public:
     */
     Var& unshare() {
         switch (type_) {
-            case tOBJECT:
-                ((ObjectType*)buf_obj_)->unshare();
+            case tOBJECT: {
+                ObjectType* p = (ObjectType*)buf_obj_;
+                p->unshare();
                 break;
-            case tLIST:
-                ((ListType*)buf_list_)->unshare();
+            }
+            case tLIST: {
+                ListType* p = (ListType*)buf_list_;
+                p->unshare();
                 break;
-            case tSTRING:
-                ((String*)buf_str_)->unshare();
+            }
+            case tSTRING: {
+                String* p = (String*)buf_str_;
+                p->unshare();
                 break;
+            }
             default:
                 break;
         }
@@ -705,7 +747,8 @@ public:
     Var& unshare_all() {
         switch (type_) {
             case tOBJECT: {
-                ObjectType& obj = *(ObjectType*)buf_obj_;
+                ObjectType* p = (ObjectType*)buf_obj_;
+                ObjectType& obj = *p;
                 obj.unshare();
                 for (ObjectType::IterM iter(obj); iter; ++iter) {
                     ((String&)iter->key()).unshare(); // key is const to prevent reordering, need to override const to unshare()
@@ -714,15 +757,18 @@ public:
                 break;
             }
             case tLIST: {
-                ListType& list = *(ListType*)buf_list_;
+                ListType* p = (ListType*)buf_list_;
+                ListType& list = *p;
                 list.unshare();
                 for (ListType::IterM iter(list); iter; ++iter)
                     iter->unshare_all();
                 break;
             }
-            case tSTRING:
-                ((String*)buf_str_)->unshare();
+            case tSTRING: {
+                String* p = (String*)buf_str_;
+                p->unshare();
                 break;
+            }
             default:
                 break;
         }
@@ -741,7 +787,8 @@ public:
     */
     const Var& childref(const StringBase& key) const {
         if (type_ == tOBJECT) {
-            const Var* v = ((ObjectType*)buf_obj_)->find(key);
+            const ObjectType* p = (ObjectType*)buf_obj_;
+            const Var* v = p->find(key);
             if (v != NULL)
                 return *v;
         }
@@ -771,8 +818,10 @@ public:
      \return  Pointer to found child, NULL if not found or not an object
     */
     const Var* child(const StringBase& key) const {
-        if (type_ == tOBJECT)
-            return ((ObjectType*)buf_obj_)->find(key);
+        if (type_ == tOBJECT) {
+            const ObjectType* p = (const ObjectType*)buf_obj_;
+            return p->find(key);
+        }
         return NULL;
     }
 
@@ -781,7 +830,7 @@ public:
     */
     const Var* child(Size index) const {
         if (type_ == tLIST) {
-            const ListType* l = (ListType*)buf_list_;
+            const ListType* l = (const ListType*)buf_list_;
             if (l != NULL && index < l->size())
                 return &l->item(index);
         }
@@ -792,8 +841,10 @@ public:
      \return  Pointer to found child, NULL if not found or not an object
     */
     Var* childM(const StringBase& key) {
-        if (type_ == tOBJECT)
-            return ((ObjectType*)buf_obj_)->findM(key);
+        if (type_ == tOBJECT) {
+            ObjectType* p = (ObjectType*)buf_obj_;
+            return p->findM(key);
+        }
         return NULL;
     }
 
@@ -801,8 +852,10 @@ public:
      \return  Pointer to found child, NULL if not found or not a list
     */
     Var* childM(Size index) {
-        if (type_ == tLIST)
-            return &((ListType*)buf_list_)->itemM(index);
+        if (type_ == tLIST) {
+            ListType* l = (ListType*)buf_list_;
+            return &l->itemM(index);
+        }
         return NULL;
     }
 
@@ -816,12 +869,16 @@ public:
         switch (type_) {
             case tOBJECT:
                 return *ptr;
-            case tLIST:
-                ((ListType*)buf_list_)->~ListType();
+            case tLIST: {
+                ListType* p = (ListType*)buf_list_;
+                p->~ListType();
                 break;
-            case tSTRING:
-                ((String*)buf_str_)->~String();
+            }
+            case tSTRING: {
+                String* p = (String*)buf_str_;
+                p->~String();
                 break;
+            }
             default:
                 break;
         }
@@ -839,14 +896,18 @@ public:
     ListType& list() {
         ListType* ptr = (ListType*)buf_obj_;
         switch (type_) {
-            case tOBJECT:
-                ((ObjectType*)buf_obj_)->~ObjectType();
+            case tOBJECT: {
+                ObjectType* p = (ObjectType*)buf_obj_;
+                p->~ObjectType();
                 break;
+            }
             case tLIST:
                 return *ptr;
-            case tSTRING:
-                ((String*)buf_str_)->~String();
+            case tSTRING: {
+                String* p = (String*)buf_str_;
+                p->~String();
                 break;
+            }
             default:
                 break;
         }
@@ -864,12 +925,16 @@ public:
     String& string() {
         String* ptr = (String*)buf_str_;
         switch (type_) {
-            case tOBJECT:
-                ((ObjectType*)buf_obj_)->~ObjectType();
+            case tOBJECT: {
+                ObjectType* p = (ObjectType*)buf_obj_;
+                p->~ObjectType();
                 break;
-            case tLIST:
-                ((ListType*)buf_list_)->~ListType();
+            }
+            case tLIST: {
+                ListType* p = (ListType*)buf_list_;
+                p->~ListType();
                 break;
+            }
             case tSTRING:
                 return *ptr;
             default:
@@ -890,15 +955,21 @@ public:
     */
     uint64& numu() {
         switch (type_) {
-            case tOBJECT:
-                ((ObjectType*)buf_obj_)->~ObjectType();
+            case tOBJECT: {
+                ObjectType* p = (ObjectType*)buf_obj_;
+                p->~ObjectType();
                 break;
-            case tLIST:
-                ((ListType*)buf_list_)->~ListType();
+            }
+            case tLIST: {
+                ListType* p = (ListType*)buf_list_;
+                p->~ListType();
                 break;
-            case tSTRING:
-                ((String*)buf_str_)->~String();
+            }
+            case tSTRING: {
+                String* p = (String*)buf_str_;
+                p->~String();
                 break;
+            }
             case tFLOAT: {
                 const uint64 num = (uint64)buf_float_;
                 type_ = tUNSIGNED;
@@ -927,15 +998,21 @@ public:
     */
     int64& numi() {
         switch (type_) {
-            case tOBJECT:
-                ((ObjectType*)buf_obj_)->~ObjectType();
+            case tOBJECT: {
+                ObjectType* p = (ObjectType*)buf_obj_;
+                p->~ObjectType();
                 break;
-            case tLIST:
-                ((ListType*)buf_list_)->~ListType();
+            }
+            case tLIST: {
+                ListType* p = (ListType*)buf_list_;
+                p->~ListType();
                 break;
-            case tSTRING:
-                ((String*)buf_str_)->~String();
+            }
+            case tSTRING: {
+                String* p = (String*)buf_str_;
+                p->~String();
                 break;
+            }
             case tFLOAT: {
                 const int64 num = (int64)buf_float_;
                 type_ = tINTEGER;
@@ -963,15 +1040,21 @@ public:
     */
     double& numf() {
         switch (type_) {
-            case tOBJECT:
-                ((ObjectType*)buf_obj_)->~ObjectType();
+            case tOBJECT: {
+                ObjectType* p = (ObjectType*)buf_obj_;
+                p->~ObjectType();
                 break;
-            case tLIST:
-                ((ListType*)buf_list_)->~ListType();
+            }
+            case tLIST: {
+                ListType* p = (ListType*)buf_list_;
+                p->~ListType();
                 break;
-            case tSTRING:
-                ((String*)buf_str_)->~String();
+            }
+            case tSTRING: {
+                String* p = (String*)buf_str_;
+                p->~String();
                 break;
+            }
             case tFLOAT:
                 return buf_float_;
             case tUNSIGNED: {
@@ -1002,15 +1085,21 @@ public:
     */
     bool& boolref() {
         switch (type_) {
-            case tOBJECT:
-                ((ObjectType*)buf_obj_)->~ObjectType();
+            case tOBJECT: {
+                ObjectType* p = (ObjectType*)buf_obj_;
+                p->~ObjectType();
                 break;
-            case tLIST:
-                ((ListType*)buf_list_)->~ListType();
+            }
+            case tLIST: {
+                ListType* p = (ListType*)buf_list_;
+                p->~ListType();
                 break;
-            case tSTRING:
-                ((String*)buf_str_)->~String();
+            }
+            case tSTRING: {
+                String* p = (String*)buf_str_;
+                p->~String();
                 break;
+            }
             case tUNSIGNED:
             case tINTEGER:
             case tFLOAT:
@@ -1033,21 +1122,27 @@ public:
     */
     bool get_val(String& val) const {
         switch (type_) {
-            case tOBJECT:
-                if (((ObjectType*)buf_obj_)->null()) {
+            case tOBJECT: {
+                const ObjectType* p = (const ObjectType*)buf_obj_;
+                if (p->null()) {
                     val.set();
                     return true;
                 }
                 break;
-            case tLIST:
-                if (((ListType*)buf_list_)->null()) {
+            }
+            case tLIST: {
+                const ListType* p = (const ListType*)buf_list_;
+                if (p->null()) {
                     val.set();
                     return true;
                 }
                 break;
-            case tSTRING:
-                val = *(String*)buf_str_;
+            }
+            case tSTRING: {
+                const String* p = (const String*)buf_str_;
+                val = *p;
                 return true;
+            }
             case tFLOAT:
                 val.setn(buf_float_);
                 return true;
@@ -1079,7 +1174,8 @@ public:
             static const ObjectType DEF;
             return DEF;
         }
-        return *(ObjectType*)buf_obj_;
+        const ObjectType* p = (const ObjectType*)buf_obj_;
+        return *p;
     }
 
     /** Get read-only list reference (const).
@@ -1092,7 +1188,8 @@ public:
             static const ListType DEF;
             return DEF;
         }
-        return *(ListType*)buf_list_;
+        const ListType* p = (const ListType*)buf_list_;
+        return *p;
     }
 
     /** Get read-only string value reference (const).
@@ -1105,7 +1202,8 @@ public:
             static const String DEF;
             return DEF;
         }
-        return *(String*)buf_str_;
+        const String* p = (const String*)buf_str_;
+        return *p;
     }
 
     /** Get value as a floating-point number (const).
@@ -1116,8 +1214,10 @@ public:
     */
     double get_float() const {
         switch (type_) {
-            case tSTRING:
-                return ((String*)buf_str_)->getnumf<double>();
+            case tSTRING: {
+                const String* p = (const String*)buf_str_;
+                return p->getnumf<double>();
+            }
             case tFLOAT:
                 return buf_float_;
             case tUNSIGNED:
@@ -1141,8 +1241,10 @@ public:
     */
     uint64 get_uint() const {
         switch (type_) {
-            case tSTRING:
-                return ((String*)buf_str_)->getnum<uint64>();
+            case tSTRING: {
+                const String* p = (const String*)buf_str_;
+                return p->getnum<uint64>();
+            }
             case tFLOAT:
                 return (uint64)buf_float_;
             case tUNSIGNED:
@@ -1165,8 +1267,10 @@ public:
     */
     int64 get_int() const {
         switch (type_) {
-            case tSTRING:
-                return ((String*)buf_str_)->getnum<int64>();
+            case tSTRING: {
+                const String* p = (const String*)buf_str_;
+                return p->getnum<int64>();
+            }
             case tFLOAT:
                 return (int64)buf_float_;
             case tUNSIGNED:
@@ -1188,8 +1292,10 @@ public:
     */
     bool get_bool() const {
         switch (type_) {
-            case tSTRING:
-                return ((String*)buf_str_)->getbool<bool>();
+            case tSTRING: {
+                const String* p = (const String*)buf_str_;
+                return p->getbool<bool>();
+            }
             case tFLOAT:
                 return (buf_float_ != 0.0);
             case tUNSIGNED:
@@ -1213,15 +1319,21 @@ public:
         free();
         type_ = src.type_;
         switch (type_) {
-            case tOBJECT:
-                new((ObjectType*)buf_obj_) ObjectType(*(ObjectType*)src.buf_obj_);
+            case tOBJECT: {
+                const ObjectType* src_p = (const ObjectType*)src.buf_obj_;
+                new((ObjectType*)buf_obj_) ObjectType(*src_p);
                 break;
-            case tLIST:
-                new((ListType*)buf_list_) ListType(*(ListType*)src.buf_list_);
+            }
+            case tLIST: {
+                const ListType* src_p = (const ListType*)src.buf_list_;
+                new((ListType*)buf_list_) ListType(*src_p);
                 break;
-            case tSTRING:
-                new((String*)buf_str_) String(*(String*)src.buf_str_);
+            }
+            case tSTRING: {
+                const String* src_p = (const String*)src.buf_str_;
+                new((String*)buf_str_) String(*src_p);
                 break;
+            }
             case tFLOAT:
                 buf_float_ = src.buf_float_;
                 break;
@@ -1451,15 +1563,21 @@ private:
 
     void free() {
         switch (type_) {
-            case tOBJECT:
-                ((ObjectType*)buf_obj_)->~ObjectType();
+            case tOBJECT: {
+                ObjectType* p = (ObjectType*)buf_obj_;
+                p->~ObjectType();
                 break;
-            case tLIST:
-                ((ListType*)buf_list_)->~ListType();
+            }
+            case tLIST: {
+                ListType* p = (ListType*)buf_list_;
+                p->~ListType();
                 break;
-            case tSTRING:
-                ((String*)buf_str_)->~String();
+            }
+            case tSTRING: {
+                String* p = (String*)buf_str_;
+                p->~String();
                 break;
+            }
             default:
                 break;
         }
@@ -1474,7 +1592,8 @@ private:
     void dump_val(T& out, char end_delim) const {
         switch (type_) {
             case tSTRING: {
-                const String& str = *(String*)buf_str_;
+                const String* p = (const String*)buf_str_;
+                const String& str = *p;
                 out.writequoted(str.data(), str.size(), end_delim);
                 break;
             }
@@ -1505,7 +1624,8 @@ private:
     void dump_impl(T& out, const TNL& newline, uint indent, bool first=true) const {
         switch (type_) {
             case tOBJECT: {
-                ObjectType& obj = *(ObjectType*)buf_obj_;
+                const ObjectType* p = (const ObjectType*)buf_obj_;
+                const ObjectType& obj = *p;
                 if (obj.empty()) {
                     out << "{}";
                 } else {
@@ -1543,7 +1663,8 @@ private:
                 break;
             }
             case tLIST: {
-                ListType& list = *(ListType*)buf_list_;
+                const ListType* p = (const ListType*)buf_list_;
+                const ListType& list = *p;
                 if (list.empty()) {
                     out << "[]";
                 } else {

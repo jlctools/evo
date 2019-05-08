@@ -21,6 +21,8 @@ namespace evo {
 /** \mainpage Evo C++ Library
 \par Evo
 
+<a href="https://github.com/jlctools/evo">Home on Github</a>
+
 Evo is a modern high performance C++ library designed to make writing efficient and portable code easy.
 It covers:
  - core types, strings, and containers
@@ -69,6 +71,7 @@ object oriented C++ server code. Evo aims to make C++ easier and more powerful w
  - \ref StringParsing "String Parsing"
  - \ref StringFormatting "String Formatting"
  - \ref StreamFormatting "Stream Formatting"
+ - \ref AdditionalFormatting "Additional Formatting"
  - \ref StringCustomConversion "Advanced: Custom String Conversion/Formatting"
  - \ref StringStreamCommon "Advanced: Common Stream/String Interface"
  .
@@ -91,7 +94,7 @@ object oriented C++ server code. Evo aims to make C++ easier and more powerful w
  - get_cwd(), get_abspath(), set_cwd()
  - daemonize()
  .
- - Cortex, ModuleBase
+ - Cortex, CortexModuleBase
  .
 
 </td></tr><tr><td valign="top">
@@ -192,6 +195,8 @@ object oriented C++ server code. Evo aims to make C++ easier and more powerful w
  - \ref FmtUShort, \ref FmtUInt, \ref FmtULong, \ref FmtULongL
  - \ref FmtFloat, \ref FmtFloatD, \ref FmtFloatL
  .
+ - FmtTable, fmt_table(), fmt_table_nocache()
+ .
 </td><td valign="top">
 
 \par Asynchronous I/O
@@ -285,6 +290,27 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 /** \page WhatsNew What's New?
 
 Evo change history.
+
+\par Version 0.5.1 - May 2019
+ - Add EVO_ENUM_TRAITS() and EVO_ENUM_CLASS_TRAITS()
+ - Add \ref AdditionalFormatting with FmtTable, fmt_table(), fmt_table_nocache()
+ - Add PureBase for a common empty base class
+ - Add STL `string_view` compatibility to \ref StringBase
+ - Updated and simplified Cortex, removed cortex_module.h and moved contents to cortex.h
+   - Renamed `ModuleBase` to `CortexModuleBase`, and renamed related types too
+ - Updated Benchmark: Add warmup_count to constructor, simplify helper macros, improved report output
+ - Updated StrTok (and variants) to use `const StringBase&` arguments to support for STL string compatibility
+ - Updated List and String methods: add/prepend/insert/replace now support copying from SubString or pointer in the same list/string (previously undefined behavior)
+   - Note that String::replace() where source and destination overlap still results in undefined behavior
+ - Bug fix: EventThreadPool not working correctly in MSVC 2017, MSVC 2013, FreeBSD
+ - Bug fix: Cortex items not "relocatable", insert order no longer tracked
+ - Bug fix: GCC 4.6 and 4.4 compiler errors
+ - Bug fix: GCC warnings in var.h
+ - Bug fix: MSVC security warning on _open()
+ - Bug fix: Cygwin GCC x86 signed/unsigned warnings
+ - Bug fix: Fixed missing async dir in previous release
+ - Various documentation updates
+ - Add FAQ and benchmarks in <a href="https://github.com/jlctools/evo">Github Home</a>
 
 \par Version 0.5 - Apr 2019
  - Async I/O:
@@ -400,12 +426,12 @@ General design goals:
  - Trivial operations are short and simple, like parsing a string
  - Advanced operations are supported, like writing directly to a string buffer
  - High performance, especially for critical systems like servers and game engines
- - Simple interfaces that are easy to understand and use, differentiate basic and advanced features
+ - Straightforward interfaces that are easy to understand and use, differentiate basic and advanced features
  - Header-only library that's easy to integrate with projects
  - Good and thorough documentation with examples
  - Structured naming to make related things naturally sort together -- ex: MapList, MapHash, \link evo::String::split split()\endlink, \link evo::String::splitr splitr()\endlink, \link evo::String::splitat splitat()\endlink
- - Support multiple platforms: Linux, Unix, MacOS, Windows, Cygwin
- - Support C++03, C++11, and newer
+ - Portability before and after C++11
+ - Cross platform: Linux, Unix, MacOS, Windows, Cygwin
  - Tested with at least 99% code coverage
  .
 */
@@ -444,7 +470,7 @@ Notes for best performance:
 Tested on the following systems and compilers:
 
 Ubuntu
- - 18.04: gcc 7.3.0, clang 6.0.0, valgrind 3.13.0 -- VM
+ - 18.04: gcc 7.4.0, clang 6.0.0, valgrind 3.13.0 -- Intel Core i7
  - 16.04: gcc 5.4.0, clang 3.8.0, valgrind 3.11.0 -- Intel Core i7
  - 14.04: gcc 4.8.4, clang 3.4.0, valgrind 3.10.1 -- VM
    - Also: gcc 4.6.4, gcc 4.7.3
@@ -454,18 +480,18 @@ CentOS -- VM
  - 6.10: gcc 4.4.7, clang 3.4.2
 
 FreeBSD -- VM
- - 12.0: clang 6.0.1 valgrind 3.10.1
+ - 12.0: clang 6.0.1, valgrind 3.10.1
 
 MacOS -- Intel Core i5
  - 10.13.6: Apple LLVM 10.0.0 (clang 1000-10.44.4)
 
 Windows 10 -- Intel Core i7
- - <a href="https://www.visualstudio.com/vs/cplusplus/">MSVC</a> 2017 Community 15.9.7
- - MSVC 2015 Community, Update 3
+ - <a href="https://www.visualstudio.com/vs/cplusplus/">MSVC</a> 2017 Community 15.9.11, libevent 2.1.8, libevent 2.0.22
+ - MSVC 2015 Community Update 3
 
 Windows 7 SP1 32-bit -- VM
- - MSVC 2013 Community, Update 5
- - <a href="https://www.cygwin.com/">cygwin 2.11.0</a>: gcc 7.3.0
+ - MSVC 2013 Community Update 5, libevent 2.1.8, libevent 2.0.22
+ - <a href="https://www.cygwin.com/">cygwin 3.0.6</a>: gcc 7.4.0
 
 \par Notes
 
@@ -477,6 +503,68 @@ Windows 7 SP1 32-bit -- VM
  - Cygwin:
    - For C++11 (or newer), enable with the `gnu++` option variant to avoid compile errors, ex: `g++ -std=gnu++11`
  - Older compilers (like gcc 4.4 or clang 3.4) should use `-fno-strict-aliasing` to avoid warnings and stability issues
+   - RedHat GCC 4.4 on CentOS 6 has a vtable optimization bug, <a href="https://stackoverflow.com/questions/41810222/pure-virtual-function-called-on-gcc-4-4-but-not-on-newer-version-or-clang-3-4">see here</a>
+ - See also: \ref BuildDependencies*/
+
+///////////////////////////////////////////////////////////////////////////////
+
+/** \page BuildDependencies Build Dependencies
+
+Evo is a self-contained library but \ref Async currently requires libevent 2.0+. This gives some tips on installing this dependency.
+
+\par Windows / MSVC
+
+Building newer libevent (with cmake):
+ - Download and install cmake: https://cmake.org/download/
+   - %Set install option to add to system path
+ - Download libevent source and extract it: https://libevent.org/
+ - Open MSVC Command Prompt, cd to extracted dir
+ - Build:
+   \code
+     > cmake -G "NMake Makefiles" -DEVENT__DISABLE_OPENSSL=ON -DEVENT__DISABLE_TESTS=ON -DEVENT__DISABLE_BENCHMARK=ON ..
+     > nmake
+   \endcode
+ - Assemble results (where x.y.z is the version):
+   \code
+     > md libevent-x.y.z
+     > xcopy ..\LICENSE libevent-x.y.z\
+     > xcopy ..\ChangeLog libevent-x.y.z\
+     > xcopy ..\whatsnew*.txt libevent-x.y.z\
+     > xcopy /s ..\include libevent-x.y.z\include\
+     > xcopy ..\WIN32-Code\nmake\event2\*.h libevent-x.y.z\include\event2\
+     > del libevent-x.y.z\include\include.am
+     > xcopy /s lib libevent-x.y.z\lib\
+   \endcode
+ .
+
+Building older libevent (before was cmake supported):
+ - Download libevent source and extract it: https://libevent.org/
+ - Open MSVC Command Prompt, cd to extracted dir
+ - Build:
+   \code
+     > nmake -f makefile.nmake
+   \endcode
+ - Assemble results (where x.y.z is the version):
+   \code
+     > md libevent-x.y.z
+     > xcopy LICENSE libevent-x.y.z\
+     > xcopy ChangeLog libevent-x.y.z\
+     > xcopy whatsnew*.txt libevent-x.y.z\
+     > xcopy /s ..\include libevent-x.y.z\include\
+     > del libevent-x.y.z\include\Makefile.*
+     > xcopy WIN32-Code\event2\*.h libevent-x.y.z\include\event2\
+     > xcopy *.lib libevent-x.y.z\lib\
+   \endcode
+ .
+
+\par Linux/Unix/MacOS
+
+See packages:
+ - Debian/Ubuntu: libevent, libevent-dev
+ - RedHat/CentOS: libevent, libevent-devel
+ - FreeBSD: libevent
+ - MacOS (brew): libevent
+
 */
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -971,15 +1059,16 @@ Evo has helpers for efficiently converting between strings and enums.
 This example defines an enum, then uses the EVO_ENUM_MAP_PREFIXED() helper to create string mappings.
  - This requires the enum to have the expected first/last guard values (`UNKNOWN`, `ENUM_END` -- with a prefix where applicable) to deduce the mappings
  - These enum values have a lowercase prefix to avoid collisions with other enums -- referred to as a "prefixed" enum
+ - The enum map also has a nested `Iter` type for iterating through enum values
  .
 
 \code
-#include <evo/substring.h>
+#include <evo/enum.h>
+#include <evo/io.h>
 using namespace evo;
 
 enum Color {
     cUNKNOWN = 0,   // Must be first
-    // Must match string order below
     cBLUE,
     cGREEN,
     cRED,
@@ -994,12 +1083,26 @@ EVO_ENUM_MAP_PREFIXED(Color, c,
 );
 
 int main() {
+    // Enum map lookups
     Color     color_val1 = ColorEnum::get_enum("green");    // set to cGREEN
     Color     color_val2 = ColorEnum::get_enum(2);          // set to cGREEN
     SubString color_str  = ColorEnum::get_string(cGREEN);   // set to "green"
     int       color_num  = ColorEnum::get_int(cGREEN);      // set to 2
+
+    // Iterate through enum values
+    Console& c = con();
+    for (ColorEnum::Iter iter; iter; ++iter)
+        c.out << "num:" << iter.value_num() << ", str:" << iter.value_str() << NL;
+
     return 0;
 }
+\endcode
+
+Output (from iterator):
+\code{.unparsed}
+num:1, str:blue
+num:2, str:green
+num:3, str:red
 \endcode
 
 \par Unsorted Enum Values
@@ -1009,13 +1112,12 @@ This example is similar but uses an enum with unsorted values, which must be "re
  .
 
 \code
-#include <evo/substring.h>
+#include <evo/enum.h>
 using namespace evo;
 
 enum Color {
     cUNKNOWN = 0,   // Must be first
-    // Unsorted values
-    cRED,
+    cRED,           // Unsorted values
     cBLUE,
     cGREEN,
     cENUM_END       // Must be last
@@ -1044,17 +1146,57 @@ int main() {
 }
 \endcode
 
+\par Enum Traits
+
+This example creates traits for the above `Color` enum using EVO_ENUM_TRAITS():
+ - This requires the enum to have the expected first guard value (`UNKNOWN` -- with prefix where applicable) to deduce the mappings
+ - The above enum map example and the below enum traits example may be combined on the same enum, creating `ColorEnum` and `ColorEnumTraits` helper types
+ .
+
+\code
+#include <evo/enum.h>
+#include <evo/substring.h>
+using namespace evo;
+
+enum Color {
+    cUNKNOWN = 0,   // Must be first (required for traits)
+    cBLUE,
+    cGREEN,
+    cRED,
+    cENUM_END       // Must be last (not required for traits)
+};
+
+struct ColorTraits {
+    int index;
+    SubString code;
+};
+
+EVO_ENUM_TRAITS(Color, ColorTraits, cUNKNOWN,
+    // Initialize ColorTraits for each enum value starting at cUNKNOWN, must match enum values
+    { 0, "?" },
+    { 1, "B" },
+    { 2, "G" },
+    { 3, "R" }
+);
+
+int main() {
+    const ColorTraits& unknown_traits = ColorEnumTraits::get(cUNKNOWN); // index:0, code:?
+    const ColorTraits& green_traits   = ColorEnumTraits::get(cGREEN);   // index:2, code:G
+    return 0;
+}
+\endcode
+
 \par Enum Class (C++11)
 
 This is simplied further with C++11 enum class and EVO_ENUM_CLASS_MAP(), as long as the enum has the expected first/last guard values (`UNKNOWN`, `ENUM_END`).
 
 \code
-#include <evo/substring.h>
+#include <evo/enum.h>
+#include <evo/io.h>
 using namespace evo;
 
 enum class Color {
     UNKNOWN = 0,    // Must be first
-    // Must match string order below
     BLUE,
     GREEN,
     RED,
@@ -1069,12 +1211,26 @@ EVO_ENUM_CLASS_MAP(Color,
 );
 
 int main() {
+    // Enum map lookups
     Color     color_val1 = ColorEnum::get_enum("green");        // set to Color::GREEN
     Color     color_val2 = ColorEnum::get_enum(2);              // set to Color::GREEN
     SubString color_str  = ColorEnum::get_string(Color::GREEN); // set to "green"
     int       color_num  = ColorEnum::get_int(Color::GREEN);    // set to 2
+
+    // Iterate through enum values
+    Console& c = con();
+    for (ColorEnum::Iter iter; iter; ++iter)
+        c.out << "num:" << iter.value_num() << ", str:" << iter.value_str() << NL;
+
     return 0;
 }
+\endcode
+
+Output (from iterator):
+\code{.unparsed}
+num:1, str:blue
+num:2, str:green
+num:3, str:red
 \endcode
 
 \par Unsorted Enum Class Values (C++11)
@@ -1089,8 +1245,7 @@ using namespace evo;
 
 enum class Color {
     UNKNOWN = 0,    // Must be first
-    // Unsorted values
-    RED,
+    RED,            // Unsorted values
     BLUE,
     GREEN,
     ENUM_END        // Must be last
@@ -1115,6 +1270,46 @@ int main() {
     Color     color_val2 = ColorEnum::get_enum(2);              // set to Color::BLUE
     SubString color_str  = ColorEnum::get_string(Color::GREEN); // set to "green"
     int       color_num  = ColorEnum::get_int(Color::GREEN);    // set to 3
+    return 0;
+}
+\endcode
+
+\par Enum Class Traits (C++11)
+
+This example creates traits for the above `Color` enum class using EVO_ENUM_CLASS_TRAITS():
+ - This requires the enum class to have the expected first guard value (`UNKNOWN`) to deduce the mappings
+ - The above enum class map example and the below enum traits example may be combined on the same enum, creating `ColorEnum` and `ColorEnumTraits` helper types
+ .
+
+\code
+#include <evo/enum.h>
+#include <evo/substring.h>
+using namespace evo;
+
+enum class Color {
+    UNKNOWN = 0,    // Must be first
+    BLUE,
+    GREEN,
+    RED,
+    ENUM_END        // Must be last
+};
+
+struct ColorTraits {
+    int index;
+    SubString code;
+};
+
+EVO_ENUM_CLASS_TRAITS(Color, ColorTraits,
+    // Initialize ColorTraits for each enum value starting at UNKNOWN, must match enum values
+    { 0, "?" },
+    { 1, "B" },
+    { 2, "G" },
+    { 3, "R" }
+);
+
+int main() {
+    const ColorTraits& unknown_traits = ColorEnumTraits::get(Color::UNKNOWN);   // index:0, code:?
+    const ColorTraits& green_traits   = ColorEnumTraits::get(Color::GREEN);     // index:2, code:G
     return 0;
 }
 \endcode
@@ -1262,11 +1457,12 @@ _Alpha: Evo Async I/O classes should be considerd a Work In Progress_
 Evo async I/O requires libevent 2.0 or newer:
  - Linux/Unix/Cygwin: Link with `-levent_core` or `-levent`
    - To use libevent in multiple threads `#``define EVO_ASYNC_MULTI_THREAD 1` (before evo includes) and also link with `-levent_pthreads` -- _otherwise libevent is not thread safe, even with separate instances_
- - Windows/MSVC: Link with `libevent_core.lib` in project configuration:
+ - Windows/MSVC: Link with `libevent_core.lib` or `event_core.lib` in project configuration:
    - `Configuration -> VC++ Directories -> Include Directories`
    - `Configuration -> VC++ Directories -> Library Directories`
    - `Configuration -> Linker -> Input -> Additional Dependencies`
    - To use libevent in multiple threads `#``define EVO_ASYNC_MULTI_THREAD 1` (before evo includes) -- _otherwise libevent is not thread safe, even with separate instances_
+ - See also: \ref BuildDependencies
  .
 
 Near the beginning of a program using sockets, call Socket::sysinit() for best portability (required in Windows).
@@ -1878,7 +2074,7 @@ _Note: Manually applying smart quoting to text can be tricky in certain cases._
 
 A "field" is the original text, which may contain whitespace, delimiters, and/or quote characters:
  - Binary data is not supported here as it isn't text and may be impossible to correctly quote
- - However the field may contain unprintable characters as well as UTF-8 multibyte characters
+ - However, a quoted field may contain unprintable characters as well as UTF-8 multibyte characters
 
 A "token" is a field as quoted or unquoted text, which is often followed by a delimiter acting as a separator for the next token:
  - This text may contain delimiters and quote characters as well as any valid plain text
@@ -1900,10 +2096,12 @@ Triple quoting (inspired by the Python language):
 
 _Following the above rules will correctly quote and escape text fields_ -- see below for edge cases.
 
+The non-single-quoting types (above) and edge cases (mentioned below) are rare with normal text, but must be handled correctly when using smart quoting.
+
 No quoting:
  - If a token doesn't begin _and_ end with quotes then it's _treated as unquoted_
    - Quoting at _end_ is determined by context: a quote followed by a delimiter, or followed by end of input
-   - There may be whitespace (spaces, tabs, newlines) between the quote and the delimiter -- see _Formatting_ section below for example
+   - There may be whitespace (spaces, tabs, newlines) between the quote and the delimiter (or end of input), in which case the field is still _end-quoted_ -- see _Formatting_ section below for example
  - The parser doesn't get confused when quote characters (or apostrophes) appear inside _unquoted_ tokens -- in this case with unquoted text, the parser just splits by delimiter
  - Example comma-delimited fields that aren't quoted at all -- these particular cases don't confuse the parser:
    - <code> can't,won't,'bout </code>
@@ -1939,14 +2137,12 @@ Backtick-DEL quoting:
  - This is a fallback when no other quoting will work (which is very rare) and uses the `DEL` char (ASCII code `7F`, normally not printable but shown here as `DEL` or `␡`)
  - Here a backtick followed by a `DEL` char is used as a quote, and this pair is used at the beginning and the end, like with other quote types
    - Example: <code> \`␡foo bar\`␡ </code>
- - This assumes the quoted text is valid plain text (not binary data) -- normal plain text doesn't use the `DEL` char at all, and is even less likely to include a backtick-DEL pair followed by a delimiter
- - This can still be used in combination with the `DEL` char as a delimiter
+ - This assumes the quoted text is valid plain text (not binary data) -- normal plain text doesn't use the `DEL` char at all, and is very unlikely to include a backtick-DEL pair followed by a delimiter (or end of input)
+ - This (and other quoting types) can still be used in combination with the `DEL` char as a delimiter
    - Example with `DEL` delimiter and `backtick-DEL` quoting:
      - <code> \`␡foo bar\`␡␡\`␡stuff things\`␡ </code>
        - <code> foo bar </code>
        - <code> stuff things </code>
-
-The non-single-quoting types (above) and edge cases (mentioned below) are rare with normal text, but must be handled correctly when using smart quoting.
 
 \par Parsing
 
@@ -2118,8 +2314,12 @@ int main() {
 
 \par STL String
 
-Evo supports implicitly converting `const std::string&` and `const std::string*` to \link evo::StringBase StringBase\endlink so STL strings can be passed to functions that
-accept Evo string types. Simply include STL strings first and Evo will try to auto-detect and enable `std::string` support.
+Evo supports implicitly converting STL strings (`const std::string&` and `const std::string*`) to \link evo::StringBase StringBase\endlink so STL strings
+can be passed to functions that accept Evo string types. Simply include STL string header first and Evo will try to auto-detect and enable `std::string` support.
+C++17 `std::string_view` is also supported as well, when supported by the compiler.
+
+If you want to be explicit about passing an STL string to a function using Evo strings, wrap it like this: `evo::StringBase(stdstring)` -- see example below.
+ * Note that \ref StringBase is a common base class for all Evo strings and works as a primitive form of SubString
 
 See \ref StringPassing
 
@@ -2129,11 +2329,12 @@ Note that in some cases you may run into problems with "too many implicit conver
 #include <evo/string.h>
 
 int main() {
-    std::string stdstring = "test";              // constructs via temporary, ok here
-    evo::String string    = stdstring;           // constructs via temporary, possible compiler error: too many implicit conversions
+    std::string stdstring = "test";                     // constructs via temporary, ok here
+    evo::String string    = stdstring;                  // constructs via temporary, possible compiler error: too many implicit conversions
 
-    evo::String string(stdstring);               // ok, explicit constructor (no temporary) -- preferred
-    evo::String string = StringBase(stdstring);  // ok, explicit temporary
+    evo::String string(stdstring);                      // ok, explicit constructor (no temporary) -- preferred
+    evo::String string = evo::StringBase(stdstring);    // ok, explicit temporary
+    evo::String string(( evo::StringBase(stdstring) )); // ok, explicit temporary -- extra parenthesis prevent the C++ "Most Vexing Parse" issue
 
     return 0;
 }
@@ -2142,10 +2343,11 @@ int main() {
 You may also enable STL string compatibility directly with a preprocessor define, before including any Evo headers:
 \code
 #define EVO_STD_STRING 1
+#define EVO_STD_STRING_VIEW 1
 #include <evo/string.h>
 \endcode
 
-For more info on enabling STL string compatibility see: \link EVO_STD_STRING EVO_STD_STRING\endlink
+For more info on enabling STL string compatibility see: \ref EVO_STD_STRING and \ref EVO_STD_STRING_VIEW
 
 \par STL Map
 
@@ -2180,7 +2382,7 @@ This shows the preferred ways of passing a string with Evo.
         return 0;
     }
    \endcode
- - Passing a string by value is ok but not ideal (less efficient):
+ - Passing a string by value works but is not ideal (less efficient):
    \code
     void foo(evo::String str);  // Pass by value: not ideal
    \endcode
@@ -2196,11 +2398,12 @@ This shows the preferred ways of passing a string with Evo.
      are cases where it can't (where the compiler will silently return by value) -- sticking with an out parameter for consistency and simplicity is recommended
  .
 
-These also apply in general to Evo containers like List, and other complex objects.
+These suggestions also apply in general to Evo containers like List, and other complex objects.
 
-For passing read-only or non-persistent strings it may be useful to use SubString.
-This explicitly shows the string is read-only and prevents further \ref Sharing when copied to another String,
+For passing read-only strings it's often useful to use SubString to show how the string is used. A function taking a SubString argument
+explicitly shows the string is read-only and prevents further \ref Sharing when copied to another String (i.e. sharing stops here),
 and is often useful in multithreaded situations (with sychronization as needed).
+
  - Pass substring as an argument (by const reference):
    \code
     #include <evo/substring.h>
@@ -2209,7 +2412,7 @@ and is often useful in multithreaded situations (with sychronization as needed).
     struct MyData {
         String data;
 
-        // Takes a string reference, without sharing
+        // Takes a string reference, "disables" sharing
         void store(const SubString& str) {
             data = str;         // Store a unique copy
         }
@@ -2228,7 +2431,7 @@ and is often useful in multithreaded situations (with sychronization as needed).
         return 0;
     }
    \endcode
- - As with String, passing SubString by value is ok but not preferred (less efficient)
+ - As with String, passing SubString by value works but is not ideal (less efficient)
  - Returning a SubString in any way is often dangerous, unless returning one of the arguments
    \code
     const SubString& foo(const SubString& str) {
@@ -2237,6 +2440,42 @@ and is often useful in multithreaded situations (with sychronization as needed).
     }
    \endcode
  .
+
+Alternatively, for passing read-only strings with \ref StlCompatibility use \ref StringBase. This works the same way as SubString.
+
+ - Pass substring as an argument (by const reference) using \ref StringBase :
+   \code
+    #include <string> // std::string
+    #include <evo/substring.h>
+    using namespace evo;
+
+    struct MyData {
+        String data;
+        Int num;
+
+        // Takes a string reference, "disables" sharing
+        void store(const StringBase& str) {
+            data = str;                     // Store a unique copy
+            num  = SubString(str).num();    // Use SubString methods, like num()
+        }
+    };
+
+    int main() {
+        String str("test");
+        MyData data;
+
+        // Pass str
+        data.store(str);
+
+        // Works with std::string too
+        std::string stdstr("testing");
+        data.store(stdstr);
+
+        return 0;
+    }
+   \endcode
+ - \ref StringBase is only used for passing strings to functions (and only by const-reference)
+ - See \ref StlCompatibility
 
 See also: \ref UnsafePtrRef
 */
@@ -2845,10 +3084,6 @@ int main() {
 
     return 0;
 }
-
-\par Smart Quoting
-
-See also: \ref SmartQuoting
 \endcode
 
 Sticky formatting is useful for applying the same formatting to many fields.
@@ -2864,6 +3099,92 @@ Formatting types for setting attributes with `operator<<()`
  - FmtSetField
  - FmtSetInt
  - FmtSetFloat
+
+\par Smart Quoting
+
+See also: \ref SmartQuoting
+*/
+
+////
+
+/** \page AdditionalFormatting Additional Formatting
+
+Additional text formatting helpers, compatible with String, Stream, and StreamOut types.
+
+\par Tables
+
+FmtTable is used to setup table column information and FmtTableOut (or a helper that returns this) is used to format and write the table to a string or stream.
+
+The easiest way to format a table is with fmt_table(), which caches the output internally in order to determine the best column alignment.
+
+\code
+#include <evo/fmt.h>
+#include <evo/io.h>
+using namespace evo;
+
+int main() {
+    Console& c = con();
+
+    const SubString NAMES[] = {
+        "Name",
+        "ID",
+        "Balance",
+        "Location",
+        ""
+    };
+
+    FmtTable table(NAMES, 0);
+    fmt_table(c.out, table)
+        << "John Smith" << 1001 << 9.50 << "Los Angeles" << NL
+        << "Jane Doe" << 1002 << 19.75 << "New York" << NL
+        << fFLUSH;
+
+    return 0;
+}
+\endcode
+
+Output:
+\code{.unparsed}
+Name        ID    Balance  Location
+John Smith  1001  9.5      Los Angeles
+Jane Doe    1002  19.75    New York
+\endcode
+
+To avoid caching overhead use fmt_table_nocache() to write table output directly. To keep columns aligned, FmtTableAttribs is useful for updating column widths first.
+
+\code
+#include <evo/fmt.h>
+#include <evo/io.h>
+using namespace evo;
+
+int main() {
+    Console& c = con();
+
+    const SubString NAMES[] = {
+        "Name",
+        "ID",
+        "Balance",
+        "Location",
+        ""
+    };
+
+    FmtTable table(NAMES, 0);
+    FmtTableAttribs(table) << 10 << 5 << 11;
+
+    fmt_table_nocache(c.out, table)
+        << "John Smith" << 1001 << 9.50 << "Los Angeles" << NL
+        << "Jane Doe" << 1002 << 19.75 << "New York" << NL;
+
+    return 0;
+}
+\endcode
+
+Output:
+\code{.unparsed}
+Name        ID    Balance  Location
+John Smith  1001  9.5      Los Angeles
+Jane Doe    1002  19.75    New York
+\endcode
 */
 
 ////

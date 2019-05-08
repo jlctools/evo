@@ -1328,6 +1328,12 @@ public:
         return false;
     }
 
+    /** No-op used by formatting helpers.
+     \return  This
+    */
+    This& operator<<(This&)
+        { return *this; }
+
     /** Write an explicit newline and flush stream.
      - Use \link evo::NL NL\endlink for default newline value, where default is set by the stream
      .
@@ -1640,6 +1646,21 @@ public:
     /** \copydoc operator<<(const FmtShort&) */
     This& operator<<(const FmtFloatL& fmt)
         { writefmtnumf(fmt.num, fmt.fmt); return *this; }
+
+    /** \copydoc operator<<(const FmtShort&) */
+    template<class U>
+    This& operator<<(const FmtFieldNum<U>& fmt) {
+        if (IntegerT<U>::SIGN)
+            writefmtnum(fmt.num.num, fmt.num.fmt, &fmt.field);
+        else
+            writefmtnumu(fmt.num.num, fmt.num.fmt, &fmt.field);
+        return *this;
+    }
+
+    /** \copydoc operator<<(const FmtShort&) */
+    template<class U>
+    This& operator<<(const FmtFieldFloat<U>& fmt)
+        { writefmtnumf(fmt.num.num, fmt.num.fmt, &fmt.field); return *this; }
 
     /** Writer formatted pointer field to stream.
      \param  fmtptr  Pointer info

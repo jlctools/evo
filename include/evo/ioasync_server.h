@@ -473,7 +473,7 @@ struct AsyncServerHandler {
          .
          \param  server  Server AsyncBase instance
          \param  global  Reference to global data
-         \return         Whether successfull, false on critical error (which prevents server startup)
+         \return         Whether successful, false on critical error (which prevents server startup)
         */
         bool on_init(AsyncBase& server, Global& global) {
             EVO_PARAM_UNUSED(server);

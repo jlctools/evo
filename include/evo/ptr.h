@@ -96,6 +96,7 @@ protected:
 
 public:
     typedef SmartPtr<T> This;       ///< This pointer type
+    typedef T Item;                 ///< Item type dereferenced to
 
     /** Constructor.
      \param  ptr  Pointer to set, NULL for none
@@ -243,6 +244,7 @@ protected:
 
 public:
     typedef SmartPtr<T[]> This;
+    typedef T Item;
 
     /** Constructor.
      \param  ptr  Pointer to set, NULL for none
@@ -399,7 +401,8 @@ protected:
     using PtrBase<T>::ptr_;
 
 public:
-    typedef SharedPtr<T,TSize> This;        ///< This pointer type
+    typedef SharedPtr<T,TSize> This;    ///< This pointer type
+    typedef T Item;                     ///< Item type dereferenced to
 
     /** Constructor to start with null pointer. */
     SharedPtr()
@@ -610,6 +613,7 @@ protected:
 
 public:
     typedef SharedPtr<T[],TSize> This;
+    typedef T Item;
 
     /** Constructor to start with null pointer. */
     SharedPtr()
@@ -797,6 +801,7 @@ protected:
 public:
     typedef Ptr<T>     This;        ///< This pointer type
     typedef PtrBase<T> Base;        ///< Base type
+    typedef T          Item;        ///< Item type dereferenced to
 
     /** Default constructor sets as NULL. */
     Ptr()
@@ -961,6 +966,8 @@ protected:
 public:
     typedef Ptr<T[]>   This;        ///< This pointer type
     typedef PtrBase<T> Base;        ///< Base type
+    typedef T          Item;        ///< Item type dereferenced to
+
 
     /** Default constructor sets as NULL. */
     Ptr()
@@ -1061,6 +1068,35 @@ public:
         return result;
     }
 };
+
+///////////////////////////////////////////////////////////////////////////////
+
+/** Check if type is a SmartPtr or SharedPtr. Value member holds result.
+ - See also: IsPointer
+ .
+ \tparam  T  Type to check.
+
+\par Example
+\code
+#include <evo/ptr.h>
+using namespace evo;
+
+int main() {
+    bool b1 = IsSmartPtr< SmartPtr<char> >::value;  // true
+    bool b2 = IsSmartPtr<char*>::value;             // false
+    bool b3 = IsSmartPtr<char>::value;              // false
+
+    return 0;
+}
+\endcode
+*/
+template<class T> struct IsSmartPtr : public StaticBoolF { };
+/** \cond impl */
+template<class T> struct IsSmartPtr<SmartPtr<T> >    : public StaticBoolT { };
+template<class T> struct IsSmartPtr<SmartPtr<T[]> >  : public StaticBoolT { };
+template<class T> struct IsSmartPtr<SharedPtr<T> >   : public StaticBoolT { };
+template<class T> struct IsSmartPtr<SharedPtr<T[]> > : public StaticBoolT { };
+/** \endcond */
 
 ///////////////////////////////////////////////////////////////////////////////
 //@}

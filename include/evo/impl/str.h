@@ -147,7 +147,7 @@ enum UtfMode {
  - Each UTF-8 character may span 1-4 bytes, depending on the character
  - Call this in a loop to iterate through Unicode characters in a UTF-8 string, stop when NULL is returned
  .
- \param  code  Set to full Unicode character code scanned, or error code on error (see return value)  [out]
+ \param  code  %Set to full Unicode character code scanned, or error code on error (see return value)  [out]
  \param  str   Pointer to string to scan, must not be NULL
  \param  end   Pointer to end of string to scan, must be >= `str`
  \param  mode  How to handle invalid UTF-8 bytes:
@@ -222,7 +222,7 @@ inline const char* utf8_scan(wchar32& code, const char* str, const char* end, Ut
  - Each UTF-8 character may span 1-4 bytes, depending on the character
  - Call this in a loop to iterate through Unicode characters in a UTF-8 string, stop when NULL is returned
  .
- \param  code  Set to full Unicode character code scanned, or error code on error (see return value)  [out]
+ \param  code  %Set to full Unicode character code scanned, or error code on error (see return value)  [out]
  \param  str   Pointer to string to scan, must be terminated, must not be NULL
  \param  mode  How to handle invalid UTF-8 bytes:
                 - \ref umINCLUDE_INVALID - Invalid UTF-8 bytes are each used as-is (1 byte each)
@@ -617,7 +617,7 @@ inline ulong utf8_to16(const char*& str, const char* end, wchar16* outbuf=NULL, 
    - 4 byte values are pairs of reserved 16-bit values called surrogate pairs
  - Call this in a loop to iterate through Unicode characters in a UTF-16 string, stop when NULL is returned
  .
- \param  code  Set to full Unicode character code scanned, or error code on error (see return value)  [out]
+ \param  code  %Set to full Unicode character code scanned, or error code on error (see return value)  [out]
  \param  str   Pointer to string to scan, must not be ULL
  \param  end   Pointer to end of string to scan
  \param  mode  How to handle invalid UTF-16 values:
@@ -670,7 +670,7 @@ inline const wchar16* utf16_scan(wchar32& code, const wchar16* str, const wchar1
    - 4 byte values are pairs of reserved 16-bit values called surrogate pairs
  - Call this in a loop to iterate through Unicode characters in a terminated UTF-16 string, stop when NULL is returned
  .
- \param  code  Set to full Unicode character code scanned, or error code on error (see return value)  [out]
+ \param  code  %Set to full Unicode character code scanned, or error code on error (see return value)  [out]
  \param  str   Pointer to string to scan, muts be terminated, must not be ULL
  \param  mode  How to handle invalid UTF-16 values:
                 - \ref umINCLUDE_INVALID - Invalid UTF-16 values are each returned as-is (1 character each)
@@ -2521,8 +2521,8 @@ struct FmtSetField {
     }
 
     /** Used to setup and calculate alignment padding (used internally).
-     \param  align_padleft   Set to left-padding size  [out]
-     \param  align_padright  Set to right-padding size  [out]
+     \param  align_padleft   %Set to left-padding size  [out]
+     \param  align_padright  %Set to right-padding size  [out]
      \param  align_padding   Padding width to use
      \param  field           Field attribuets to use for alignment type (field->align), NULL for no alignment
     */
@@ -2776,7 +2776,7 @@ struct FmtSetFloat {
     int            precision;       ///< Floating point precision (number of digits after decimal), fPREC_AUTO for automatic (default: fPREC_AUTO)
     int            pad_width;       ///< Width to fill to, 0 for none, -1 to ignore (leave current width) (default: 0)
     char           pad_ch;          ///< Padding character, 0 to ignore (leave current fill character) (default: '0')
-    char           pad_ch_sp;       ///< Padding character used with special value (inf or nan)
+    char           pad_ch_sp;       ///< Padding character used with special value (inf or nan), 0 to ignore (leave current fill character) (default: ' ')
 
     /** Constructor with all attributes.
      \param  precision  Precision to use (number of digits after decimal), fPREC_AUTO for automatic (default: fPREC_AUTO)
@@ -2931,6 +2931,7 @@ struct FmtChar {
 struct FmtString {
     typedef FmtString               This;           ///< %This type
     typedef ListBase<char,StrSizeT> StringBase;     ///< StringBase type
+    typedef FmtString               FmtFieldType;   ///< This type paired with field info
 
     StringBase  str;
     FmtSetField fmt;
@@ -2978,6 +2979,15 @@ struct FmtString {
     FmtString(const StringBase& str, FmtAlign align, int width=-1, char ch=0) : str(str), fmt(align, width, ch)
         { }
 
+    /** Constructor with override fields for compatibility with FmtFieldType.
+     \param  str    %String to format
+     \param  align  Alignment type for string -- see FmtAlign
+     \param  width  Width to format within, -1 for default
+     \param  ch     Padding character to fill in `width` around string, 0 for default
+    */
+    FmtString(const FmtString& str, FmtAlign align, int width, char ch=0) : str(str.str), fmt(align, width, ch)
+        { }
+
     /** Helper for setting padding attributes.
      \param  width  Width to format within, -1 for default
      \param  ch     Padding character to fill in `width` around string, 0 for default
@@ -3020,6 +3030,10 @@ struct FmtStringWrap {
     }
 };
 
+// Implemented below
+template<class T> struct FmtFieldNum;
+template<class T> struct FmtFieldFloat;
+
 /** Explicitly format an integer.
  - Used with operator<<() on String, Stream, and StreamOut
    - See \ref StringFormatting "String Formatting" and \ref StreamFormatting "Stream Formatting"
@@ -3049,9 +3063,10 @@ int main() {
 */
 template<class T>
 struct FmtIntT {
-    typedef FmtIntT<T>                 This;        ///< %This type
-    typedef typename IntegerT<T>::This IntClass;    ///< Number class type
-    typedef T                          IntPod;      ///< Number POD type
+    typedef FmtIntT<T>                 This;            ///< %This type
+    typedef typename IntegerT<T>::This IntClass;        ///< Number class type
+    typedef T                          IntPod;          ///< Number POD type
+    typedef FmtFieldNum<T>             FmtFieldType;    ///< This type paired with field info
 
     T         num;          ///< Number to format
     FmtSetInt fmt;          ///< Formatting attributes
@@ -3131,9 +3146,10 @@ int main() {
 */
 template<class T>
 struct FmtFloatT {
-    typedef FmtFloatT<T>             This;
-    typedef typename FloatT<T>::This FloatClass;
-    typedef T                        FloatPod;
+    typedef FmtFloatT<T>             This;          ///< This type
+    typedef typename FloatT<T>::This FloatClass;    ///< Number class type
+    typedef T                        FloatPod;      ///< Number POD type
+    typedef FmtFieldFloat<T>         FmtFieldType;  ///< This type paired with field info
 
     bool        null;
     T           num;
@@ -3144,7 +3160,7 @@ struct FmtFloatT {
      \param  precision  Precision to use (number of digits after decimal), fPREC_AUTO for automatic (default: fPREC_AUTO)
      \param  width      Width to pad to, -1 for unspecified (default: 0)
      \param  ch         Padding character to use, 0 for unspecified (default: '0')
-     \param  ch_sp      Padding character to use, 0 for unspecified (default: '0')
+     \param  ch_sp      Padding character to use with special value (inf or nan), 0 for unspecified (default: ' ')
     */
     FmtFloatT(T num, int precision=fpCURRENT, int width=-1, char ch='0', char ch_sp=' ') : null(false), num(num), fmt(precision, width, ch, ch_sp)
         { }
@@ -3154,7 +3170,7 @@ struct FmtFloatT {
      \param  precision  Precision to use (number of digits after decimal), fPREC_AUTO for automatic (default: fPREC_AUTO)
      \param  width      Width to pad to, -1 for unspecified (default: 0)
      \param  ch         Padding character to use, 0 for unspecified (default: '0')
-     \param  ch_sp      Padding character to use, 0 for unspecified (default: '0')
+     \param  ch_sp      Padding character to use with special value (inf or nan), 0 for unspecified (default: ' ')
     */
     FmtFloatT(const FloatClass& num, int precision=fpCURRENT, int width=-1, char ch='0', char ch_sp=' ') : null(num.null()), num(num.value()), fmt(precision, width, ch, ch_sp)
         { }
@@ -3162,8 +3178,8 @@ struct FmtFloatT {
     /** Helper for setting padding attributes.
      \param  width   Width to pad to, -1 for unspecified (default: 0)
      \param  ch      Padding character to use, 0 for unspecified (default: '0')
-     \param  ch_sp   Padding character to use, 0 for unspecified (default: '0')
-     \return         Padding character to use with special value (inf or nan), 0 for unspecified (default: ' ')
+     \param  ch_sp   Padding character to use with special value (inf or nan), 0 for unspecified (default: ' ')
+     \return         This
     */
     This& width(int width, char ch=0, char ch_sp=0) {
         fmt.pad_width = width;
@@ -3176,6 +3192,50 @@ struct FmtFloatT {
 typedef FmtFloatT<float>   FmtFloat;    ///< \copydoc FmtFloatT
 typedef FmtFloatT<double>  FmtFloatD;   ///< \copydoc FmtFloatT
 typedef FmtFloatT<ldouble> FmtFloatL;   ///< \copydoc FmtFloatT
+
+///////////////////////////////////////////////////////////////////////////////
+
+/** This pairs a FmtIntT type with FmtSetField for output formatting.
+*/
+template<class T>
+struct FmtFieldNum {
+    typedef FmtFieldNum<T> This;
+    FmtIntT<T> num;
+    FmtSetField field;
+
+    FmtFieldNum(const FmtIntT<T>& num, FmtAlign align=fLEFT, int width=0, char fill=' ') : num(num), field(align, width, fill) {
+    }
+
+    FmtFieldNum(const This& src) : num(src.num), field(src.field) {
+    }
+
+    FmtFieldNum& operator=(const This& src) {
+        num = src.num;
+        field = src.field;
+        return *this;
+    }
+};
+
+/** This pairs a FmtFloatT type with FmtSetField for output formatting.
+*/
+template<class T>
+struct FmtFieldFloat {
+    typedef FmtFieldFloat<T> This;
+    FmtFloatT<T> num;
+    FmtSetField field;
+
+    FmtFieldFloat(const FmtFloatT<T>& num, FmtAlign align=fLEFT, int width=0, char fill=' ') : num(num), field(align, width, fill) {
+    }
+
+    FmtFieldFloat(const This& src) : num(src.num), field(src.field) {
+    }
+
+    This& operator=(const This& src) {
+        num = src.num;
+        field = src.field;
+        return *this;
+    }
+};
 
 ///////////////////////////////////////////////////////////////////////////////
 

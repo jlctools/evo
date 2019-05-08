@@ -367,6 +367,7 @@ private:
 
  - Similar to STL `std::string`
  - Built-in formatting support -- see operator<<()
+   - Appending/prepending/inserting a string (or SubString or pointer) into itself is supported
  - Built-in conversions -- see num(), numu(), numf(), boolval()
  - Searching and splitting with split() and find() methods
  - Not always terminated, call cstr() for terminated string
@@ -2924,7 +2925,6 @@ public:
        \endcode
      .
      \param  str  %String to append
-
      \return      This
     */
     String& operator<<(const StringBase& str)
@@ -3249,6 +3249,21 @@ public:
     /** \copydoc operator<<(const FmtShort&) */
     String& operator<<(const FmtFloatL& fmt)
         { writefmtnumf(fmt.num, fmt.fmt); return *this; }
+
+    /** \copydoc operator<<(const FmtShort&) */
+    template<class T>
+    String& operator<<(const FmtFieldNum<T>& fmt) {
+        if (IntegerT<T>::SIGN)
+            writefmtnum(fmt.num.num, fmt.num.fmt, &fmt.field);
+        else
+            writefmtnumu(fmt.num.num, fmt.num.fmt, &fmt.field);
+        return *this;
+    }
+
+    /** \copydoc operator<<(const FmtShort&) */
+    template<class T>
+    String& operator<<(const FmtFieldFloat<T>& fmt)
+        { writefmtnumf(fmt.num.num, fmt.num.fmt, &fmt.field); return *this; }
 
     /** Append operator to append formatted pointer field.
      \param  fmtptr  Pointer info
@@ -3870,7 +3885,7 @@ public:
     /** Replace characters with string (modifier).
      \param  index  Start index to replace
      \param  rsize  Size as item count from index to replace, ALL for all items from index
-     \param  str    Replacement string to copy
+     \param  str    Replacement string to copy -- which may refer to a substring of this, as long as it doesn't overlap with the part being replaced
      \return        This
     */
     String& replace(Key index, Size rsize, const StringBase& str)
@@ -3879,7 +3894,7 @@ public:
     /** Replace characters with string (modifier).
      \param  index  Start index to replace
      \param  rsize  Size as item count from index to replace, ALL for all items from index
-     \param  str    Replacement string to copy
+     \param  str    Replacement string to copy -- which may refer to a substring of this, as long as it doesn't overlap with the part being replaced
      \param  size   Replacement string size as character count
      \return        This
     */
@@ -4253,6 +4268,18 @@ public:
         return count;
     }
 
+    /** Write (append) to string.
+     - This is the same as add(const char*,Size)
+     .
+     \param  buf   Data to write
+     \param  size  Size to write
+     \return       Size actually written, 0 on error
+    */
+    Size writebin(const char* buf, Size size) {
+        add(buf, size);
+        return size;
+    }
+
     /** Write (append) text output to string.
      - This is the same as add(const char*,Size)
      .
@@ -4385,6 +4412,7 @@ public:
      \tparam  TNum  Number type, inferred by param
      \param  num   Number to write
      \param  base  Base to use for formatting
+     \return       Whether successful, always true with String
     */
     template<class TNum>
     bool writenum(TNum num, int base=fDEC) {
@@ -5321,23 +5349,24 @@ template<> struct Convert<String,ULongL> : public Convert_StringToCIntBase<ULong
 template<> struct Convert<String,Float>  : public Convert_StringToCFltBase<Float>   { };
 template<> struct Convert<String,FloatD> : public Convert_StringToCFltBase<FloatD>  { };
 template<> struct Convert<String,FloatL> : public Convert_StringToCFltBase<FloatL>  { };
-
 /** \endcond */
 
 ///////////////////////////////////////////////////////////////////////////////
 
 /** Base string typedef.
- - Use to explicitly cast to a base string type
+ - Use to explicitly convert a non-Evo string to a base string type
+   - This is actually the base of all Evo string types
    - Use on char* or STL string (if STL compatiblity enabled)
    - Not needed with string literals like: "test"
+   - Overhead is minimal (similar to SubString)
    .
  - This can solve compiler errors creating a temporary when "too many implicit conversions" are available\n
    Example:
    \code
    std::string stdstr("test");
-   evo::String str(StringBase(stdstr));
+   evo::String str(evo::StringBase(stdstr));
    \endcode
- - See also: SubString
+ - See also: SubString, \ref StlCompatibility
  .
 */
 typedef String::ListBaseType StringBase;

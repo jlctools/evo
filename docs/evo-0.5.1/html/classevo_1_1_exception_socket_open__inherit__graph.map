@@ -1,0 +1,5 @@
+<map id="ExceptionSocketOpen" name="ExceptionSocketOpen">
+<area shape="rect" id="node2" href="$classevo_1_1_exception_stream_open.html" title="Stream open exception for errors opening a stream, see Exception. " alt="" coords="5,155,172,181"/>
+<area shape="rect" id="node3" href="$classevo_1_1_exception_stream.html" title="Base stream exception for all stream errors, see Exception. " alt="" coords="22,80,155,107"/>
+<area shape="rect" id="node4" href="$classevo_1_1_exception.html" title="Evo base exception class. " alt="" coords="45,5,132,32"/>
+</map>

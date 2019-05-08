@@ -155,6 +155,8 @@ template<class T> struct IsSame<T,T> : public StaticBoolT { };
 /** \endcond */
 
 /** Check if type is a pointer. Value member holds result.
+ - See also: IsSmartPtr
+ .
  \tparam  T  Type to check.
 
 \par Example

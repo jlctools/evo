@@ -715,7 +715,7 @@ struct Bits {
      \param  bitsize  Number of bits in bit array
      \param  pos      Bit position to set, 0 for first bit on left, etc
      \param  value    Bit value to set, true to set bit, false to clear bit
-     \return          Whether successfull, false if `pos` out of bounds
+     \return          Whether successful, false if `pos` out of bounds
      \see array_set_multi(), array_toggle(), array_get()
     */
     static bool array_set(T* data, Size bitsize, Size pos, bool value=true) {
@@ -809,7 +809,7 @@ struct Bits {
      \param  data     Bit array data pointer, treated as a bool array even though bits come in chunks of T
      \param  bitsize  Number of bits in bit array
      \param  pos      Bit position to toggle, 0 for first bit on left, etc
-     \return          Whether successfull, false if `pos` out of bounds
+     \return          Whether successful, false if `pos` out of bounds
      \see array_toggle_multi(), array_set(), array_get()
     */
     static bool array_toggle(T* data, Size bitsize, Size pos) {
