@@ -91,7 +91,7 @@ $(function() {
 <p>A <em>bad</em> example:</p><div class="fragment"><div class="line"><span class="preprocessor">#include &lt;<a class="code" href="substring_8h.html">evo/substring.h</a>&gt;</span></div><div class="line"><span class="keyword">using namespace </span><a class="code" href="namespaceevo.html">evo</a>;</div><div class="line"></div><div class="line"><span class="keyword">struct </span>MyData {</div><div class="line">    <a class="code" href="structevo_1_1_sub_string.html">SubString</a> mydata;   <span class="comment">// DANGER: Ownership isn&#39;t clear, use String instead</span></div><div class="line"></div><div class="line">    <span class="keywordtype">void</span> store(<span class="keyword">const</span> <a class="code" href="structevo_1_1_sub_string.html">SubString</a>&amp; str) {</div><div class="line">        mydata = str;   <span class="comment">// DANGER!</span></div><div class="line">    }</div><div class="line">};</div><div class="line"></div><div class="line"><span class="keywordtype">int</span> main() {</div><div class="line">    MyData data;</div><div class="line">    data.store(<span class="stringliteral">&quot;test 123&quot;</span>);</div><div class="line">    <span class="keywordflow">return</span> 0;</div><div class="line">}</div></div><!-- fragment --> </div></div><!-- contents -->
 <!-- start footer part -->
 <hr class="footer"/><address class="footer"><small>
-Generated on Tue May 7 2019 17:30:54 for Evo C++ Library v0.5.1 by &#160;<a href="http://www.doxygen.org/index.html">
+Generated on Tue May 7 2019 18:17:31 for Evo C++ Library v0.5.1 by &#160;<a href="http://www.doxygen.org/index.html">
 <img class="footer" src="doxygen.png" alt="doxygen"/>
 </a> 1.8.13
 </small></address>
