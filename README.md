@@ -17,8 +17,7 @@ Inspired by modern languages like Python and D, Evo is the result of many years 
 Download
 --------
 
-* Linux/Unix: [Evo 0.5.1](jlctools.github.io/evo/downloads/evo-0.5.1.tar.gz)
-* Windows: [Evo 0.5.1](jlctools.github.io/evo/downloads/evo-0.5.1.zip)
+[Download Evo 0.5.1](https://github.com/jlctools/evo/tree/master/docs/downloads)
 
 License
 -------
