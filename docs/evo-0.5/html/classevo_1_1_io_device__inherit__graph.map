@@ -1,4 +1,0 @@
-<map id="IoDevice" name="IoDevice">
-<area shape="rect" id="node2" href="$structevo_1_1_io_file.html" title="File I/O device (used internally). " alt="" coords="5,80,59,107"/>
-<area shape="rect" id="node3" href="$structevo_1_1_io_socket.html" title="Socket I/O device (used internally). " alt="" coords="83,80,160,107"/>
-</map>

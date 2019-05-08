@@ -1,6 +1,0 @@
-<map id="PipeIn" name="PipeIn">
-<area shape="rect" id="node2" href="$classevo_1_1_stream_in.html" title="StreamIn\&lt; IoFile \&gt;" alt="" coords="10,229,153,256"/>
-<area shape="rect" id="node3" href="$structevo_1_1_stream_base.html" title="Base text and binary stream interface. " alt="" coords="30,155,133,181"/>
-<area shape="rect" id="node4" href="$structevo_1_1_io_base.html" title="Base binary stream interface. " alt="" coords="49,80,114,107"/>
-<area shape="rect" id="node5" href="$classevo_1_1_safe_bool.html" title="SafeBool\&lt; IoBase \&gt;" alt="" coords="5,5,157,32"/>
-</map>

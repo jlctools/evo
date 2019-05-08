@@ -1,6 +1,0 @@
-<map id="AsyncBase" name="AsyncBase">
-<area shape="rect" id="node2" href="$classevo_1_1_async_client.html" title="AsyncClient\&lt; MemcachedClient,\l impl_memc::ClientQueueItem \&gt;" alt="" coords="145,5,376,47"/>
-<area shape="rect" id="node4" href="$classevo_1_1_async_client.html" title="Template class for an async I/O client. " alt="" coords="185,71,336,98"/>
-<area shape="rect" id="node5" href="$classevo_1_1_async_server.html" title="Async I/O server for receiving and handling requests. " alt="" coords="191,122,330,149"/>
-<area shape="rect" id="node3" href="$classevo_1_1async_1_1_memcached_client.html" title="Implements Memcached protocol for an async client. " alt="" coords="424,13,560,39"/>
-</map>

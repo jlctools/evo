@@ -1,4 +1,0 @@
-<map id="AtomicFlag" name="AtomicFlag">
-<area shape="rect" id="node3" href="$structevo_1_1_spin_lock.html" title="Spin&#45;lock for thread synchronization. " alt="" coords="14,155,93,181"/>
-<area shape="rect" id="node4" href="$structevo_1_1_sleep_lock.html" title="Variation of SpinLock for thread synchronization using sleep&#45;wait. " alt="" coords="10,229,97,256"/>
-</map>
