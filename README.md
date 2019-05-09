@@ -17,7 +17,7 @@ Inspired by modern languages like Python and D, Evo is the result of many years 
 Getting Started
 ---------------
 
-See "*Features & Concepts*" and "*Mini Tutorials*" in the [documentation](http://jlctools.github.io/evo/evo-0.5.1/html/index.html), which includes many examples. Try using some of the Evo classes on a project, or with a "hello world" example program, or play with the [benchmarks](bench/README.md). *This is the best way to quickly get a feel for working with Evo.*
+See "*Features & Concepts*" and "*Mini Tutorials*" in the [documentation](http://jlctools.github.io/evo/evo-0.5.1/html/index.html), which include many examples. Try using some of the Evo classes on a project, or with a "hello world" example program, or play with the [benchmarks](bench/README.md). *This is the best way to quickly get a feel for working with Evo.*
 
 Here's a basic "hello world" example, with some additions to make it more interesting:
 
