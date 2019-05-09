@@ -71,12 +71,13 @@ Evo C++ Library FAQ
 
      
 
-6. Why not build on top of STL (like Boost)?
+6. Why not build on top of STL, like Boost?
 
-   * Evo uses fundamentally different container and iterator implementations, and usually can outperform the STL -- see [Benchmarks](bench/README.md) for some examples
-   * STL has issues with performance-critical use, like with servers and game engines -- see [EASTL ](http://www.open-std.org/jtc1/sc22/wg21/docs/papers/2007/n2271.html) for some examples
-   * STL containers generally don't support "intrusive" use, such as writing directly to internal container buffers
-   * STL implementations vary by platform
+   * Evo has [STL compatibility](http://jlctools.github.io/evo/evo-0.5.1/html/_stl_compatibility.html), so you can use what you want from both. For example, you can pass an `std::string` to functions accepting `const evo::String&` or `const evo::SubString&`, or to tokenizers like `evo::StrTok`.
+   * Why Evo itself doesn't use STL containers:
+     * Evo uses fundamentally different container and iterator implementations, and usually can outperform the STL -- see [Benchmarks](bench/README.md) for some examples
+     * STL has issues with performance-critical use, like with servers and game engines -- see [EASTL ](http://www.open-std.org/jtc1/sc22/wg21/docs/papers/2007/n2271.html) for some examples
+     * STL containers generally don't support "intrusive" use, such as writing directly to internal container buffers
 
 7. Why doesn't Evo provide drop-in replacements for STL classes for familiar interfaces?
 
