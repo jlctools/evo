@@ -32,6 +32,7 @@ Evo C++ Library FAQ
    - Portability with different compilers and older C++ standards
    - Consistency with different compilers -- for example: The `evo::String` class generally works the same in Windows and Linux/Unix
    - Exceptions are optional and may be disabled without losing functionality
+   - Evo plays nice with STL and other libraries -- only use what you need
 
 3. What makes Evo "high performance" and unique here?
 
